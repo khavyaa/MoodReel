@@ -46,7 +46,7 @@ lists in `localStorage`.
 | `NEXT_PUBLIC_SUPABASE_URL` | No | Omit to run guest-only. |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | No | Browser client; safe to expose, protected by RLS. `NEXT_PUBLIC_SUPABASE_ANON_KEY` is accepted as the legacy name. |
 | `SUPABASE_SERVICE_ROLE_KEY` | No | Genuinely secret. Not used by the MVP. Never expose to the browser. |
-| `NEXT_PUBLIC_APP_URL` | Yes in prod | Used for auth redirects and metadata. |
+| `NEXT_PUBLIC_APP_URL` | No | Auth redirects and metadata. On Vercel it falls back to `VERCEL_PROJECT_PRODUCTION_URL`; set it only to override. |
 | `TMDB_WATCH_REGION` | No | Region for watch-provider lookups. Defaults to `IN`. |
 
 Get a TMDb token at <https://www.themoviedb.org/settings/api> (Settings → API → API Read Access
@@ -87,8 +87,8 @@ Requires Docker. The suite stubs the parts of Supabase's `auth` schema the migra
 
 1. Push this repository to GitHub.
 2. Import it at <https://vercel.com/new>. The framework preset is detected automatically.
-3. Add every environment variable above in **Settings → Environment Variables**, setting
-   `NEXT_PUBLIC_APP_URL` to your production URL.
+3. Add the environment variables above in **Settings → Environment Variables**. `NEXT_PUBLIC_APP_URL`
+   can be left unset - it falls back to the domain Vercel injects.
 4. Deploy, then add the production `…/auth/callback` URL to Supabase's allowed redirects.
 
 ## Architecture
