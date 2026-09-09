@@ -148,7 +148,8 @@ export function DeckClient() {
             {languages.map((l) => l.toUpperCase()).join(" · ")} · page {page}
           </p>
         </div>
-        <div className="flex gap-2">
+        {/* shrink-0 so a long mood name wraps the heading, never these controls. */}
+        <div className="flex shrink-0 gap-2">
           <Button
             variant="ghost"
             size="sm"
@@ -158,7 +159,7 @@ export function DeckClient() {
             <RefreshCw className="size-4" aria-hidden />
           </Button>
           <Link href="/app">
-            <Button variant="secondary" size="sm">
+            <Button variant="secondary" size="sm" className="whitespace-nowrap">
               Change mood
             </Button>
           </Link>

@@ -5,7 +5,7 @@ import {
   MOOD_PRESETS,
   isMoodId,
 } from "@/lib/recommendations/mood-presets";
-import { buildDiscoverParams } from "@/lib/tmdb";
+import { buildDiscoverParams, scaledVoteFloor } from "@/lib/tmdb";
 
 describe("mood presets", () => {
   it("exposes one preset per mood id, keyed consistently", () => {
@@ -56,6 +56,38 @@ describe("buildDiscoverParams", () => {
     for (const preset of MOOD_LIST) {
       const params = buildDiscoverParams({ language: "en", preset, page: 1 });
       expect(Number(params["vote_count.gte"])).toBeGreaterThan(0);
+    }
+  });
+
+  it("scales the vote floor down for Hindi and Tamil", () => {
+    // TMDb vote counts skew heavily English; a flat floor would exclude entire
+    // catalogues. At the classics floor of 300, Tamil has literally zero titles.
+    const floors = (["en", "hi", "ta"] as const).map((language) =>
+      Number(
+        buildDiscoverParams({ language, preset: MOOD_PRESETS.classicRewatch, page: 1 })[
+          "vote_count.gte"
+        ],
+      ),
+    );
+    const [en, hi, ta] = floors;
+    expect(en).toBe(300);
+    expect(hi).toBeLessThan(en);
+    expect(ta).toBeLessThan(hi);
+  });
+
+  it("never drops the vote floor into unreviewed noise", () => {
+    for (const preset of MOOD_LIST) {
+      for (const language of ["en", "hi", "ta"] as const) {
+        expect(scaledVoteFloor(language, preset.minVoteCount)).toBeGreaterThanOrEqual(20);
+      }
+    }
+  });
+
+  it("leaves English floors unscaled", () => {
+    for (const preset of MOOD_LIST) {
+      expect(scaledVoteFloor("en", preset.minVoteCount)).toBe(
+        Math.max(20, preset.minVoteCount ?? 25),
+      );
     }
   });
 

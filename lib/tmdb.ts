@@ -9,6 +9,8 @@ export class TmdbError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    /** Whether retrying the same request could plausibly succeed. */
+    readonly retryable = false,
   ) {
     super(message);
     this.name = "TmdbError";
@@ -23,6 +25,21 @@ type TmdbFetchOptions = {
   /** Seconds. TMDb terms discourage indefinite caching, so keep these short. */
   revalidate?: number;
 };
+
+/**
+ * Connections to TMDb drop often enough (ECONNRESET on a cold connection, the
+ * occasional 429/5xx) that a single failure is not evidence of a real problem.
+ * Without retries a dropped request silently removes a whole language from a
+ * deck, so transient failures are retried before they are believed.
+ */
+const MAX_ATTEMPTS = 3;
+const RETRY_BASE_MS = 150;
+
+function isRetryableStatus(status: number) {
+  return status === 429 || status >= 500;
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function tmdbFetch<T>(
   path: string,
@@ -41,20 +58,52 @@ async function tmdbFetch<T>(
   }
   const url = `${TMDB_BASE}${path}${search.size ? `?${search.toString()}` : ""}`;
 
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}`, accept: "application/json" },
-    next: { revalidate: options.revalidate ?? 60 * 30 },
-  });
+  let lastError: unknown;
 
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new TmdbError(
-      `TMDb request failed (${res.status}) for ${path}${body ? `: ${body.slice(0, 200)}` : ""}`,
-      res.status === 401 ? 503 : 502,
-    );
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+    try {
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}`, accept: "application/json" },
+        next: { revalidate: options.revalidate ?? 60 * 30 },
+      });
+
+      if (res.ok) return (await res.json()) as T;
+
+      const body = await res.text().catch(() => "");
+      throw new TmdbError(
+        `TMDb request failed (${res.status}) for ${path}${body ? `: ${body.slice(0, 200)}` : ""}`,
+        // A bad token is a configuration problem, not a transient one.
+        res.status === 401 ? 503 : 502,
+        isRetryableStatus(res.status),
+      );
+    } catch (error) {
+      // Network-level failures (ECONNRESET, DNS, timeouts) are always worth a retry;
+      // TmdbErrors carry their own verdict.
+      const retryable = error instanceof TmdbError ? error.retryable : true;
+      if (!retryable) throw error;
+
+      if (attempt === MAX_ATTEMPTS) {
+        throw error instanceof TmdbError
+          ? error
+          : new TmdbError(
+              `TMDb request failed for ${path} after ${MAX_ATTEMPTS} attempts: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+              502,
+              true,
+            );
+      }
+      lastError = error;
+    }
+
+    // Exponential backoff with jitter, so parallel language fetches do not
+    // retry in lockstep and hit TMDb as a burst.
+    await sleep(RETRY_BASE_MS * 2 ** (attempt - 1) + Math.random() * 100);
   }
 
-  return (await res.json()) as T;
+  throw lastError instanceof TmdbError
+    ? lastError
+    : new TmdbError(`TMDb request failed for ${path}.`, 502);
 }
 
 /* ------------------------------------------------------------------ genres */
@@ -124,6 +173,23 @@ export type DiscoverArgs = {
   page: number;
 };
 
+/**
+ * TMDb's vote counts are dominated by its English-speaking userbase, so one
+ * global vote floor is not neutral - it is an English filter. At the classics
+ * preset's floor of 300, English returns ~1000 titles, Hindi 13, and Tamil
+ * zero. Scaling the floor per language keeps the quality gate meaningful for
+ * English while letting genuine Hindi and Tamil classics through.
+ */
+const LANGUAGE_VOTE_SCALE: Record<string, number> = { en: 1, hi: 0.25, ta: 0.15 };
+
+/** Below this, results are mostly unreviewed noise in any language. */
+const MIN_VOTE_FLOOR = 20;
+
+export function scaledVoteFloor(language: string, minVoteCount: number | undefined) {
+  const scale = LANGUAGE_VOTE_SCALE[language] ?? 1;
+  return Math.max(MIN_VOTE_FLOOR, Math.round((minVoteCount ?? 25) * scale));
+}
+
 /** Build the TMDb discover query for one language + mood. Exported for tests. */
 export function buildDiscoverParams({ language, preset, page }: DiscoverArgs) {
   const params: Record<string, string | number | undefined> = {
@@ -133,7 +199,7 @@ export function buildDiscoverParams({ language, preset, page }: DiscoverArgs) {
     page,
     sort_by: preset.sortBy ?? "popularity.desc",
     with_original_language: language,
-    "vote_count.gte": preset.minVoteCount ?? 25,
+    "vote_count.gte": scaledVoteFloor(language, preset.minVoteCount),
   };
   if (preset.genres.length) params.with_genres = preset.genres.join("|");
   if (preset.excludeGenres?.length) params.without_genres = preset.excludeGenres.join(",");

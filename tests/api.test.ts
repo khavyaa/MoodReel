@@ -84,6 +84,74 @@ describe("GET /api/movies/search", () => {
     expect(response.status).toBe(400);
   });
 
+  it("retries a dropped connection and succeeds", async () => {
+    vi.stubEnv("TMDB_ACCESS_TOKEN", "test-token");
+    let calls = 0;
+    const fetchMock = vi.fn(async (url: string | URL) => {
+      const href = String(url);
+      if (href.includes("/genre/movie/list")) {
+        return new Response(JSON.stringify({ genres: [] }), { status: 200 });
+      }
+      calls += 1;
+      // First attempt dies the way TMDb actually fails: a reset socket.
+      if (calls === 1) throw new TypeError("fetch failed");
+      return new Response(JSON.stringify({ results: [tmdbMovie(1, "en")] }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { GET } = await import("@/app/api/movies/search/route");
+    const response = await GET(new NextRequest("http://localhost/api/movies/search?q=heat"));
+
+    expect(response.status).toBe(200);
+    expect((await response.json()).movies).toHaveLength(1);
+    expect(calls).toBe(2);
+  });
+
+  it("retries a 500 but gives up after the attempt limit", async () => {
+    vi.stubEnv("TMDB_ACCESS_TOKEN", "test-token");
+    let calls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string | URL) => {
+        if (String(url).includes("/genre/movie/list")) {
+          return new Response(JSON.stringify({ genres: [] }), { status: 200 });
+        }
+        calls += 1;
+        return new Response("upstream boom", { status: 500 });
+      }),
+    );
+
+    const { GET } = await import("@/app/api/movies/search/route");
+    const response = await GET(new NextRequest("http://localhost/api/movies/search?q=heat"));
+
+    expect(response.status).toBe(502);
+    expect(calls).toBe(3);
+  });
+
+  it("does not retry a bad token", async () => {
+    vi.stubEnv("TMDB_ACCESS_TOKEN", "bad-token");
+    let calls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string | URL) => {
+        if (String(url).includes("/genre/movie/list")) {
+          calls += 1;
+          return new Response(JSON.stringify({ status_message: "Invalid API key" }), {
+            status: 401,
+          });
+        }
+        return new Response(JSON.stringify({ results: [] }), { status: 200 });
+      }),
+    );
+
+    const { GET } = await import("@/app/api/movies/search/route");
+    const response = await GET(new NextRequest("http://localhost/api/movies/search?q=heat"));
+
+    // A rejected credential is a config problem: retrying it just wastes time.
+    expect(response.status).toBe(503);
+    expect(calls).toBe(1);
+  });
+
   it("reports 503 when the TMDb token is missing", async () => {
     vi.stubEnv("TMDB_ACCESS_TOKEN", "");
     const { GET } = await import("@/app/api/movies/search/route");

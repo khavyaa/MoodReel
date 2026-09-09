@@ -45,8 +45,12 @@ export function MovieCard({
         </div>
       )}
 
-      {/* Legibility scrim: posters vary wildly, so the text needs its own floor. */}
-      <div className="absolute inset-0 bg-gradient-to-t from-ink-950 via-ink-950/70 via-40% to-transparent" />
+      {/*
+        Legibility scrim. Posters vary wildly - a bright key-art poster will wash
+        out metadata text entirely - so the bottom third gets a near-opaque floor
+        rather than a gentle fade.
+      */}
+      <div className="absolute inset-0 bg-gradient-to-t from-ink-950 from-25% via-ink-950/85 via-50% to-transparent to-80%" />
 
       <div className="absolute inset-x-0 bottom-0 p-5">
         <div className="flex flex-wrap items-center gap-2 text-[11px] text-ink-300">

@@ -10,9 +10,15 @@ import { filterSeen, statesToMap } from "@/lib/recommendations/filter-seen";
 import { handleRouteError, jsonError, parseIdList, parseLanguages } from "@/lib/api";
 import { loadUserContext } from "@/lib/movie-states-server";
 import { createClient } from "@/lib/supabase/server";
+import type { LanguageCode, MovieCard } from "@/lib/types";
 
 const DECK_SIZE = 40;
 const PAGES_PER_LANGUAGE = 2;
+
+/** One discover request's outcome, tagged so failures can be attributed to a language. */
+type DiscoverOutcome =
+  | { ok: true; language: LanguageCode; movies: MovieCard[] }
+  | { ok: false; language: LanguageCode; error: unknown };
 
 export async function GET(request: NextRequest) {
   try {
@@ -31,24 +37,41 @@ export async function GET(request: NextRequest) {
     const { userId, states, taste } = await loadUserContext();
 
     // One discover call per language per page; TMDb has no multi-language filter.
-    const requests = languages.flatMap((language) =>
+    // Each result is tagged with its language so a failure can be attributed to
+    // one, rather than silently thinning the deck.
+    const requests: Promise<DiscoverOutcome>[] = languages.flatMap((language) =>
       Array.from({ length: PAGES_PER_LANGUAGE }, (_, i) =>
-        discoverMovies({ language, preset, page: (page - 1) * PAGES_PER_LANGUAGE + i + 1 }),
+        discoverMovies({ language, preset, page: (page - 1) * PAGES_PER_LANGUAGE + i + 1 })
+          .then((movies): DiscoverOutcome => ({ ok: true, language, movies }))
+          .catch((error: unknown): DiscoverOutcome => ({ ok: false, language, error })),
       ),
     );
 
-    const settled = await Promise.allSettled(requests);
-    const failure = settled.find((r) => r.status === "rejected");
-    const fulfilled = settled.filter(
-      (r): r is PromiseFulfilledResult<Awaited<ReturnType<typeof discoverMovies>>> =>
-        r.status === "fulfilled",
-    );
-    // Every language failed - surface the real TMDb error instead of an empty deck.
-    if (fulfilled.length === 0 && failure && failure.status === "rejected") {
-      throw failure.reason;
+    const results = await Promise.all(requests);
+    const succeeded = results.filter((r) => r.ok);
+    const failures = results.filter((r) => !r.ok);
+
+    // Every request failed - surface the real TMDb error instead of an empty deck.
+    if (succeeded.length === 0) {
+      throw failures[0]?.error ?? new Error("No TMDb results.");
     }
 
-    const merged = dedupeMovies(fulfilled.flatMap((r) => r.value));
+    // Only a language whose every request failed is "missing". A language that
+    // simply has no titles matching this mood is a thin result, not an error.
+    const failedLanguages = languages.filter(
+      (language) =>
+        failures.some((f) => f.language === language) &&
+        !succeeded.some((r) => r.language === language),
+    );
+    if (failures.length > 0) {
+      console.warn(
+        `[moodreel] ${failures.length}/${results.length} TMDb discover requests failed` +
+          (failedLanguages.length ? `; lost languages: ${failedLanguages.join(", ")}` : ""),
+        failures[0].error,
+      );
+    }
+
+    const merged = dedupeMovies(succeeded.flatMap((r) => r.movies));
     const unseen = filterSeen(merged, statesToMap(states), { excludeIds });
     const ranked = rankMovies(unseen, preset, taste, seed);
     const deck = interleaveByLanguage(ranked).slice(0, DECK_SIZE);
@@ -67,6 +90,9 @@ export async function GET(request: NextRequest) {
       page,
       seed,
       count: deck.length,
+      // Tells the client this deck is missing languages it asked for.
+      partial: failedLanguages.length > 0,
+      missingLanguages: failedLanguages,
       movies: deck,
     });
   } catch (error) {
