@@ -45,12 +45,21 @@ export async function signUp(_prev: AuthState, formData: FormData): Promise<Auth
   if (!supabase) return { error: "Supabase is not configured on this deployment." };
 
   const appUrl = getAppUrl();
+  const next = safeNext(parsed.data.next);
+  // Supabase glob-matches the whole redirect URL against its allow list, so a
+  // needless query string forces every project to allow-list a wildcard. The
+  // callback already defaults to /app, so only pass `next` when it differs.
+  const emailRedirectTo =
+    next === "/app"
+      ? `${appUrl}/auth/callback`
+      : `${appUrl}/auth/callback?next=${encodeURIComponent(next)}`;
+
   const { data, error } = await supabase.auth.signUp({
     email: parsed.data.email,
     password: parsed.data.password,
     options: {
       data: { display_name: parsed.data.displayName || null },
-      emailRedirectTo: `${appUrl}/auth/callback?next=${encodeURIComponent(safeNext(parsed.data.next))}`,
+      emailRedirectTo,
     },
   });
   if (error) return { error: error.message };

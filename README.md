@@ -59,8 +59,13 @@ Token).
    (or `supabase db push`). It creates the tables, indexes, the profile-creation trigger and all
    RLS policies.
 3. Copy the project URL and publishable key into `.env.local`.
-4. Under **Authentication → URL Configuration**, add your redirect URLs:
-   `http://localhost:3000/auth/callback` and `https://<your-domain>/auth/callback`.
+4. Under **Authentication → URL Configuration**:
+   - Set **Site URL** to your production origin, e.g. `https://your-app.vercel.app`. This is the
+     fallback Supabase uses for email links, and it defaults to `http://localhost:3000` - if a
+     redirect is not allow-listed, confirmation emails silently point at localhost.
+   - Add to **Redirect URLs**: `https://your-app.vercel.app/**` and `http://localhost:3000/**`.
+     Use the `/**` wildcard rather than a bare `/auth/callback`: Supabase glob-matches the entire
+     URL including any query string.
 
 Every table is protected by row level security keyed on `auth.uid()`, so a user can only ever read
 or write their own rows.
