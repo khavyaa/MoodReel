@@ -36,6 +36,7 @@ lists in `localStorage`.
 | `npm test` | Vitest unit + route tests |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | ESLint |
+| `npm run test:rls` | Migration + RLS policy suite against a throwaway Postgres (needs Docker) |
 
 ## Environment variables
 
@@ -63,6 +64,24 @@ Token).
 
 Every table is protected by row level security keyed on `auth.uid()`, so a user can only ever read
 or write their own rows.
+
+### Verifying the schema before you run it
+
+The migration and its RLS policies are covered by a test suite that runs against a throwaway
+Postgres container, so you can check them without touching a real project:
+
+```bash
+npm run test:rls
+```
+
+It applies the migration twice (proving it is safe to re-run), confirms the signup trigger creates
+a profile, and then asserts isolation between two users: neither can read the other's rows, all
+four cross-user inserts are rejected, and cross-user updates and deletes affect zero rows. It also
+exercises the two upsert paths the app depends on. 23 assertions; a leak fails the run with a
+non-zero exit.
+
+Requires Docker. The suite stubs the parts of Supabase's `auth` schema the migration touches
+(`auth.users`, `auth.uid()`, the `authenticated` role) in `supabase/tests/auth-stub.sql`.
 
 ## Deploying to Vercel
 
@@ -95,6 +114,7 @@ lib/
   supabase/                    browser + server clients, session proxy
   local-store.ts               guest history in localStorage
 supabase/migrations/           schema, trigger and RLS policies
+supabase/tests/                auth stub + RLS isolation suite
 ```
 
 ### How a deck is built
