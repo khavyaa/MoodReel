@@ -44,8 +44,8 @@ lists in `localStorage`.
 | --- | --- | --- |
 | `TMDB_ACCESS_TOKEN` | Yes | TMDb **API Read Access Token** (v4 bearer). Server-only — never exposed to the browser. |
 | `NEXT_PUBLIC_SUPABASE_URL` | No | Omit to run guest-only. |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | No | Browser client; safe to expose, protected by RLS. |
-| `SUPABASE_SERVICE_ROLE_KEY` | No | Not used by the MVP. Never expose to the browser. |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | No | Browser client; safe to expose, protected by RLS. `NEXT_PUBLIC_SUPABASE_ANON_KEY` is accepted as the legacy name. |
+| `SUPABASE_SERVICE_ROLE_KEY` | No | Genuinely secret. Not used by the MVP. Never expose to the browser. |
 | `NEXT_PUBLIC_APP_URL` | Yes in prod | Used for auth redirects and metadata. |
 | `TMDB_WATCH_REGION` | No | Region for watch-provider lookups. Defaults to `IN`. |
 
@@ -58,7 +58,7 @@ Token).
 2. Run [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) in the SQL editor
    (or `supabase db push`). It creates the tables, indexes, the profile-creation trigger and all
    RLS policies.
-3. Copy the project URL and anon key into `.env.local`.
+3. Copy the project URL and publishable key into `.env.local`.
 4. Under **Authentication → URL Configuration**, add your redirect URLs:
    `http://localhost:3000/auth/callback` and `https://<your-domain>/auth/callback`.
 
