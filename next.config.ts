@@ -11,12 +11,8 @@ const nextConfig: NextConfig = {
       },
     },
   },
-  images: {
-    remotePatterns: [
-      { protocol: "https", hostname: "image.tmdb.org", pathname: "/t/p/**" },
-      { protocol: "https", hostname: "covers.openlibrary.org", pathname: "/b/**" },
-    ],
-  },
+  // Posters and covers load straight from TMDb / Open Library (`unoptimized`),
+  // so the image optimizer needs no remote allowlist.
   async redirects() {
     return [{ source: "/", destination: "/movies", permanent: false }];
   },

@@ -6,8 +6,8 @@ the next book.
 
 Built for one person on an iPhone and a Mac. Sign-in is a passkey; there is no sign-up page.
 
-> **Status:** Phase 1 (foundation) of the v2 rebuild. Sign-in, the app shell and both looks are
-> done; the taps → deck → pick flow arrives in Phase 2.
+> **Status:** Phase 2 of the v2 rebuild. Movies work end to end: taps → deck → head-to-head →
+> tonight's pick. Series (Phase 3) and books (Phase 4) come next.
 
 ## Run it locally
 
@@ -45,12 +45,33 @@ CI runs all of these on every push, against a throwaway Postgres.
    Turn on a database branch per preview deployment if offered, so previews never migrate
    production.
 2. Add `BETTER_AUTH_SECRET`, `OWNER_SETUP_TOKEN` and `TMDB_ACCESS_TOKEN` (Production and
-   Preview).
+   Preview). AI needs nothing: on Vercel the AI Gateway authenticates itself. Locally, set
+   `AI_GATEWAY_API_KEY` to try it, or leave it unset and the rules do everything.
 3. Deploy. Migrations run during the build.
 4. Open `/setup` on the production domain and save your passkey.
 
 Passkeys are bound to the domain they were created on. One made on production won't sign in on
 a preview deployment's own URL; previews are for checking builds.
+
+## How a deck is picked
+
+1. **Pools.** TMDb Discover, per language (English, Hindi, Tamil, Malayalam), filtered by the
+   mood's genres or keywords, your runtime limit, and a per-language vote floor. Separate pools
+   pull what's on your services (Netflix, Prime Video, Apple TV, JioHotstar) and well-rated films
+   fewer people have seen.
+2. **Your rules.** English: any genre. Tamil, Malayalam, Hindi: only crime/thriller/mystery, or
+   acclaimed. Anything you've seen, disliked, saved or picked never returns; skips return after
+   60 days.
+3. **Score.** Weighted rating (new releases damped), mood fit, energy fit, taste learned from your
+   swipes, a bonus for your services, and a markdown for films everyone has seen. No raw
+   popularity.
+4. **AI pass (optional).** The top 30 go to a fast model through Vercel's AI Gateway, which flags
+   which genuinely fit the mood. It only re-weights; if it's slow or unavailable, the rules decide.
+5. **Deck.** 15 films, about two-thirds English, the rest spread through. Four saves start the
+   head-to-head.
+
+The rules live in `lib/taste/rules.ts`, each with a unit test, and their thresholds came from
+probing real TMDb data.
 
 ## How it's put together
 
@@ -62,6 +83,11 @@ lib/auth.ts        passkey-only, single-owner auth
 lib/session.ts     the data access layer: every read of your data verifies the session here
 lib/db/            Drizzle schema and client (plain Postgres, no vendor lock-in)
 lib/moods.ts       moods, energy and time vocabulary, and their colours
+lib/taste/         language gates, weighted rating, mood/energy fit, taste from swipes
+lib/deck/          deck composition, head-to-head, AI re-weighting, the movie deck builder
+lib/tmdb/          TMDb client (retries flaky connections) and movie queries
+lib/ai/            AI Gateway calls, each with a rule-based fallback
+components/pick/   the flow: taps, deck, head-to-head, pick
 proxy.ts           sends signed-out requests to /sign-in
 ```
 

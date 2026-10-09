@@ -35,3 +35,27 @@ export async function resetDatabase() {
     await client.end();
   }
 }
+
+/** Claims the account through /setup with a virtual passkey and lands signed in. */
+export async function claimAccount(page: Page, token: string) {
+  await addVirtualAuthenticator(page);
+  await page.goto("/setup");
+  await page.getByLabel("Setup token").fill(token);
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Save a passkey" }).click();
+  await page.waitForURL(/\/movies$/);
+}
+
+/** Runs one query against the test database. */
+export async function query<T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<T[]> {
+  const client = new pg.Client({
+    connectionString:
+      process.env.DATABASE_URL_TEST ?? "postgres://moodreel:moodreel@localhost:5433/moodreel_test",
+  });
+  await client.connect();
+  try {
+    return (await client.query(sql, params)).rows as T[];
+  } finally {
+    await client.end();
+  }
+}

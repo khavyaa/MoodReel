@@ -1,5 +1,7 @@
 import "server-only";
 import { composeDeck, DECK_SIZE } from "./compose";
+import { applyCuration } from "./curation";
+import { curateWithAi } from "@/lib/ai/curate";
 import { discoverMovies, getMovieDetails, type DiscoverQuery } from "@/lib/tmdb/movies";
 import {
   GENRE,
@@ -36,6 +38,8 @@ export type DeckCard = {
   streamingOn: string[];
   gate: GateReason | null;
   trailerKey: string | null;
+  /** TMDb's where-to-watch page (JustWatch data) for your region. */
+  watchLink: string | null;
 };
 
 /**
@@ -86,7 +90,12 @@ export type DealResult = {
   cards: DeckCard[];
   /** Languages whose queries all failed, so the deck is missing them. */
   missingLanguages: string[];
+  /** Whether an AI pass re-weighted this deck (false: rules only). */
+  curatedByAi: boolean;
 };
+
+/** How many of the best-scoring candidates the AI is asked about. */
+const CURATE_TOP = 30;
 
 export async function buildMovieDeck(
   taps: Taps,
@@ -114,10 +123,15 @@ export async function buildMovieDeck(
   }
 
   const candidates = [...pool.values()].filter((m) => !exclude.has(m.id) && eligible(m, taps));
-  const deck = composeDeck(
-    capAnimated(candidates.map((movie) => ({ movie, score: scoreMovie(movie, taps, taste) }))),
-    { size: DECK_SIZE, seed },
-  );
+  const scored = capAnimated(candidates.map((movie) => ({ movie, score: scoreMovie(movie, taps, taste) })));
+
+  // AI gets a say on the strongest candidates; the rules still compose the deck.
+  const top = [...scored].sort((a, b) => b.score - a.score).slice(0, CURATE_TOP).map((s) => s.movie);
+  const approved = await curateWithAi(taps, top);
+  const deck = composeDeck(applyCuration(scored, approved, new Set(top.map((m) => m.id))), {
+    size: DECK_SIZE,
+    seed,
+  });
 
   const details = await Promise.allSettled(deck.map((m) => getMovieDetails(m.id)));
   const cards = deck.map((m, i): DeckCard => {
@@ -143,8 +157,13 @@ export async function buildMovieDeck(
       streamingOn: d?.streamingOn ?? (m.onMyServices ? ["your services"] : []),
       gate: passesGate(m).reason ?? null,
       trailerKey: d?.trailerKey ?? null,
+      watchLink: d?.watchLink ?? null,
     };
   });
 
-  return { cards, missingLanguages: MOVIE_LANGUAGES.filter((l) => !succeeded.has(l)) };
+  return {
+    cards,
+    missingLanguages: MOVIE_LANGUAGES.filter((l) => !succeeded.has(l)),
+    curatedByAi: approved !== null,
+  };
 }

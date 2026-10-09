@@ -13,7 +13,7 @@ const SECRET = "test-secret-with-enough-length-0123456789";
 // lib/auth reads env at import, so configure before importing anything.
 process.env.DATABASE_URL = TEST_URL;
 process.env.BETTER_AUTH_SECRET = SECRET;
-process.env.NEXT_PUBLIC_APP_URL = "http://localhost:3000";
+process.env.APP_URL = "http://localhost:3000";
 
 type Modules = {
   auth: typeof import("@/lib/auth").auth;

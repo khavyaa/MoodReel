@@ -17,11 +17,9 @@ const instrument = Instrument_Serif({
   variable: "--font-instrument",
 });
 const onest = Onest({ subsets: ["latin"], variable: "--font-onest" });
-const jetbrains = JetBrains_Mono({
-  subsets: ["latin"],
-  weight: ["400", "600"],
-  variable: "--font-jetbrains",
-});
+// Variable font: one file covers every weight. Requesting fixed weights
+// ("400", "600") broke Turbopack's Google font loader in Next 16.4.
+const jetbrains = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains" });
 
 export const metadata: Metadata = {
   title: { default: "MoodReel", template: "%s · MoodReel" },

@@ -12,7 +12,7 @@ import {
   recordSwipe,
   tasteFor,
 } from "@/lib/picks/server";
-import { ruleBasedWhy } from "@/lib/picks/why";
+import { writeWhy } from "@/lib/ai/why";
 import { MEDIA } from "@/lib/moods";
 
 const tapsSchema = z.object({
@@ -37,7 +37,8 @@ export async function dealMovies(input: unknown): Promise<DealResponse> {
   try {
     const [exclude, taste] = await Promise.all([handledMovieIds(owner.id), tasteFor(owner.id)]);
     const seed = Date.now() % 100_000;
-    const { cards, missingLanguages } = await buildMovieDeck(taps, { exclude, taste, seed });
+    const { cards, missingLanguages, curatedByAi } = await buildMovieDeck(taps, { exclude, taste, seed });
+    console.info(`[moodreel] dealt ${cards.length} cards (${curatedByAi ? "AI-curated" : "rules only"})`);
     const sessionId = await createMovieSession(owner.id, taps, cards.map((c) => c.id));
     return { ok: true, sessionId, cards, missingLanguages };
   } catch (error) {
@@ -70,6 +71,7 @@ const pickSchema = titleSchema.extend({
   gate: z.enum(["crime/thriller", "acclaimed"]).nullable(),
   streamingOn: z.array(z.string()),
   directors: z.array(z.string()),
+  overview: z.string().max(2000),
 });
 
 export async function pickMovie(
@@ -81,7 +83,7 @@ export async function pickMovie(
   z.string().uuid().parse(sessionId);
   const w = pickSchema.parse(winner);
   const taps = tapsSchema.pick({ mood: true, energy: true }).parse(context);
-  const why = ruleBasedWhy({ ...w, mood: taps.mood, energy: taps.energy, beat: Math.max(0, context.beat | 0) });
-  await completePick(owner.id, sessionId, w, { text: why, source: "rules" });
-  return { why };
+  const why = await writeWhy({ ...w, mood: taps.mood, energy: taps.energy, beat: Math.max(0, context.beat | 0) });
+  await completePick(owner.id, sessionId, w, why);
+  return { why: why.text };
 }

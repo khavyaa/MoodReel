@@ -7,7 +7,8 @@ import "server-only";
  * deck, so transient failures are retried before they're believed.
  */
 
-const TMDB_BASE = "https://api.themoviedb.org/3";
+/** Overridable only so end-to-end tests can point at a fixed fake TMDb. */
+const TMDB_BASE = process.env.TMDB_BASE_URL || "https://api.themoviedb.org/3";
 const MAX_ATTEMPTS = 3;
 
 export class TmdbError extends Error {
