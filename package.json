@@ -7,7 +7,7 @@
     "build": "node scripts/migrate.mjs --if-vercel && next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run --project unit",
     "test:db": "dotenv -e .env.local -- vitest run --project db",
     "db:generate": "dotenv -e .env.local -- drizzle-kit generate",
