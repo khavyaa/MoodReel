@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, gt, isNotNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { pickSessions, titleActions, titleStates } from "@/lib/db/schema";
 import { buildTasteProfile, type ActionKind } from "@/lib/taste/profile";
@@ -156,4 +156,131 @@ export async function markSessionEmpty(userId: string, sessionId: string) {
     .update(pickSessions)
     .set({ status: "empty", completedAt: new Date() })
     .where(eq(pickSessions.id, sessionId));
+}
+
+/* ------------------------------------------------------- saved and history */
+
+export type LibraryAction = "unsaved" | "seen";
+
+/**
+ * A change made from Saved or History, outside any deck. Actions go in the log
+ * with the tags the title was first logged with, so taste stays consistent; a
+ * rating only touches the title's state.
+ */
+export async function updateMovieState(
+  userId: string,
+  movieId: number,
+  action: LibraryAction | null,
+  state: Partial<Pick<typeof titleStates.$inferInsert, "saved" | "seen" | "rating">>,
+) {
+  const db = getDb();
+  const key = { userId, media: "movie" as const, source: "tmdb" as const, externalId: String(movieId) };
+  const current = await db.query.titleStates.findFirst({
+    where: and(
+      eq(titleStates.userId, userId),
+      eq(titleStates.media, "movie"),
+      eq(titleStates.source, "tmdb"),
+      eq(titleStates.externalId, key.externalId),
+    ),
+  });
+  if (!current) throw new Error("That title isn't in your library.");
+
+  const earlier = await db.query.titleActions.findFirst({
+    where: and(
+      eq(titleActions.userId, userId),
+      eq(titleActions.media, "movie"),
+      eq(titleActions.source, "tmdb"),
+      eq(titleActions.externalId, key.externalId),
+    ),
+    orderBy: desc(titleActions.createdAt),
+  });
+
+  await db.transaction(async (tx) => {
+    if (action) {
+      await tx.insert(titleActions).values({
+        ...key,
+        action,
+        language: earlier?.language ?? null,
+        tags: earlier?.tags ?? [],
+      });
+    }
+    await tx
+      .update(titleStates)
+      .set({ ...state, updatedAt: new Date() })
+      .where(
+        and(
+          eq(titleStates.userId, userId),
+          eq(titleStates.media, "movie"),
+          eq(titleStates.source, "tmdb"),
+          eq(titleStates.externalId, key.externalId),
+        ),
+      );
+  });
+}
+
+/** Movies you swiped right on and haven't picked or removed, newest first. */
+export async function savedMovieIds(userId: string, limit = 60) {
+  const rows = await getDb()
+    .select({ id: titleStates.externalId, savedAt: titleStates.updatedAt })
+    .from(titleStates)
+    .where(
+      and(
+        eq(titleStates.userId, userId),
+        eq(titleStates.media, "movie"),
+        eq(titleStates.source, "tmdb"),
+        eq(titleStates.saved, true),
+      ),
+    )
+    .orderBy(desc(titleStates.updatedAt))
+    .limit(limit);
+  return rows.map((r) => ({ id: Number(r.id), savedAt: r.savedAt }));
+}
+
+/** Past picks, newest first, with the mood, the reason, and what you made of it. */
+export async function movieHistory(userId: string, limit = 50) {
+  const db = getDb();
+  const sessions = await db
+    .select({
+      sessionId: pickSessions.id,
+      pick: pickSessions.pick,
+      mood: pickSessions.mood,
+      why: pickSessions.why,
+      pickedAt: pickSessions.completedAt,
+    })
+    .from(pickSessions)
+    .where(and(eq(pickSessions.userId, userId), eq(pickSessions.media, "movie"), eq(pickSessions.status, "picked")))
+    .orderBy(desc(pickSessions.completedAt))
+    .limit(limit);
+
+  const ids = [...new Set(sessions.flatMap((s) => (s.pick ? [s.pick.externalId] : [])))];
+  const states = ids.length
+    ? await db
+        .select({ id: titleStates.externalId, seen: titleStates.seen, rating: titleStates.rating })
+        .from(titleStates)
+        .where(
+          and(
+            eq(titleStates.userId, userId),
+            eq(titleStates.media, "movie"),
+            eq(titleStates.source, "tmdb"),
+            inArray(titleStates.externalId, ids),
+          ),
+        )
+    : [];
+  const stateOf = new Map(states.map((s) => [s.id, s]));
+
+  return sessions.flatMap((s) =>
+    s.pick
+      ? [
+          {
+            sessionId: s.sessionId,
+            id: Number(s.pick.externalId),
+            mood: s.mood,
+            why: s.why,
+            pickedAt: s.pickedAt,
+            seen: stateOf.get(s.pick.externalId)?.seen ?? false,
+            rating: stateOf.get(s.pick.externalId)?.rating ?? null,
+          },
+        ]
+      : [],
+  );
 }

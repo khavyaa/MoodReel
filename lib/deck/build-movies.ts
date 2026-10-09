@@ -38,8 +38,6 @@ export type DeckCard = {
   streamingOn: string[];
   gate: GateReason | null;
   trailerKey: string | null;
-  /** TMDb's where-to-watch page (JustWatch data) for your region. */
-  watchLink: string | null;
 };
 
 /**
@@ -157,7 +155,6 @@ export async function buildMovieDeck(
       streamingOn: d?.streamingOn ?? (m.onMyServices ? ["your services"] : []),
       gate: passesGate(m).reason ?? null,
       trailerKey: d?.trailerKey ?? null,
-      watchLink: d?.watchLink ?? null,
     };
   });
 

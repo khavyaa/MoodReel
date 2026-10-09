@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { AnimatePresence, motion, useMotionValue, useReducedMotion, useTransform } from "framer-motion";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AnimatePresence, animate, motion, useMotionValue, useReducedMotion, useTransform } from "framer-motion";
 import { ArrowLeft, ArrowRight, ArrowUp, Check, Star } from "lucide-react";
 import type { DeckCard } from "@/lib/deck/build-movies";
 import { MAX_SAVES } from "@/lib/deck/finale";
@@ -12,10 +12,21 @@ import { Poster } from "./poster";
 export type SwipeAction = "saved" | "skipped" | "seen";
 
 const EXIT: Record<SwipeAction, { x: number; y: number; rotate: number }> = {
-  saved: { x: 700, y: 60, rotate: 18 },
-  skipped: { x: -700, y: 60, rotate: -18 },
-  seen: { x: 0, y: -900, rotate: 0 },
+  saved: { x: 640, y: 40, rotate: 16 },
+  skipped: { x: -640, y: 40, rotate: -16 },
+  seen: { x: 0, y: -820, rotate: 0 },
 };
+
+/** Cards rendered in the pile: the one you're deciding on and two beneath it. */
+const PILE = 3;
+/** Where each card in the pile rests, top first. */
+const RESTING = [
+  { scale: 1, y: 0, rotate: 0, opacity: 1 },
+  { scale: 0.94, y: 14, rotate: -3, opacity: 1 },
+  { scale: 0.88, y: 28, rotate: 2.5, opacity: 0.7 },
+] as const;
+/** A soft, quick settle: no bounce, so it reads the same on 60 and 120 Hz screens. */
+const SETTLE = { type: "spring", stiffness: 420, damping: 38, mass: 0.9 } as const;
 
 /** Distance or flick speed that commits a swipe instead of springing back. */
 const COMMIT = 110;
@@ -37,7 +48,6 @@ export function DeckScreen({
   onSwipe: (action: SwipeAction) => void;
 }) {
   const card = cards[index];
-  const next = cards[index + 1];
 
   // Arrow keys on a laptop. Ignored while typing, and while a modifier is held.
   useEffect(() => {
@@ -69,19 +79,20 @@ export function DeckScreen({
       )}
 
       <div className="grid flex-1 items-center gap-6 lg:grid-cols-[minmax(280px,380px)_minmax(0,1fr)] lg:gap-14">
-        {/* The pile: the next card peeks out behind the one you're deciding on. */}
-        <div className="relative mx-auto w-[min(50vw,240px)] lg:w-full lg:max-w-[380px]">
-          {next && (
-            <div aria-hidden className="absolute inset-0 -rotate-6 translate-x-[-12px] translate-y-2 opacity-70 saturate-50">
-              <Poster title={next.title} path={next.posterPath} sizes="(min-width: 1024px) 380px, 50vw" />
-            </div>
-          )}
+        {/*
+          The pile: the next two cards sit underneath, already loaded. When the
+          top card leaves, they slide forward instead of a new card popping in.
+        */}
+        <div className="relative mx-auto aspect-[2/3] w-[min(50vw,240px)] lg:w-full lg:max-w-[380px]">
           <AnimatePresence custom={lastAction} initial={false}>
-            <SwipeCard key={card.id} card={card} onSwipe={onSwipe} />
+            {cards
+              .slice(index, index + PILE)
+              .map((c, depth) => <SwipeCard key={c.id} card={c} depth={depth} onSwipe={onSwipe} />)
+              .reverse()}
           </AnimatePresence>
         </div>
 
-        <CardInfo card={card} />
+        <CardInfo key={card.id} card={card} />
       </div>
 
       <div className="mt-auto grid grid-cols-[1fr_1fr_1.3fr] gap-2 lg:mt-0 lg:flex lg:flex-wrap lg:gap-3">
@@ -99,8 +110,11 @@ export function DeckScreen({
   );
 }
 
-function SwipeCard({ card, onSwipe }: { card: DeckCard; onSwipe: (a: SwipeAction) => void }) {
+function SwipeCard({ card, depth, onSwipe }: { card: DeckCard; depth: number; onSwipe: (a: SwipeAction) => void }) {
   const reduce = useReducedMotion();
+  const isTop = depth === 0;
+  // Drag lives on an inner layer, the pile position and the exit on the outer
+  // one, so a card flies off from wherever your finger let go of it.
   const x = useMotionValue(0);
   const y = useMotionValue(0);
   const rotate = useTransform(x, [-320, 320], [-14, 14]);
@@ -111,38 +125,53 @@ function SwipeCard({ card, onSwipe }: { card: DeckCard; onSwipe: (a: SwipeAction
 
   return (
     <motion.div
-      className="relative z-10 cursor-grab touch-none active:cursor-grabbing"
-      style={{ x, y, rotate }}
-      drag
-      dragSnapToOrigin
-      dragElastic={0.9}
-      onDragEnd={(_, info: { offset: { x: number; y: number }; velocity: { x: number; y: number } }) => {
-        if (committed.current) return;
-        const { offset, velocity } = info;
-        let action: SwipeAction | null = null;
-        if ((offset.y < -COMMIT || velocity.y < -FLICK) && Math.abs(offset.y) > Math.abs(offset.x)) action = "seen";
-        else if (offset.x > COMMIT || velocity.x > FLICK) action = "saved";
-        else if (offset.x < -COMMIT || velocity.x < -FLICK) action = "skipped";
-        if (action) {
-          committed.current = true;
-          onSwipe(action);
-        }
-      }}
+      aria-hidden={!isTop}
+      className={cn("absolute inset-0 will-change-transform", !isTop && "pointer-events-none")}
+      style={{ zIndex: PILE - depth }}
       variants={{
-        enter: { scale: 0.96, opacity: 0 },
-        center: { scale: 1, opacity: 1 },
         // The card leaves the way you sent it: right for save, left for skip, up for seen.
-        exit: (a: SwipeAction) => (reduce ? { opacity: 0 } : { ...EXIT[a], opacity: 0, transition: { duration: 0.32 } }),
+        exit: (a: SwipeAction) =>
+          reduce
+            ? { opacity: 0, transition: { duration: 0.15 } }
+            : { ...EXIT[a], opacity: 0, zIndex: PILE + 1, transition: { duration: 0.38, ease: [0.3, 0.7, 0.4, 1] } },
       }}
-      initial={reduce ? false : "enter"}
-      animate="center"
+      initial={reduce ? false : { ...RESTING[PILE - 1], scale: 0.82, y: 40, opacity: 0 }}
+      animate={reduce ? { ...RESTING[depth], rotate: 0 } : RESTING[depth]}
       exit="exit"
-      transition={{ type: "spring", stiffness: 340, damping: 30 }}
+      transition={SETTLE}
     >
-      <Poster title={card.title} path={card.posterPath} sizes="(min-width: 1024px) 380px, 50vw" priority />
-      <Stamp label="Save" opacity={saveHint} className="left-4 -rotate-12" />
-      <Stamp label="Skip" opacity={skipHint} className="right-4 rotate-12" />
-      <Stamp label="Seen it" opacity={seenHint} className="left-1/2 -translate-x-1/2" />
+      <motion.div
+        className={cn("h-full", isTop && "cursor-grab touch-none active:cursor-grabbing")}
+        style={{ x, y, rotate }}
+        drag={isTop}
+        dragElastic={0.9}
+        dragMomentum={false}
+        onDragEnd={(_, info: { offset: { x: number; y: number }; velocity: { x: number; y: number } }) => {
+          if (committed.current) return;
+          const { offset, velocity } = info;
+          let action: SwipeAction | null = null;
+          if ((offset.y < -COMMIT || velocity.y < -FLICK) && Math.abs(offset.y) > Math.abs(offset.x)) action = "seen";
+          else if (offset.x > COMMIT || velocity.x > FLICK) action = "saved";
+          else if (offset.x < -COMMIT || velocity.x < -FLICK) action = "skipped";
+          if (action) {
+            committed.current = true;
+            onSwipe(action);
+          } else {
+            // Not far enough: spring back to the pile.
+            animate(x, 0, SETTLE);
+            animate(y, 0, SETTLE);
+          }
+        }}
+      >
+        <Poster title={card.title} path={card.posterPath} sizes="(min-width: 1024px) 380px, 50vw" priority={depth < 2} />
+        {isTop && (
+          <>
+            <Stamp label="Save" opacity={saveHint} className="left-4 -rotate-12" />
+            <Stamp label="Skip" opacity={skipHint} className="right-4 rotate-12" />
+            <Stamp label="Seen it" opacity={seenHint} className="left-1/2 -translate-x-1/2" />
+          </>
+        )}
+      </motion.div>
     </motion.div>
   );
 }
@@ -196,8 +225,45 @@ function CardInfo({ card }: { card: DeckCard }) {
       </div>
 
       {card.genres.length > 0 && <p className="hidden text-sm text-muted sm:block">{card.genres.slice(0, 4).join(" · ")}</p>}
-      <p className="line-clamp-2 max-w-[60ch] text-[15px] leading-relaxed sm:line-clamp-3 lg:line-clamp-5 lg:text-lg">{card.overview}</p>
+      <Overview text={card.overview} />
       {people && <p className="hidden text-sm text-muted sm:block">{people}{card.cast.length ? ` · with ${card.cast.slice(0, 3).join(", ")}` : ""}</p>}
+    </div>
+  );
+}
+
+/** The synopsis, clamped to fit beside the poster, with "More" when it doesn't. */
+function Overview({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const [clipped, setClipped] = useState(false);
+  // Whether the clamp actually cuts anything depends on screen width, so it's measured, not guessed.
+  const measure = useCallback((el: HTMLParagraphElement | null) => {
+    if (!el) return;
+    const check = () => setClipped(el.scrollHeight > el.clientHeight + 1);
+    check();
+    const observer = new ResizeObserver(check);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  if (!text) return null;
+  return (
+    <div className="flex max-w-[60ch] flex-col items-start gap-1">
+      <p
+        ref={open ? undefined : measure}
+        className={cn("text-[15px] leading-relaxed lg:text-lg", !open && "line-clamp-3 lg:line-clamp-5")}
+      >
+        {text}
+      </p>
+      {(clipped || open) && (
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          className="text-sm font-bold underline underline-offset-4"
+        >
+          {open ? "Less" : "More"}
+        </button>
+      )}
     </div>
   );
 }

@@ -103,6 +103,13 @@ export async function discoverMovies(q: DiscoverQuery): Promise<MovieCandidate[]
 
 export type MovieDetails = {
   id: number;
+  title: string;
+  year: number | null;
+  language: string;
+  genreIds: number[];
+  posterPath: string | null;
+  rating: number;
+  overview: string;
   runtime: number | null;
   genres: string[];
   tagline: string | null;
@@ -111,8 +118,6 @@ export type MovieDetails = {
   trailerKey: string | null;
   /** Your services that stream it in your region, by name. */
   streamingOn: string[];
-  /** TMDb's page listing every way to watch it (JustWatch data). */
-  watchLink: string | null;
 };
 
 type TmdbDetails = TmdbMovie & {
@@ -136,8 +141,16 @@ export async function getMovieDetails(id: number): Promise<MovieDetails> {
   const trailer =
     videos.find((v) => v.site === "YouTube" && v.type === "Trailer" && v.official) ??
     videos.find((v) => v.site === "YouTube" && v.type === "Trailer");
+  const base = toCandidate(d, false);
   return {
     id: d.id,
+    title: base.title,
+    year: base.year,
+    language: base.language,
+    genreIds: base.genreIds,
+    posterPath: base.posterPath,
+    rating: Math.round(base.voteAverage * 10) / 10,
+    overview: base.overview,
     runtime: d.runtime || null,
     genres: (d.genres ?? []).map((g) => MOVIE_GENRE_NAMES[g.id] ?? g.name),
     tagline: d.tagline || null,
@@ -147,6 +160,5 @@ export async function getMovieDetails(id: number): Promise<MovieDetails> {
     streamingOn: (region?.flatrate ?? [])
       .filter((p) => p.provider_id in MY_SERVICES)
       .map((p) => MY_SERVICES[p.provider_id]),
-    watchLink: region?.link ?? null,
   };
 }

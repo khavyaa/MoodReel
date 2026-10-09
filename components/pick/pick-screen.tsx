@@ -4,6 +4,7 @@ import { Check, ExternalLink, Play, Star } from "lucide-react";
 import type { DeckCard } from "@/lib/deck/build-movies";
 import { MOODS, type MoodId } from "@/lib/moods";
 import { formatRuntime } from "@/lib/picks/why";
+import { watchSearchUrl } from "@/lib/watch";
 import { buttonClasses } from "@/components/ui/button";
 import { Poster } from "./poster";
 
@@ -47,11 +48,9 @@ export function PickScreen({
         </div>
 
         <div className="flex flex-wrap gap-3 pt-2">
-          {pick.watchLink && (
-            <a href={pick.watchLink} target="_blank" rel="noreferrer noopener" className={buttonClasses("solid", "lg")}>
-              Where to watch <ExternalLink className="size-4" aria-hidden />
-            </a>
-          )}
+          <a href={watchSearchUrl(pick.title, pick.year)} target="_blank" rel="noreferrer noopener" className={buttonClasses("solid", "lg")}>
+            Where to watch <ExternalLink className="size-4" aria-hidden />
+          </a>
           {pick.trailerKey && (
             <a
               href={`https://www.youtube.com/watch?v=${pick.trailerKey}`}
@@ -79,7 +78,7 @@ export function PickScreen({
             </ul>
           </div>
         )}
-        <p className="text-xs text-muted">Where-to-watch data from JustWatch, via TMDb.</p>
+        <p className="text-xs text-muted">Streaming badges from JustWatch, via TMDb.</p>
       </div>
     </div>
   );

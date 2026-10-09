@@ -95,6 +95,43 @@ test("taps → deck → head-to-head → tonight's pick, saved to the database",
   expect(english).toBeLessThan(dealt.length);
 });
 
+test("saved and history show the run, and you can tidy and rate them", async ({ page }) => {
+  // Saved: the three saves that didn't win.
+  await page.goto("/saved");
+  await expect(page.getByText("Saved · 3 films")).toBeVisible();
+  const saved = page.getByRole("main").getByRole("listitem");
+  await expect(saved).toHaveCount(3);
+  const where = saved.first().getByRole("link", { name: /Where to watch/ });
+  await expect(where).toHaveAttribute("href", /^https:\/\/www\.google\.com\/search\?q=.+movie/);
+
+  await saved.first().getByRole("button", { name: "Remove" }).click();
+  await expect(saved).toHaveCount(2);
+  await saved.first().getByRole("button", { name: "Seen it" }).click();
+  await expect(saved).toHaveCount(1);
+  await expect
+    .poll(async () => (await query<{ n: string }>("select count(*) as n from title_states where saved"))[0].n)
+    .toBe("1");
+  await page.reload();
+  await expect(page.getByText("Saved · 1 film")).toBeVisible();
+
+  // History: the pick, its mood and reason, and a rating.
+  await page.goto("/history");
+  await expect(page.getByText("History · 1 pick")).toBeVisible();
+  await expect(page.getByText(/beat 3 other saves/)).toBeVisible();
+  await page.getByRole("button", { name: "4 stars" }).click();
+  await expect(page.getByRole("button", { name: "4 stars" })).toHaveAttribute("aria-pressed", "true");
+  await expect
+    .poll(async () => (await query<{ rating: number | null }>("select rating from title_states where picked_at is not null"))[0].rating)
+    .toBe(8);
+  await page.reload();
+  await expect(page.getByRole("button", { name: "4 stars" })).toHaveAttribute("aria-pressed", "true");
+
+  const [{ actions }] = await query<{ actions: string }>(
+    "select count(*) as actions from title_actions where action in ('unsaved', 'seen') and pick_session_id is null",
+  );
+  expect(actions).toBe("2"); // remove and seen are logged; the rating is not
+});
+
 test("swipe gestures and keys work on the deck", async ({ page, isMobile }) => {
   await page.goto("/movies");
   await page.getByRole("button", { name: /Deal 15 films/ }).click();
