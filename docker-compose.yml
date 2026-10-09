@@ -1,0 +1,21 @@
+# Local development database. Production uses Neon (also Postgres), so the same
+# migrations and queries run in both places. Start with: docker compose up -d
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: moodreel
+      POSTGRES_PASSWORD: moodreel
+      POSTGRES_DB: moodreel
+    ports:
+      - "5433:5432"
+    volumes:
+      - moodreel-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U moodreel -d moodreel"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  moodreel-db:
