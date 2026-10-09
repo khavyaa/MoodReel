@@ -1,0 +1,152 @@
+import "server-only";
+import { tmdb } from "./client";
+import { EXCLUDED_KEYWORDS, MOVIE_GENRE_NAMES } from "@/lib/taste/rules";
+import type { MovieCandidate } from "@/lib/taste/types";
+
+export const WATCH_REGION = process.env.TMDB_WATCH_REGION || "IN";
+
+/**
+ * Your services, by TMDb provider id in India (checked Oct 2026). "Apple TV"
+ * here is the subscription; the rent-or-buy "Apple TV Store" (id 2) and
+ * "Netflix Kids" (175) are left out on purpose.
+ */
+export const MY_SERVICES: Record<number, string> = {
+  8: "Netflix",
+  119: "Prime Video",
+  350: "Apple TV",
+  2336: "JioHotstar",
+};
+const SERVICE_FILTER = Object.keys(MY_SERVICES).join("|");
+
+type TmdbMovie = {
+  id: number;
+  title: string;
+  original_title: string;
+  original_language: string;
+  release_date?: string | null;
+  genre_ids?: number[];
+  genres?: { id: number; name: string }[];
+  overview?: string | null;
+  poster_path: string | null;
+  backdrop_path: string | null;
+  vote_average: number;
+  vote_count: number;
+  popularity: number;
+};
+
+function toCandidate(m: TmdbMovie, onMyServices: boolean): MovieCandidate {
+  const year = m.release_date ? Number(m.release_date.slice(0, 4)) : null;
+  return {
+    id: m.id,
+    title: m.title,
+    originalTitle: m.original_title,
+    language: m.original_language,
+    year: year && Number.isFinite(year) ? year : null,
+    releaseDate: m.release_date || null,
+    genreIds: m.genre_ids ?? m.genres?.map((g) => g.id) ?? [],
+    overview: m.overview ?? "",
+    posterPath: m.poster_path,
+    backdropPath: m.backdrop_path,
+    voteAverage: m.vote_average ?? 0,
+    voteCount: m.vote_count ?? 0,
+    popularity: m.popularity ?? 0,
+    onMyServices,
+  };
+}
+
+export type DiscoverQuery = {
+  language: string;
+  genres: number[];
+  /** When set, query these keywords (any of) instead of genres. */
+  keywords?: number[];
+  excludeGenres: number[];
+  minVotes: number;
+  /** Cap on votes: pulls well-rated films fewer people have seen. */
+  maxVotes?: number;
+  runtimeMax: number | null;
+  onlyMyServices: boolean;
+  sortBy: "vote_average.desc" | "popularity.desc";
+  page: number;
+};
+
+/** Exported for tests: the exact TMDb parameters for one pool query. */
+export function discoverParams(q: DiscoverQuery, today = new Date().toISOString().slice(0, 10)) {
+  return {
+    include_adult: false,
+    include_video: false,
+    language: "en-US",
+    with_original_language: q.language,
+    ...(q.keywords?.length
+      ? { with_keywords: q.keywords.join("|") } // any of the mood's keywords
+      : { with_genres: q.genres.join("|") }), // any of the mood's genres
+    without_genres: q.excludeGenres.join(","),
+    without_keywords: EXCLUDED_KEYWORDS.join(","),
+    "vote_count.gte": q.minVotes,
+    "vote_count.lte": q.maxVotes,
+    "with_runtime.gte": 70, // no shorts
+    "with_runtime.lte": q.runtimeMax ?? undefined,
+    "primary_release_date.lte": today, // released, not announced
+    sort_by: q.sortBy,
+    page: q.page,
+    ...(q.onlyMyServices
+      ? { with_watch_providers: SERVICE_FILTER, watch_region: WATCH_REGION, with_watch_monetization_types: "flatrate" }
+      : {}),
+  };
+}
+
+export async function discoverMovies(q: DiscoverQuery): Promise<MovieCandidate[]> {
+  const data = await tmdb<{ results: TmdbMovie[] }>("/discover/movie", discoverParams(q), 60 * 60 * 6);
+  return data.results.map((m) => toCandidate(m, q.onlyMyServices));
+}
+
+/* ---------------------------------------------------------------- details */
+
+export type MovieDetails = {
+  id: number;
+  runtime: number | null;
+  genres: string[];
+  tagline: string | null;
+  directors: string[];
+  cast: string[];
+  trailerKey: string | null;
+  /** Your services that stream it in your region, by name. */
+  streamingOn: string[];
+  /** TMDb's page listing every way to watch it (JustWatch data). */
+  watchLink: string | null;
+};
+
+type TmdbDetails = TmdbMovie & {
+  runtime: number | null;
+  tagline: string | null;
+  credits?: { cast: { name: string }[]; crew: { name: string; job: string }[] };
+  videos?: { results: { key: string; site: string; type: string; official: boolean }[] };
+  "watch/providers"?: {
+    results: Record<string, { link?: string; flatrate?: { provider_id: number; provider_name: string }[] }>;
+  };
+};
+
+export async function getMovieDetails(id: number): Promise<MovieDetails> {
+  const d = await tmdb<TmdbDetails>(
+    `/movie/${id}`,
+    { language: "en-US", append_to_response: "credits,videos,watch/providers" },
+    60 * 60 * 6,
+  );
+  const region = d["watch/providers"]?.results?.[WATCH_REGION];
+  const videos = d.videos?.results ?? [];
+  const trailer =
+    videos.find((v) => v.site === "YouTube" && v.type === "Trailer" && v.official) ??
+    videos.find((v) => v.site === "YouTube" && v.type === "Trailer");
+  return {
+    id: d.id,
+    runtime: d.runtime || null,
+    genres: (d.genres ?? []).map((g) => MOVIE_GENRE_NAMES[g.id] ?? g.name),
+    tagline: d.tagline || null,
+    directors: (d.credits?.crew ?? []).filter((c) => c.job === "Director").map((c) => c.name),
+    cast: (d.credits?.cast ?? []).slice(0, 4).map((c) => c.name),
+    trailerKey: trailer?.key ?? null,
+    streamingOn: (region?.flatrate ?? [])
+      .filter((p) => p.provider_id in MY_SERVICES)
+      .map((p) => MY_SERVICES[p.provider_id]),
+    watchLink: region?.link ?? null,
+  };
+}
