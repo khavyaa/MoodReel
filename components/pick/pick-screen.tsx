@@ -3,7 +3,7 @@
 import { Check, ExternalLink, Play, Star } from "lucide-react";
 import type { DeckCard } from "@/lib/deck/build-movies";
 import { MOODS, type MoodId } from "@/lib/moods";
-import { formatRuntime } from "@/lib/picks/why";
+import { cardMeta, startLine } from "@/lib/card-meta";
 import { watchSearchUrl } from "@/lib/watch";
 import { buttonClasses } from "@/components/ui/button";
 import { Poster } from "./poster";
@@ -12,16 +12,18 @@ export function PickScreen({
   pick,
   mood,
   why,
+  resultLabel = "Tonight's pick",
   savedForLater,
   onAgain,
 }: {
   pick: DeckCard;
   mood: MoodId;
   why: string | null;
+  resultLabel?: string;
   savedForLater: DeckCard[];
   onAgain: () => void;
 }) {
-  const runtime = formatRuntime(pick.runtime);
+  const start = startLine(pick);
   return (
     <div className="grid flex-1 items-center gap-5 lg:grid-cols-[minmax(260px,380px)_minmax(0,1fr)] lg:gap-16">
       <div className="mx-auto w-[min(40vw,200px)] lg:w-full">
@@ -29,12 +31,20 @@ export function PickScreen({
       </div>
 
       <div className="flex min-w-0 flex-col gap-4 lg:gap-5">
-        <p className="label text-muted">Tonight&apos;s pick · {MOODS[mood].label}</p>
+        <p className="label text-muted">
+          {resultLabel} · {MOODS[mood].label}
+        </p>
         <h1 className="display text-[clamp(3rem,8vw,7.5rem)]">{pick.title}</h1>
         <p className="max-w-[40ch] text-xl leading-snug lg:text-2xl" aria-live="polite">
           {why ?? "Working out why…"}
         </p>
-        <p className="label text-muted">{[pick.year, pick.languageLabel, runtime].filter(Boolean).join(" · ")}</p>
+        <p className="label text-muted">{cardMeta(pick)}</p>
+        {start && (
+          <div className="flex max-w-md flex-col gap-0.5 rounded-2xl bg-soft px-4 py-3">
+            <span className="font-bold">Start with Season 1</span>
+            <span className="text-sm text-muted">{start}</span>
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-2 text-[13px] font-semibold">
           <span className="inline-flex items-center gap-1.5 rounded-lg bg-soft px-2.5 py-1 shadow-[inset_0_0_0_1.5px_var(--line)]">
@@ -48,7 +58,7 @@ export function PickScreen({
         </div>
 
         <div className="flex flex-wrap gap-3 pt-2">
-          <a href={watchSearchUrl(pick.title, pick.year)} target="_blank" rel="noreferrer noopener" className={buttonClasses("solid", "lg")}>
+          <a href={watchSearchUrl(pick.title, pick.year, pick.media)} target="_blank" rel="noreferrer noopener" className={buttonClasses("solid", "lg")}>
             Where to watch <ExternalLink className="size-4" aria-hidden />
           </a>
           {pick.trailerKey && (
@@ -77,6 +87,9 @@ export function PickScreen({
               ))}
             </ul>
           </div>
+        )}
+        {pick.media === "series" && (
+          <p className="text-sm">It&apos;s on your Watching list. Every few days MoodReel asks how it&apos;s going.</p>
         )}
         <p className="text-xs text-muted">Streaming badges from JustWatch, via TMDb.</p>
       </div>

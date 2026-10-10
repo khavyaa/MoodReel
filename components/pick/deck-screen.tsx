@@ -5,7 +5,7 @@ import { AnimatePresence, animate, motion, useMotionValue, useReducedMotion, use
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, Star, Undo2 } from "lucide-react";
 import type { DeckCard } from "@/lib/deck/build-movies";
 import { MAX_SAVES } from "@/lib/deck/finale";
-import { formatRuntime } from "@/lib/picks/why";
+import { airingLabel, cardMeta, makersLabel } from "@/lib/card-meta";
 import { cn } from "@/lib/cn";
 import { Poster } from "./poster";
 
@@ -264,13 +264,11 @@ function Stamp({
 }
 
 function CardInfo({ card }: { card: DeckCard }) {
-  const runtime = formatRuntime(card.runtime);
-  const people = card.directors.length ? `Directed by ${card.directors.slice(0, 2).join(" & ")}` : null;
+  const people = makersLabel(card);
+  const airing = airingLabel(card);
   return (
     <div className="flex min-w-0 flex-col gap-3 lg:gap-4">
-      <p className="label text-muted">
-        {[card.year, card.languageLabel, runtime].filter(Boolean).join(" · ")}
-      </p>
+      <p className="label text-muted">{cardMeta(card)}</p>
       <h2 className="display text-[clamp(2.25rem,6vw,5.5rem)]">{card.title}</h2>
       {card.originalTitle !== card.title && <p className="-mt-1 text-sm text-muted">{card.originalTitle}</p>}
 
@@ -285,11 +283,15 @@ function CardInfo({ card }: { card: DeckCard }) {
             <Check className="size-3.5" aria-hidden /> On {s}
           </Badge>
         ))}
+        {airing && <Badge>{airing}</Badge>}
         {card.gate && <Badge>{card.gate === "acclaimed" ? `Acclaimed ${card.languageLabel}` : `${card.languageLabel} crime`}</Badge>}
       </div>
 
       {card.genres.length > 0 && <p className="hidden text-sm text-muted sm:block">{card.genres.slice(0, 4).join(" · ")}</p>}
       <Overview text={card.overview} />
+      {card.series?.firstSeasonEpisodes ? (
+        <p className="hidden text-sm text-muted sm:block">Season 1: {card.series.firstSeasonEpisodes} episodes</p>
+      ) : null}
       {people && <p className="hidden text-sm text-muted sm:block">{people}{card.cast.length ? ` · with ${card.cast.slice(0, 3).join(", ")}` : ""}</p>}
     </div>
   );

@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { Undo2 } from "lucide-react";
 import type { DeckCard } from "@/lib/deck/build-movies";
 import type { Finale } from "@/lib/deck/finale";
-import { formatRuntime } from "@/lib/picks/why";
+import { cardMeta } from "@/lib/card-meta";
 import { Poster } from "./poster";
 
 /** "This or that?" Laptop: side by side with ← / →. iPhone: stacked, tap one. */
@@ -76,7 +76,7 @@ function Option({ card, onPick, keyHint }: { card: DeckCard; onPick: () => void;
       <span className="flex min-w-0 flex-col gap-2">
         <span className="display text-[clamp(1.75rem,3.2vw,3rem)]">{card.title}</span>
         <span className="label text-muted">
-          {[card.year, card.languageLabel, formatRuntime(card.runtime)].filter(Boolean).join(" · ")}
+          {cardMeta(card)}
         </span>
         <span className="hidden text-sm lg:line-clamp-3">{card.overview}</span>
         <span className="hidden text-sm font-semibold opacity-60 lg:block">Press {keyHint}</span>

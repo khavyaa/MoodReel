@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { WatchCheck } from "@/components/library/watch-check";
+import { SeriesCheck, WatchCheck } from "@/components/library/watch-check";
 import { AppFrame } from "@/components/shell/app-frame";
-import { MovieFlow } from "@/components/pick/movie-flow";
+import { PickFlow } from "@/components/pick/pick-flow";
 import { MEDIA, MEDIA_SLUGS, MOODS, isMediaSlug } from "@/lib/moods";
 
 export function generateStaticParams() {
@@ -17,19 +17,16 @@ export async function generateMetadata({ params }: PageProps<"/[media]">) {
 export default async function MediaPage({ params }: PageProps<"/[media]">) {
   const { media } = await params;
   if (!isMediaSlug(media)) notFound();
-  if (media === "movies") {
+  if (media === "movies" || media === "series") {
     return (
-      <MovieFlow
-        notice={
-          <Suspense fallback={null}>
-            <WatchCheck />
-          </Suspense>
-        }
+      <PickFlow
+        media={MEDIA[media].media as "movie" | "series"}
+        notice={<Suspense fallback={null}>{media === "movies" ? <WatchCheck /> : <SeriesCheck />}</Suspense>}
       />
     );
   }
 
-  // Series arrive in Phase 3, books in Phase 4.
+  // Books arrive in Phase 4.
   const config = MEDIA[media];
   return (
     <AppFrame mood={config.moods[0]}>
@@ -49,9 +46,7 @@ export default async function MediaPage({ params }: PageProps<"/[media]">) {
           ))}
         </ul>
         <p className="max-w-[52ch] text-muted">
-          {media === "series"
-            ? "Series get their own deck in the next phase, with moods mapped to TV genres and soaps and talk shows kept out."
-            : "Books come after series: English titles from Open Library, with length instead of runtime."}
+          Books come next: English titles from Open Library, with length instead of runtime.
         </p>
       </div>
     </AppFrame>

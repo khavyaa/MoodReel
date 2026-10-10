@@ -2,29 +2,31 @@
 
 import { useOptimistic, useTransition } from "react";
 import { Check, ExternalLink, Play, Star, X } from "lucide-react";
-import { markSeen, rateMovie, removeSaved } from "@/app/(app)/library-actions";
+import { markSeen, rateTitle, removeSaved } from "@/app/(app)/library-actions";
 import type { LibraryMovie } from "@/lib/library";
 import { MOODS, type MoodId } from "@/lib/moods";
-import { formatRuntime } from "@/lib/picks/why";
+import { airingLabel, cardMeta } from "@/lib/card-meta";
 import { watchSearchUrl } from "@/lib/watch";
 import { buttonClasses } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 import { Poster } from "@/components/pick/poster";
-import type { FollowUpAnswer } from "@/lib/picks/server";
-import { WatchAnswer } from "./watch-prompt";
+import type { FollowUpAnswer, Media } from "@/lib/picks/server";
+import { CheckInAnswers, WatchAnswer } from "./watch-prompt";
 
 // You're in India; dates read the same on the server (UTC) and in the browser.
 const DATE = new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Kolkata" });
 
 function meta(m: LibraryMovie) {
-  return [m.year, m.languageLabel, formatRuntime(m.runtime)].filter(Boolean).join(" · ");
+  return `${m.media === "series" ? "Series · " : ""}${cardMeta(m)}`;
 }
+
+const keyOf = (m: { media: Media; id: number }) => `${m.media}:${m.id}`;
 
 function WatchLinks({ movie }: { movie: LibraryMovie }) {
   return (
     <div className="flex flex-wrap gap-2">
       <a
-        href={watchSearchUrl(movie.title, movie.year)}
+        href={watchSearchUrl(movie.title, movie.year, movie.media)}
         target="_blank"
         rel="noreferrer noopener"
         className={buttonClasses("solid", "sm")}
@@ -49,22 +51,22 @@ function WatchLinks({ movie }: { movie: LibraryMovie }) {
 
 export function SavedList({ movies }: { movies: LibraryMovie[] }) {
   const [, startTransition] = useTransition();
-  const [gone, hide] = useOptimistic<number[], number>([], (ids, id) => [...ids, id]);
+  const [gone, hide] = useOptimistic<string[], string>([], (keys, key) => [...keys, key]);
 
-  function act(id: number, action: (id: number) => Promise<void>) {
+  function act(m: LibraryMovie, action: (media: Media, id: number) => Promise<void>) {
     startTransition(async () => {
-      hide(id);
-      await action(id);
+      hide(keyOf(m));
+      await action(m.media, m.id);
     });
   }
 
-  const shown = movies.filter((m) => !gone.includes(m.id));
+  const shown = movies.filter((m) => !gone.includes(keyOf(m)));
   if (shown.length === 0) return <p className="text-lg text-muted">All cleared.</p>;
 
   return (
     <ul className="grid gap-x-10 gap-y-8 md:grid-cols-2 2xl:grid-cols-3">
       {shown.map((m) => (
-        <li key={m.id} className="grid grid-cols-[96px_minmax(0,1fr)] gap-4 sm:grid-cols-[120px_minmax(0,1fr)]">
+        <li key={keyOf(m)} className="grid grid-cols-[96px_minmax(0,1fr)] gap-4 sm:grid-cols-[120px_minmax(0,1fr)]">
           <Poster title={m.title} path={m.posterPath} size="md" sizes="120px" className="rounded-xl" />
           <div className="flex min-w-0 flex-col gap-2">
             <p className="label text-muted">{meta(m)}</p>
@@ -78,14 +80,15 @@ export function SavedList({ movies }: { movies: LibraryMovie[] }) {
                   {s}
                 </span>
               ))}
+              {airingLabel(m) && <span className="text-xs text-muted">{airingLabel(m)}</span>}
             </p>
             {m.overview && <p className="line-clamp-2 text-sm text-muted">{m.overview}</p>}
             <WatchLinks movie={m} />
             <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1 text-sm font-semibold">
-              <button type="button" onClick={() => act(m.id, markSeen)} className="inline-flex items-center gap-1 underline-offset-4 hover:underline">
+              <button type="button" onClick={() => act(m, markSeen)} className="inline-flex items-center gap-1 underline-offset-4 hover:underline">
                 <Check className="size-4" aria-hidden /> Seen it
               </button>
-              <button type="button" onClick={() => act(m.id, removeSaved)} className="inline-flex items-center gap-1 text-muted underline-offset-4 hover:underline">
+              <button type="button" onClick={() => act(m, removeSaved)} className="inline-flex items-center gap-1 text-muted underline-offset-4 hover:underline">
                 <X className="size-4" aria-hidden /> Remove
               </button>
             </div>
@@ -104,6 +107,10 @@ export type HistoryEntry = {
   why: string | null;
   pickedAt: string | null;
   seen: boolean;
+  /** Series: still on your Watching list. */
+  watching: boolean;
+  /** Series: you gave up on it. */
+  dropped: boolean;
   followUp: FollowUpAnswer | null;
   /** 1–5 stars, or null when not rated yet. */
   stars: number | null;
@@ -132,7 +139,16 @@ export function HistoryList({ entries }: { entries: HistoryEntry[] }) {
               <p className="text-sm text-muted">{meta(e.movie)}</p>
               {e.why && <p className="max-w-[60ch] leading-snug">{e.why}</p>}
               {e.seen ? (
-                <Stars movieId={e.movie.id} stars={e.stars} title={e.movie.title} />
+                <Stars media={e.movie.media} id={e.movie.id} stars={e.stars} title={e.movie.title} />
+              ) : e.movie.media === "series" ? (
+                e.watching ? (
+                  <div className="flex flex-col gap-2">
+                    <p className="text-sm font-semibold">Watching. Done with it?</p>
+                    <CheckInAnswers seriesId={e.movie.id} showStillWatching={false} />
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted">{e.dropped ? "You dropped this one." : "Off your Watching list."}</p>
+                )
               ) : e.followUp ? (
                 <p className="text-sm text-muted">{e.followUp === "later" ? "Not watched yet: it's in Saved." : "You skipped this one."}</p>
               ) : (
@@ -150,7 +166,7 @@ export function HistoryList({ entries }: { entries: HistoryEntry[] }) {
   );
 }
 
-function Stars({ movieId, stars, title }: { movieId: number; stars: number | null; title: string }) {
+function Stars({ media, id, stars, title }: { media: Media; id: number; stars: number | null; title: string }) {
   const [, startTransition] = useTransition();
   const [shown, setShown] = useOptimistic(stars);
 
@@ -159,7 +175,7 @@ function Stars({ movieId, stars, title }: { movieId: number; stars: number | nul
     const next = value === shown ? null : value;
     startTransition(async () => {
       setShown(next);
-      await rateMovie(movieId, next);
+      await rateTitle(media, id, next);
     });
   }
 
@@ -179,7 +195,43 @@ function Stars({ movieId, stars, title }: { movieId: number; stars: number | nul
           </button>
         ))}
       </div>
-      <span className="text-sm text-muted">{shown === null ? "Watched. Rate it?" : "Your rating"}</span>
+      <span className="text-sm text-muted">{shown === null ? (media === "series" ? "Finished. Rate it?" : "Watched. Rate it?") : "Your rating"}</span>
     </div>
+  );
+}
+
+/* --------------------------------------------------------------- watching */
+
+export type WatchingEntry = { since: string; show: LibraryMovie };
+
+const SHORT_DATE = new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", timeZone: "Asia/Kolkata" });
+
+/** Series you picked and are part-way through, with "finished" and "dropped". */
+export function WatchingList({ entries }: { entries: WatchingEntry[] }) {
+  return (
+    <section aria-labelledby="watching" className="flex flex-col gap-4 rounded-3xl bg-soft p-5 sm:p-7">
+      <h2 id="watching" className="text-2xl font-black">
+        Watching · {entries.length}
+      </h2>
+      <ul className="grid gap-5 md:grid-cols-2">
+        {entries.map(({ since, show }) => (
+          <li key={show.id} className="grid grid-cols-[64px_minmax(0,1fr)] gap-4">
+            <Poster title={show.title} path={show.posterPath} size="sm" sizes="64px" className="rounded-lg shadow-none" />
+            <div className="flex min-w-0 flex-col gap-2">
+              <div>
+                <p className="font-black">{show.title}</p>
+                <p className="text-sm text-muted">
+                  {[`Started ${SHORT_DATE.format(new Date(since))}`, show.streamingOn[0], cardMeta(show).split(" · ").slice(2, 3)[0]]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </p>
+              </div>
+              <CheckInAnswers seriesId={show.id} showStillWatching={false} />
+            </div>
+          </li>
+        ))}
+      </ul>
+      <p className="text-sm text-muted">Finished asks for stars, then it moves to History. Dropped counts like &ldquo;not for me&rdquo;.</p>
+    </section>
   );
 }

@@ -2,8 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { Star } from "lucide-react";
-import { answerWatched } from "@/app/(app)/library-actions";
-import type { FollowUpAnswer } from "@/lib/picks/server";
+import { answerCheckIn, answerWatched } from "@/app/(app)/library-actions";
+import type { CheckInAnswer, FollowUpAnswer } from "@/lib/picks/server";
 import { cn } from "@/lib/cn";
 
 /**
@@ -133,6 +133,108 @@ export function WatchPrompt({
           Did you watch <span className="italic">{title}</span>?
         </p>
         <WatchAnswer sessionId={sessionId} onDone={setAnswered} quiet />
+      </div>
+    </section>
+  );
+}
+
+/**
+ * "Still watching?" for a series on your Watching list. Finished asks for
+ * optional stars; dropped takes it off the list and counts like "not for me".
+ */
+export function CheckInAnswers({
+  seriesId,
+  onDone,
+  quiet = false,
+  showStillWatching = true,
+}: {
+  seriesId: number;
+  onDone?: (answer: CheckInAnswer) => void;
+  quiet?: boolean;
+  showStillWatching?: boolean;
+}) {
+  const [rating, setRating] = useState(false);
+  const [pending, startTransition] = useTransition();
+
+  function answer(a: CheckInAnswer, stars: number | null = null) {
+    startTransition(async () => {
+      await answerCheckIn(seriesId, a, stars, { refresh: !quiet });
+      onDone?.(a);
+    });
+  }
+
+  if (rating) {
+    return (
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="text-sm font-semibold">How was it?</span>
+        <div role="group" aria-label="Rate it" className="flex">
+          {[1, 2, 3, 4, 5].map((n) => (
+            <button
+              key={n}
+              type="button"
+              disabled={pending}
+              onClick={() => answer("finished", n)}
+              aria-label={`${n} star${n > 1 ? "s" : ""}`}
+              className="group -m-0.5 p-1.5"
+            >
+              <Star className="size-6 opacity-40 group-hover:fill-current group-hover:opacity-100" aria-hidden />
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => answer("finished")}
+          className="text-sm font-semibold underline underline-offset-4"
+        >
+          Skip rating
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {showStillWatching && (
+        <AnswerButton onClick={() => answer("watching")} disabled={pending} primary>
+          Still watching
+        </AnswerButton>
+      )}
+      <AnswerButton onClick={() => setRating(true)} disabled={pending}>
+        Finished it
+      </AnswerButton>
+      <AnswerButton onClick={() => answer("dropped")} disabled={pending}>
+        Dropped it
+      </AnswerButton>
+    </div>
+  );
+}
+
+/** The card on the series start screen. */
+export function CheckInPrompt({ seriesId, title, posterUrl }: { seriesId: number; title: string; posterUrl: string | null }) {
+  const [answered, setAnswered] = useState<CheckInAnswer | null>(null);
+  if (answered) {
+    return (
+      <p role="status" className="mb-6 rounded-2xl bg-soft px-4 py-3 text-sm font-semibold">
+        {answered === "watching"
+          ? "Enjoy it. We'll ask again in a few days."
+          : answered === "finished"
+            ? `Nice. ${title} is in your history.`
+            : `Dropped. ${title} won't come back.`}
+      </p>
+    );
+  }
+  return (
+    <section aria-label="A show you're watching" className="mb-8 flex items-center gap-4 rounded-3xl bg-soft p-4 sm:p-5">
+      {posterUrl && (
+        // eslint-disable-next-line @next/next/no-img-element -- a 56px thumb straight from TMDb's CDN
+        <img src={posterUrl} alt="" className="aspect-[2/3] w-14 shrink-0 rounded-lg object-cover" />
+      )}
+      <div className="flex min-w-0 flex-col gap-3">
+        <p className="font-bold">
+          Still watching <span className="italic">{title}</span>?
+        </p>
+        <CheckInAnswers seriesId={seriesId} onDone={setAnswered} quiet />
       </div>
     </section>
   );

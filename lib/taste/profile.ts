@@ -7,7 +7,7 @@ import type { TasteProfile } from "./rules";
  * a genre the way it did in v1.
  */
 
-export type ActionKind = "saved" | "skipped" | "seen" | "disliked" | "picked" | "unsaved";
+export type ActionKind = "saved" | "skipped" | "seen" | "disliked" | "picked" | "unsaved" | "finished" | "dropped";
 
 export const ACTION_WEIGHT: Record<ActionKind, number> = {
   picked: 1.5,
@@ -16,6 +16,8 @@ export const ACTION_WEIGHT: Record<ActionKind, number> = {
   skipped: -0.15,
   unsaved: -0.3,
   disliked: -1,
+  finished: 0.6,
+  dropped: -1,
 };
 
 export function buildTasteProfile(actions: { action: ActionKind; tags: string[] }[]): TasteProfile {

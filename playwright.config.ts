@@ -47,7 +47,9 @@ export default defineConfig({
       reuseExistingServer: false,
     },
     {
-      command: `node scripts/migrate.mjs && npx next build && npx next start --port ${PORT}`,
+      // Clear Next's fetch cache first: it keeps TMDb responses for hours, so a
+      // changed fake TMDb would otherwise be ignored between local runs.
+      command: `node -e "require('fs').rmSync('.next/cache/fetch-cache',{recursive:true,force:true})" && node scripts/migrate.mjs && npx next build && npx next start --port ${PORT}`,
       url: `${BASE_URL}/sign-in`,
       env,
       timeout: 240_000,

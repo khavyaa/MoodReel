@@ -4,8 +4,10 @@ import { passesGate } from "@/lib/taste/rules";
 import { LANGUAGE_LABEL, type MovieCandidate } from "@/lib/taste/types";
 import { getMovieDetails, type MovieDetails } from "@/lib/tmdb/movies";
 import { servicesOn } from "@/lib/tmdb/providers";
+import { getSeriesDetails, type SeriesDetails } from "@/lib/tmdb/series";
+import { seriesCard } from "@/lib/deck/build-series";
 
-/** A Saved or History row shows the same card the deck does. */
+/** A Saved or History row shows the same card the deck does, film or series. */
 export type LibraryMovie = DeckCard;
 
 export function detailsToCandidate(d: MovieDetails, providers: number[]): MovieCandidate {
@@ -29,6 +31,7 @@ export function detailsToCandidate(d: MovieDetails, providers: number[]): MovieC
 
 export function detailsToCard(d: MovieDetails, providers: number[]): DeckCard {
   return {
+    media: "movie",
     id: d.id,
     title: d.title,
     originalTitle: d.originalTitle,
@@ -48,6 +51,7 @@ export function detailsToCard(d: MovieDetails, providers: number[]): DeckCard {
     streamingOn: servicesOn(d.providers, providers),
     gate: passesGate(detailsToCandidate(d, providers)).reason ?? null,
     trailerKey: d.trailerKey,
+    series: null,
   };
 }
 
@@ -59,7 +63,27 @@ export async function movieDetailsFor(ids: number[]): Promise<Map<number, MovieD
   return found;
 }
 
-export async function libraryMovies(ids: number[], providers: number[]): Promise<Map<number, LibraryMovie>> {
-  const details = await movieDetailsFor(ids);
-  return new Map([...details].map(([id, d]) => [id, detailsToCard(d, providers)]));
+/* ----------------------------------------------------------------- series */
+
+export async function seriesDetailsFor(ids: number[]): Promise<Map<number, SeriesDetails>> {
+  const results = await Promise.allSettled(ids.map((id) => getSeriesDetails(id)));
+  const found = new Map<number, SeriesDetails>();
+  for (const r of results) if (r.status === "fulfilled") found.set(r.value.id, r.value);
+  return found;
+}
+
+export const libraryKey = (media: "movie" | "series", id: number) => `${media}:${id}`;
+
+/** Cards for a mixed list of films and series, keyed by `libraryKey`. */
+export async function libraryTitles(
+  items: { media: "movie" | "series"; id: number }[],
+  providers: number[],
+): Promise<Map<string, LibraryMovie>> {
+  const movieIds = [...new Set(items.filter((i) => i.media === "movie").map((i) => i.id))];
+  const seriesIds = [...new Set(items.filter((i) => i.media === "series").map((i) => i.id))];
+  const [movies, shows] = await Promise.all([movieDetailsFor(movieIds), seriesDetailsFor(seriesIds)]);
+  const cards = new Map<string, LibraryMovie>();
+  for (const [id, d] of movies) cards.set(libraryKey("movie", id), detailsToCard(d, providers));
+  for (const [id, d] of shows) cards.set(libraryKey("series", id), seriesCard(d, providers));
+  return cards;
 }

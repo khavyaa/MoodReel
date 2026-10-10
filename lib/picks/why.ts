@@ -18,6 +18,9 @@ export type WhyInput = {
   streamingOn: string[];
   directors: string[];
   beat: number; // how many other saves it beat in the head-to-head
+  /** Series only: how big a commitment it is. `runtime` is then the episode length. */
+  seasons?: number | null;
+  firstSeasonEpisodes?: number | null;
 };
 
 export function formatRuntime(minutes: number | null): string | null {
@@ -40,11 +43,18 @@ export function ruleBasedWhy(w: WhyInput): string {
       : `Your one save for a ${mood}, ${energy} night`;
 
   const facts: string[] = [];
-  if (w.gate === "acclaimed") facts.push(`one of the best-rated ${w.languageLabel} films around`);
+  const series = w.seasons != null;
+  if (w.gate === "acclaimed") facts.push(`one of the best-rated ${w.languageLabel} ${series ? "shows" : "films"} around`);
   else if (w.gate === "crime/thriller") facts.push(`a ${w.languageLabel} crime pick`);
   facts.push(`rated ${w.rating.toFixed(1)} by ${votesLabel(w.votes)} people on TMDb`);
-  const runtime = formatRuntime(w.runtime);
-  if (runtime) facts.push(runtime);
+  if (series) {
+    if (w.firstSeasonEpisodes) {
+      facts.push(`season 1 is ${w.firstSeasonEpisodes} episodes${w.runtime ? ` of about ${w.runtime} min` : ""}`);
+    }
+  } else {
+    const runtime = formatRuntime(w.runtime);
+    if (runtime) facts.push(runtime);
+  }
 
   const where = w.streamingOn.length ? ` It's on ${w.streamingOn[0]}.` : "";
   return `${opener}: ${facts.join(", ")}.${where}`;
