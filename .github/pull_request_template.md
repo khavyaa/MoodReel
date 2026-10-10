@@ -2,7 +2,7 @@
 
 ## How it was tested
 
-<!-- Tests added or changed, and screenshots at laptop and iPhone sizes for anything visible. -->
+<!-- Tests added or changed, and what was checked by hand. Text only: screenshots go in the chat, not here. -->
 
 ## Before merging
 

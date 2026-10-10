@@ -12,14 +12,15 @@ Setup and architecture: README.md.
   and its own pull request, which the owner reviews and merges. One topic per branch, so
   several can be in flight at once without touching each other.
 - Work on parallel branches in separate git worktrees, so their checkouts don't collide.
-- A PR description says what changed and why, how it was tested (with screenshots for anything
-  visible), and anything the reviewer must do (env vars, migrations).
+- A PR description is text only: what changed and why, how it was tested, and anything the
+  reviewer must do (env vars, migrations). No images or image-hosting branches; screenshots of
+  anything visible go to the owner in the chat instead.
 - CI must be green before asking for review. Never merge your own PR.
 - Database migrations run only in production builds (`scripts/migrate.mjs`), because previews
   share the production database. A PR with a migration applies it when it's merged, not before:
   keep migrations additive so the code on `main` still works against the new schema.
 - Previews can't be signed into (passkeys are bound to the production domain), so review is
-  the diff, CI, and the screenshots in the PR.
+  the diff, CI, and the screenshots shared in the chat.
 
 ## Conventions
 
