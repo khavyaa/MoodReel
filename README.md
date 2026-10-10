@@ -87,8 +87,9 @@ probing real TMDb data.
 
 - **Languages:** English, and Hindi of any genre when it's well rated (weighted 7.2+). About one
   show in four is Hindi. Hindi is a small pool on TMDb (about 120 shows with 15+ votes).
-- **Never:** soaps, talk, reality, news, kids' shows, animation, and Hindi daily soaps that TMDb
-  files as drama (anything Hindi past 100 episodes). Docuseries and older classics are in.
+- **Never:** soaps, talk, reality, news, kids' shows or animation. Hindi is short series only
+  (50 episodes or fewer, at most 5 seasons, about 12 episodes a season at most), which also keeps
+  out daily soaps that TMDb files as drama. Docuseries and older classics are in.
 - **Moods** map onto TMDb's TV genres, which differ from film genres. English mind-bending uses
   story keywords (time loop, dystopia, parallel world…) because "Sci-Fi & Fantasy" alone dealt
   teen supernatural shows. There's no romantic mood: TV has no romance genre.

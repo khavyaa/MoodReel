@@ -242,14 +242,21 @@ export function fitsCommitment(facts: SeriesFacts, time: Taps["time"]): boolean 
 }
 
 /**
- * Hindi daily soaps sometimes escape TMDb's "Soap" genre (a 267-episode
- * Mahabharat came through as Drama/Family). No Hindi show you'd pick runs past
- * 100 episodes.
+ * Hindi: short series only, and never anything soap-like. Daily soaps sometimes
+ * escape TMDb's "Soap" genre (a 267-episode Mahabharat came through as
+ * Drama/Family), so the format itself is checked: Mirzapur-style shows (a few
+ * seasons of about ten episodes) are in; long runs and long seasons are out.
  */
-export const HINDI_MAX_EPISODES = 100;
+export const HINDI_LIMITS = { episodes: 50, seasons: 5, episodesPerSeason: 12 } as const;
 
-export function notADailySoap(facts: SeriesFacts, language: string): boolean {
-  return language !== "hi" || facts.episodes <= HINDI_MAX_EPISODES;
+export function shortEnoughForHindi(facts: SeriesFacts, language: string): boolean {
+  if (language !== "hi") return true;
+  const seasons = Math.max(1, facts.seasons);
+  return (
+    facts.episodes <= HINDI_LIMITS.episodes &&
+    seasons <= HINDI_LIMITS.seasons &&
+    facts.episodes / seasons <= HINDI_LIMITS.episodesPerSeason
+  );
 }
 
 /* ----------------------------------------------------------------- scoring */

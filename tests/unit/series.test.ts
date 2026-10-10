@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   fitsCommitment,
-  notADailySoap,
+  shortEnoughForHindi,
   seriesEnergyFit,
   seriesGate,
   seriesMoodFit,
@@ -60,10 +60,16 @@ describe("series gate", () => {
     expect(seriesGate(show({ language: "ko" })).ok).toBe(false);
   });
 
-  it("keeps Hindi daily soaps out even when TMDb files them as drama", () => {
-    expect(notADailySoap(facts({ episodes: 267 }), "hi")).toBe(false);
-    expect(notADailySoap(facts({ episodes: 32 }), "hi")).toBe(true);
-    expect(notADailySoap(facts({ episodes: 187 }), "en")).toBe(true);
+  it("keeps Hindi to short series: Mirzapur-style yes, long runs and soap formats no", () => {
+    expect(shortEnoughForHindi(facts({ seasons: 3, episodes: 30 }), "hi")).toBe(true); // Mirzapur
+    expect(shortEnoughForHindi(facts({ seasons: 5, episodes: 32 }), "hi")).toBe(true); // Panchayat
+    expect(shortEnoughForHindi(facts({ seasons: 1, episodes: 9 }), "hi")).toBe(true);
+    expect(shortEnoughForHindi(facts({ seasons: 28, episodes: 267 }), "hi")).toBe(false); // a daily soap
+    expect(shortEnoughForHindi(facts({ seasons: 4, episodes: 52 }), "hi")).toBe(false); // past 50 episodes
+    expect(shortEnoughForHindi(facts({ seasons: 6, episodes: 36 }), "hi")).toBe(false); // too many seasons
+    expect(shortEnoughForHindi(facts({ seasons: 2, episodes: 40 }), "hi")).toBe(false); // 20-episode seasons
+    // English isn't held to this.
+    expect(shortEnoughForHindi(facts({ seasons: 18, episodes: 187 }), "en")).toBe(true);
   });
 });
 

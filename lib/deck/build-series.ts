@@ -12,7 +12,7 @@ import {
   SERIES_LANGUAGE_LIST,
   SERIES_MOODS,
   fitsCommitment,
-  notADailySoap,
+  shortEnoughForHindi,
   scoreSeries,
   seriesEligible,
   seriesGate,
@@ -142,7 +142,7 @@ export async function buildSeriesDeck(
 
   const scored = shortlist.flatMap(({ show }) => {
     const d = details.get(show.id);
-    if (!d || !fitsCommitment(d.facts, taps.time) || !notADailySoap(d.facts, show.language)) return [];
+    if (!d || !fitsCommitment(d.facts, taps.time) || !shortEnoughForHindi(d.facts, show.language)) return [];
     return [{ movie: show, score: scoreSeries(show, taps, taste, d.facts) }];
   });
 
