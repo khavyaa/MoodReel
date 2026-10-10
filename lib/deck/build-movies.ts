@@ -4,6 +4,7 @@ import { applyCuration } from "./curation";
 import { curateWithAi } from "@/lib/ai/curate";
 import { discoverMovies, getMovieDetails, type DiscoverQuery } from "@/lib/tmdb/movies";
 import { servicesOn } from "@/lib/tmdb/providers";
+import type { SeriesFacts } from "@/lib/taste/series-rules";
 import {
   GENRE,
   LANGUAGES,
@@ -20,6 +21,7 @@ import { LANGUAGE_LABEL, type GateReason, type Language, type MovieCandidate, ty
 
 /** Everything a card shows. Sent to the browser, so nothing secret goes in here. */
 export type DeckCard = {
+  media: "movie" | "series";
   id: number;
   title: string;
   originalTitle: string;
@@ -39,6 +41,8 @@ export type DeckCard = {
   streamingOn: string[];
   gate: GateReason | null;
   trailerKey: string | null;
+  /** Seasons, episodes, still airing: series only. */
+  series: SeriesFacts | null;
 };
 
 /**
@@ -146,6 +150,7 @@ export async function buildMovieDeck(
   const cards = deck.map((m, i): DeckCard => {
     const d = details[i].status === "fulfilled" ? details[i].value : null;
     return {
+      media: "movie",
       id: m.id,
       title: m.title,
       originalTitle: m.originalTitle,
@@ -166,12 +171,13 @@ export async function buildMovieDeck(
       streamingOn: d ? servicesOn(d.providers, providers) : m.onMyServices ? ["your services"] : [],
       gate: passesGate(m).reason ?? null,
       trailerKey: d?.trailerKey ?? null,
+      series: null,
     };
   });
 
   return {
     cards,
-    missingLanguages: MOVIE_LANGUAGES.filter((l) => !succeeded.has(l)),
+    missingLanguages: MOVIE_LANGUAGES.filter((l) => !succeeded.has(l)).map((l) => LANGUAGE_LABEL[l] ?? l),
     curatedByAi: approved !== null,
   };
 }

@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useRef, useState, type ReactNode } from "react";
-import { dealMovies, noSavesThisTime, pickMovie, swipeMovie, undoMovieSwipe } from "@/app/(app)/[media]/actions";
+import { deal as dealDeck, noSavesThisTime, pick as pickTitle, swipe, undo as undoSwipe } from "@/app/(app)/[media]/actions";
 import type { DeckCard } from "@/lib/deck/build-movies";
 import { DECK_SIZE } from "@/lib/deck/compose";
+import { MEDIA } from "@/lib/moods";
 import { choose, deckIsDone, startFinale, type Finale } from "@/lib/deck/finale";
 import { buttonClasses } from "@/components/ui/button";
 import { DeckScreen, type ExitAs, type SwipeAction } from "./deck-screen";
@@ -46,8 +47,21 @@ const savesOf = (d: DeckStep) => d.cards.filter((_, i) => d.actions[i] === "save
 /** A shortlist that skips the deck, from "Pick from my saved". With one film, it's already the pick. */
 export type FlowStart = { sessionId: string; cards: DeckCard[]; taps: TapsValue; why: string | null };
 
-export function MovieFlow({ start, notice, onExit }: { start?: FlowStart; notice?: ReactNode; onExit?: () => void }) {
-  const [taps, setTaps] = useState<TapsValue>(start?.taps ?? { mood: "gripping", energy: 1, time: 1 });
+/** The whole run for films or series: taps → deck → head-to-head → tonight's pick. */
+export function PickFlow({
+  media,
+  start,
+  notice,
+  onExit,
+}: {
+  media: "movie" | "series";
+  start?: FlowStart;
+  notice?: ReactNode;
+  onExit?: () => void;
+}) {
+  const config = MEDIA[media === "movie" ? "movies" : "series"];
+  const noun = media === "movie" ? "films" : "series";
+  const [taps, setTaps] = useState<TapsValue>(start?.taps ?? { mood: config.moods[0], energy: 1, time: 1 });
   const [step, setStep] = useState<Step>(() => {
     if (!start) return { kind: "taps" };
     const finale = startFinale(start.cards);
@@ -65,7 +79,7 @@ export function MovieFlow({ start, notice, onExit }: { start?: FlowStart; notice
 
   const deal = useCallback(async () => {
     setStep({ kind: "dealing" });
-    const result = await dealMovies(taps).catch(() => null);
+    const result = await dealDeck(media, taps).catch(() => null);
     if (!result || !result.ok) {
       setStep({ kind: "error", message: result?.error ?? "Couldn't deal a deck just now." });
       return;
@@ -83,13 +97,13 @@ export function MovieFlow({ start, notice, onExit }: { start?: FlowStart; notice
       exitAs: "skipped",
       returning: null,
     });
-  }, [taps]);
+  }, [media, taps]);
 
   const reveal = useCallback(
     (sessionId: string, pick: DeckCard, saves: DeckCard[]) => {
       setStep({ kind: "pick", sessionId, pick, saves, why: null });
       void enqueue(async () => {
-        const { why } = await pickMovie(
+        const { why } = await pickTitle(
           sessionId,
           {
             ...titleRef(pick),
@@ -102,6 +116,8 @@ export function MovieFlow({ start, notice, onExit }: { start?: FlowStart; notice
             streamingOn: pick.streamingOn,
             directors: pick.directors,
             overview: pick.overview,
+            seasons: pick.series?.seasons ?? null,
+            firstSeasonEpisodes: pick.series?.firstSeasonEpisodes ?? null,
           },
           { mood: taps.mood, energy: taps.energy, beat: saves.length - 1 },
         );
@@ -131,7 +147,7 @@ export function MovieFlow({ start, notice, onExit }: { start?: FlowStart; notice
       if (step.kind !== "deck") return;
       const card = step.cards[step.actions.length];
       if (!card) return;
-      void enqueue(() => swipeMovie(step.sessionId, titleRef(card), action));
+      void enqueue(() => swipe(step.sessionId, titleRef(card), action));
       const next: DeckStep = { ...step, actions: [...step.actions, action], exitAs: action, returning: null };
       if (deckIsDone(next.actions.length, next.cards.length, savesOf(next).length)) finishDeck(next);
       else setStep(next);
@@ -146,7 +162,7 @@ export function MovieFlow({ start, notice, onExit }: { start?: FlowStart; notice
       if (i < 0) return;
       const card = deck.cards[i];
       const action = deck.actions[i];
-      void enqueue(() => undoMovieSwipe(deck.sessionId, card.id));
+      void enqueue(() => undoSwipe(deck.sessionId, card.id));
       setStep({ ...deck, actions: deck.actions.slice(0, i), exitAs: "undo", returning: { id: card.id, action } });
     },
     [enqueue],
@@ -169,14 +185,16 @@ export function MovieFlow({ start, notice, onExit }: { start?: FlowStart; notice
       {step.kind === "taps" && (
         <>
           {notice}
-          <TapsScreen value={taps} onChange={setTaps} onDeal={deal} />
+          <TapsScreen media={media} value={taps} onChange={setTaps} onDeal={deal} />
         </>
       )}
 
       {step.kind === "dealing" && (
         <div className="flex flex-1 flex-col items-center justify-center gap-6" role="status">
           <div className="aspect-[2/3] w-[min(56vw,300px)] animate-pulse rounded-2xl bg-soft" />
-          <p className="label">Dealing {DECK_SIZE} films…</p>
+          <p className="label">
+            Dealing {DECK_SIZE} {noun}…
+          </p>
         </div>
       )}
 
@@ -207,6 +225,7 @@ export function MovieFlow({ start, notice, onExit }: { start?: FlowStart; notice
           pick={step.pick}
           mood={taps.mood}
           why={step.why}
+          resultLabel={config.result}
           savedForLater={step.saves.filter((c) => c.id !== step.pick.id)}
           onAgain={toTaps}
         />

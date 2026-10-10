@@ -24,10 +24,12 @@ export async function writeWhy(input: WhyInput & { overview: string }): Promise<
       timeout: 6000,
       maxRetries: 0,
       prompt: [
-        `Write one sentence (max 28 words) telling someone why "${input.title}" is the right film for their night.`,
+        `Write one sentence (max 28 words) telling someone why "${input.title}" is the right ${input.seasons != null ? "TV series to start" : "film"} for their night.`,
         `Their mood: ${MOODS[input.mood].label}, energy: ${ENERGY[input.energy]}.`,
-        input.beat > 0 ? `It beat ${input.beat} other films they shortlisted.` : "",
-        `Facts you may use: ${input.languageLabel}, ${formatRuntime(input.runtime) ?? "runtime unknown"}, TMDb ${input.rating.toFixed(1)}.`,
+        input.beat > 0 ? `It beat ${input.beat} other ${input.seasons != null ? "shows" : "films"} they shortlisted.` : "",
+        input.seasons != null
+          ? `Facts you may use: ${input.languageLabel}, ${input.seasons} season(s), season 1 has ${input.firstSeasonEpisodes ?? "?"} episodes${input.runtime ? ` of about ${input.runtime} min` : ""}, TMDb ${input.rating.toFixed(1)}.`
+          : `Facts you may use: ${input.languageLabel}, ${formatRuntime(input.runtime) ?? "runtime unknown"}, TMDb ${input.rating.toFixed(1)}.`,
         input.streamingOn.length ? `It's on ${input.streamingOn[0]}.` : "",
         `Synopsis (don't spoil it): ${input.overview.slice(0, 300)}`,
         "Plain, warm, specific. No quotes, no hype words, no spoilers. Just the sentence.",

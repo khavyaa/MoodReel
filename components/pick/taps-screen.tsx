@@ -41,16 +41,28 @@ export function Chip({
   );
 }
 
+const SERIES_LINES: Partial<Record<MoodId, string>> = {
+  gripping: "Crime, mysteries and thrillers you'll want the next episode of.",
+  dark: "Heavy, morally messy shows that don't look away.",
+  mind: "Time loops, other worlds and stories that mess with you.",
+  funny: "Comedies for grown-ups. No kids' shows, no laugh-track filler.",
+  feelgood: "Warm shows to settle into: family, friendship, gentle laughs.",
+  moving: "Dramas and documentaries that land somewhere real.",
+};
+
 export function TapsScreen({
+  media: kind,
   value,
   onChange,
   onDeal,
 }: {
+  media: "movie" | "series";
   value: TapsValue;
   onChange: (next: TapsValue) => void;
   onDeal: () => void;
 }) {
-  const media = MEDIA.movies;
+  const media = MEDIA[kind === "movie" ? "movies" : "series"];
+  const series = kind === "series";
   return (
     <div className="grid flex-1 gap-10 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:gap-16">
       <div className="flex flex-col gap-7">
@@ -88,7 +100,7 @@ export function TapsScreen({
         </fieldset>
 
         <fieldset className="flex flex-col gap-3">
-          <legend className="label mb-3 text-muted">Time</legend>
+          <legend className="label mb-3 text-muted">{series ? "Commitment" : "Time"}</legend>
           <div className="flex flex-wrap gap-2">
             {media.time.map((label, n) => (
               <Chip key={label} pressed={value.time === n} onClick={() => onChange({ ...value, time: n as TapsValue["time"] })}>
@@ -103,7 +115,7 @@ export function TapsScreen({
           onClick={onDeal}
           className="mt-2 inline-flex h-14 w-full items-center justify-center gap-3 rounded-full bg-accent px-8 text-lg font-bold text-on-accent transition-opacity hover:opacity-90 sm:w-auto sm:self-start"
         >
-          Deal {DECK_SIZE} films
+          Deal {DECK_SIZE} {series ? "series" : "films"}
           <ArrowRight className="size-5" aria-hidden />
         </button>
       </div>
@@ -113,17 +125,26 @@ export function TapsScreen({
         <div className="flex flex-col gap-3">
           <span className="label text-muted">Tonight feels</span>
           <p className="display text-[clamp(4rem,7vw,7.5rem)]">{MOODS[value.mood].label}</p>
-          <p className="max-w-[34ch] text-lg">{MOOD_LINES[value.mood]}</p>
+          <p className="max-w-[34ch] text-lg">{(series && SERIES_LINES[value.mood]) || MOOD_LINES[value.mood]}</p>
         </div>
         <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
           <dt className="label pt-0.5 text-muted">Energy</dt>
           <dd>{ENERGY[value.energy]}</dd>
-          <dt className="label pt-0.5 text-muted">Time</dt>
+          <dt className="label pt-0.5 text-muted">{series ? "Commitment" : "Time"}</dt>
           <dd>{media.time[value.time]}</dd>
           <dt className="label pt-0.5 text-muted">Deck</dt>
           <dd>
-            {DECK_SIZE} films, mostly English. Tamil, Malayalam and Hindi when they&apos;re crime, thriller or
-            acclaimed. What&apos;s on your services comes first.
+            {series ? (
+              <>
+                {DECK_SIZE} series, about three in four English, the rest Hindi when it&apos;s well rated. No soaps,
+                reality, talk or animation. What&apos;s on your services comes first.
+              </>
+            ) : (
+              <>
+                {DECK_SIZE} films, mostly English. Tamil, Malayalam and Hindi when they&apos;re crime, thriller or
+                acclaimed. What&apos;s on your services comes first.
+              </>
+            )}
           </dd>
         </dl>
       </aside>

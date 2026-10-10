@@ -6,9 +6,10 @@ the next book.
 
 Built for one person on an iPhone and a Mac. Sign-in is a passkey; there is no sign-up page.
 
-> **Status:** Phase 2 of the v2 rebuild. Movies work end to end: taps → deck → head-to-head →
-> tonight's pick, plus Saved (with "Pick from my saved"), History with ratings, and a "Did you
-> watch it?" check a few hours after each pick. Series (Phase 3) and books (Phase 4) come next.
+> **Status:** Phase 3 of the v2 rebuild. Movies and series work end to end: taps → deck →
+> head-to-head → tonight's pick, plus Saved (with "Pick from my saved"), History with ratings, a
+> "Did you watch it?" check after a film, and a Watching list with "Still watching?" check-ins for
+> series. Books (Phase 4) come next.
 
 ## Run it locally
 
@@ -82,6 +83,26 @@ a preview deployment's own URL; previews are for checking builds.
 The rules live in `lib/taste/rules.ts`, each with a unit test, and their thresholds came from
 probing real TMDb data.
 
+## How a series deck differs
+
+- **Languages:** English, and Hindi of any genre when it's well rated (weighted 7.2+). About one
+  show in four is Hindi. Hindi is a small pool on TMDb (about 120 shows with 15+ votes).
+- **Never:** soaps, talk, reality, news, kids' shows or animation. Hindi is short series only
+  (50 episodes or fewer, at most 5 seasons, about 12 episodes a season at most), which also keeps
+  out daily soaps that TMDb files as drama. Docuseries and older classics are in.
+- **Moods** map onto TMDb's TV genres, which differ from film genres. English mind-bending uses
+  story keywords (time loop, dystopia, parallel world…) because "Sci-Fi & Fantasy" alone dealt
+  teen supernatural shows. There's no romantic mood: TV has no romance genre.
+- **Commitment** replaces time: mini-series (one finished season), one season (season 1 of 13
+  episodes or fewer), long-runner (three seasons or more). It needs each show's details, so the
+  best 40 English and 16 Hindi candidates are checked before the deck is composed. Energy also
+  leans on episode length: half-hour episodes suit "lean back".
+- **After the pick** a series goes on your Watching list. Every three days the series screen asks
+  "Still watching?": finished (with optional stars) moves it to History, dropped counts like
+  "not for me".
+
+Series rules live in `lib/taste/series-rules.ts`.
+
 ## How it's put together
 
 ```
@@ -92,9 +113,9 @@ lib/auth.ts        passkey-only, single-owner auth
 lib/session.ts     the data access layer: every read of your data verifies the session here
 lib/db/            Drizzle schema and client (plain Postgres, no vendor lock-in)
 lib/moods.ts       moods, energy and time vocabulary, and their colours
-lib/taste/         language gates, weighted rating, mood/energy fit, taste from swipes
-lib/deck/          deck composition, head-to-head, AI re-weighting, the movie deck builder
-lib/tmdb/          TMDb client (retries flaky connections) and movie queries
+lib/taste/         language gates, weighted rating, mood/energy fit, taste from swipes (films and series)
+lib/deck/          deck composition, head-to-head, AI re-weighting, the movie and series deck builders
+lib/tmdb/          TMDb client (retries flaky connections), movie, series and provider queries
 lib/ai/            AI Gateway calls, each with a rule-based fallback
 components/pick/   the flow: taps, deck, head-to-head, pick
 proxy.ts           sends signed-out requests to /sign-in

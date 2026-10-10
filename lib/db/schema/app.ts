@@ -33,6 +33,8 @@ export const titleAction = pgEnum("title_action", [
   "disliked", // "not for me"
   "picked", // won the head-to-head
   "unsaved", // removed from the saved list
+  "finished", // finished watching a series you picked
+  "dropped", // gave up on a series you picked
 ]);
 
 export const pickStatus = pgEnum("pick_status", ["dealing", "finale", "picked", "empty", "abandoned"]);
@@ -79,6 +81,10 @@ export const titleStates = pgTable(
     skipped: boolean("skipped").notNull().default(false),
     disliked: boolean("disliked").notNull().default(false),
     pickedAt: timestamp("picked_at", { withTimezone: true }),
+    /** Series: on your Watching list since this time; null when not watching. */
+    watchingSince: timestamp("watching_since", { withTimezone: true }),
+    /** Series: when you last answered "still watching?". */
+    checkedInAt: timestamp("checked_in_at", { withTimezone: true }),
     rating: smallint("rating"),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

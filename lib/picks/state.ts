@@ -31,6 +31,10 @@ export function applyAction(flags: TitleFlags, action: ActionKind, at: Date): Ti
       return { ...flags, pickedAt: at, saved: false };
     case "unsaved":
       return { ...flags, saved: false };
+    case "finished":
+      return { ...flags, seen: true, saved: false };
+    case "dropped":
+      return { ...flags, disliked: true, saved: false };
   }
 }
 
