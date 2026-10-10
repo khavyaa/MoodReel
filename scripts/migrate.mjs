@@ -1,13 +1,16 @@
 // Applies drizzle/ migrations to DATABASE_URL.
 //   node scripts/migrate.mjs             always (local, CI)
-//   node scripts/migrate.mjs --if-vercel only inside a Vercel build; a no-op elsewhere,
-//                                        so `npm run build` on a laptop never touches a database.
+//   node scripts/migrate.mjs --if-vercel only inside a Vercel *production* build; a no-op
+//                                        elsewhere. A laptop build never touches a database, and
+//                                        neither does a pull request's preview build: previews
+//                                        share production's DATABASE_URL, so migrating there would
+//                                        change live data before the PR is reviewed and merged.
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import pg from "pg";
 
-if (process.argv.includes("--if-vercel") && !process.env.VERCEL) {
-  console.log("migrate: not a Vercel build, skipping");
+if (process.argv.includes("--if-vercel") && process.env.VERCEL_ENV !== "production") {
+  console.log(`migrate: not a production build (${process.env.VERCEL_ENV ?? "local"}), skipping`);
   process.exit(0);
 }
 const url = process.env.DATABASE_URL;

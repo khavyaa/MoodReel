@@ -40,6 +40,12 @@ creates the only account. On any later device, the same page adds a passkey to i
 
 CI runs all of these on every push, against a throwaway Postgres.
 
+## Making changes
+
+`main` is the stable version; production deploys from it. All work happens on a branch
+(`feat/…`, `fix/…`, `chore/…`) and goes in through a reviewed pull request. CI (lint, types,
+unit, database and browser tests) runs on every PR.
+
 ## Deploy (Vercel + Neon, free tiers)
 
 1. In the Vercel project, **Storage → Create → Neon** and connect it. This sets `DATABASE_URL`.
@@ -48,7 +54,8 @@ CI runs all of these on every push, against a throwaway Postgres.
 2. Add `BETTER_AUTH_SECRET`, `OWNER_SETUP_TOKEN` and `TMDB_ACCESS_TOKEN` (Production and
    Preview). AI needs nothing: on Vercel the AI Gateway authenticates itself. Locally, set
    `AI_GATEWAY_API_KEY` to try it, or leave it unset and the rules do everything.
-3. Deploy. Migrations run during the build.
+3. Deploy. Migrations run during production builds only; pull-request previews share the
+   production database, so they never migrate it.
 4. Open `/setup` on the production domain and save your passkey.
 
 Passkeys are bound to the domain they were created on. One made on production won't sign in on
