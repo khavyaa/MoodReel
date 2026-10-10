@@ -1,8 +1,9 @@
 import "server-only";
-import { and, desc, eq, gt, inArray, isNotNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { pickSessions, titleActions, titleStates } from "@/lib/db/schema";
+import { pickSessions, preferences, titleActions, titleStates } from "@/lib/db/schema";
 import { buildTasteProfile, type ActionKind } from "@/lib/taste/profile";
+import { foldActions } from "./state";
 import type { TasteProfile } from "@/lib/taste/rules";
 
 /*
@@ -76,7 +77,7 @@ async function ownedSession(userId: string, sessionId: string) {
   return session;
 }
 
-export type SwipeAction = "saved" | "skipped" | "seen";
+export type SwipeAction = "saved" | "skipped" | "seen" | "disliked";
 type TitleRef = { id: number; language: string; genreIds: number[] };
 
 function tagsFor(title: TitleRef) {
@@ -114,8 +115,12 @@ async function logAction(
 
 export async function recordSwipe(userId: string, sessionId: string, title: TitleRef, action: SwipeAction) {
   const session = await ownedSession(userId, sessionId);
-  const state =
-    action === "saved" ? { saved: true, skipped: false } : action === "seen" ? { seen: true, saved: false } : { skipped: true };
+  const state = {
+    saved: { saved: true, skipped: false },
+    skipped: { skipped: true },
+    seen: { seen: true, saved: false },
+    disliked: { disliked: true, saved: false },
+  }[action];
   await logAction(userId, sessionId, session.mood, title, action, state);
 
   if (action === "saved") {
@@ -128,6 +133,58 @@ export async function recordSwipe(userId: string, sessionId: string, title: Titl
     }
   }
 }
+
+/**
+ * Takes back the last swipe on a title in this deck: deletes that action and
+ * rebuilds the title's state from whatever is left in its log.
+ */
+export async function undoSwipe(userId: string, sessionId: string, movieId: number) {
+  const session = await ownedSession(userId, sessionId);
+  const db = getDb();
+  const externalId = String(movieId);
+  const sameTitle = and(
+    eq(titleActions.userId, userId),
+    eq(titleActions.media, "movie"),
+    eq(titleActions.source, "tmdb"),
+    eq(titleActions.externalId, externalId),
+  );
+  const last = await db.query.titleActions.findFirst({
+    where: and(sameTitle, eq(titleActions.pickSessionId, sessionId), inArray(titleActions.action, SWIPES)),
+    orderBy: desc(titleActions.createdAt),
+  });
+  if (!last) return;
+
+  await db.transaction(async (tx) => {
+    await tx.delete(titleActions).where(eq(titleActions.id, last.id));
+    const rest = await tx
+      .select({ action: titleActions.action, createdAt: titleActions.createdAt })
+      .from(titleActions)
+      .where(sameTitle)
+      .orderBy(titleActions.createdAt);
+    const stateKey = and(
+      eq(titleStates.userId, userId),
+      eq(titleStates.media, "movie"),
+      eq(titleStates.source, "tmdb"),
+      eq(titleStates.externalId, externalId),
+    );
+    const current = await tx.query.titleStates.findFirst({ where: stateKey });
+    if (rest.length === 0 && current?.rating == null) {
+      await tx.delete(titleStates).where(stateKey);
+    } else {
+      // updatedAt goes back too: the skip cooldown counts from it.
+      const updatedAt = rest.at(-1)?.createdAt ?? new Date();
+      await tx.update(titleStates).set({ ...foldActions(rest), updatedAt }).where(stateKey);
+    }
+    if (last.action === "saved") {
+      await tx
+        .update(pickSessions)
+        .set({ shortlist: session.shortlist.filter((e) => e.externalId !== externalId) })
+        .where(eq(pickSessions.id, sessionId));
+    }
+  });
+}
+
+const SWIPES: ActionKind[] = ["saved", "skipped", "seen", "disliked"];
 
 export async function completePick(
   userId: string,
@@ -246,6 +303,7 @@ export async function movieHistory(userId: string, limit = 50) {
       mood: pickSessions.mood,
       why: pickSessions.why,
       pickedAt: pickSessions.completedAt,
+      followUp: pickSessions.followUp,
     })
     .from(pickSessions)
     .where(and(eq(pickSessions.userId, userId), eq(pickSessions.media, "movie"), eq(pickSessions.status, "picked")))
@@ -277,10 +335,101 @@ export async function movieHistory(userId: string, limit = 50) {
             mood: s.mood,
             why: s.why,
             pickedAt: s.pickedAt,
+            followUp: s.followUp as FollowUpAnswer | null,
             seen: stateOf.get(s.pick.externalId)?.seen ?? false,
             rating: stateOf.get(s.pick.externalId)?.rating ?? null,
           },
         ]
       : [],
   );
+}
+
+/* ------------------------------------------------------------ preferences */
+
+export const DEFAULT_PROVIDERS = [8, 119, 350, 2336];
+
+/** Your streaming services as TMDb provider ids. */
+export async function providersFor(userId: string): Promise<number[]> {
+  const row = await getDb().query.preferences.findFirst({ where: eq(preferences.userId, userId) });
+  return row?.providers ?? DEFAULT_PROVIDERS;
+}
+
+export async function saveProviders(userId: string, providers: number[]) {
+  await getDb()
+    .insert(preferences)
+    .values({ userId, providers, updatedAt: new Date() })
+    .onConflictDoUpdate({ target: preferences.userId, set: { providers, updatedAt: new Date() } });
+}
+
+/* ---------------------------------------------------------- pick from saved */
+
+/** A run that skips the deck: the shortlist comes straight from your saved list. */
+export async function createSavedSession(
+  userId: string,
+  taps: { mood: string; energy: number; time: number },
+  movieIds: number[],
+) {
+  const entries = movieIds.map((id) => ({ source: "tmdb" as const, externalId: String(id) }));
+  const [row] = await getDb()
+    .insert(pickSessions)
+    .values({ userId, media: "movie", origin: "saved", status: "finale", ...taps, deck: entries, shortlist: entries })
+    .returning({ id: pickSessions.id });
+  return row.id;
+}
+
+/* -------------------------------------------------------- did you watch it? */
+
+/** How long after a pick before asking whether you watched it. */
+export const FOLLOW_UP_AFTER_HOURS = 3;
+
+export type FollowUpAnswer = "watched" | "later" | "skipped";
+
+/** The latest pick you haven't told us about yet, if it's old enough to ask. */
+export async function pendingFollowUp(userId: string) {
+  const db = getDb();
+  const [session] = await db
+    .select({ id: pickSessions.id, pick: pickSessions.pick, pickedAt: pickSessions.completedAt })
+    .from(pickSessions)
+    .where(
+      and(
+        eq(pickSessions.userId, userId),
+        eq(pickSessions.media, "movie"),
+        eq(pickSessions.status, "picked"),
+        isNull(pickSessions.followUp),
+        lt(pickSessions.completedAt, sql`now() - make_interval(hours => ${FOLLOW_UP_AFTER_HOURS})`),
+      ),
+    )
+    .orderBy(desc(pickSessions.completedAt))
+    .limit(1);
+  if (!session?.pick) return null;
+  const state = await db.query.titleStates.findFirst({
+    where: and(
+      eq(titleStates.userId, userId),
+      eq(titleStates.media, "movie"),
+      eq(titleStates.source, "tmdb"),
+      eq(titleStates.externalId, session.pick.externalId),
+    ),
+  });
+  // Already marked watched some other way (History, a rating): nothing to ask.
+  if (state?.seen) return null;
+  return { sessionId: session.id, movieId: Number(session.pick.externalId) };
+}
+
+/**
+ * Records your answer. Watched: seen (and rated, if you gave stars). Not yet:
+ * back on the saved list. Skipped it: just stop asking.
+ */
+export async function answerFollowUp(userId: string, sessionId: string, answer: FollowUpAnswer, stars: number | null) {
+  const session = await ownedSession(userId, sessionId);
+  if (!session.pick) throw new Error("That run has no pick.");
+  const movieId = Number(session.pick.externalId);
+  if (answer === "watched") {
+    await updateMovieState(userId, movieId, "seen", { seen: true, ...(stars ? { rating: stars * 2 } : {}) });
+  } else if (answer === "later") {
+    await updateMovieState(userId, movieId, null, { saved: true });
+  }
+  await getDb()
+    .update(pickSessions)
+    .set({ followUp: answer, followedUpAt: new Date() })
+    .where(eq(pickSessions.id, sessionId));
 }

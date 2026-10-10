@@ -7,6 +7,9 @@ import { LookPicker } from "@/components/settings/look-picker";
 import { AddPasskeyButton, RemovePasskeyButton, SignOutButton } from "@/components/settings/account-actions";
 import { auth } from "@/lib/auth";
 import { requireOwner } from "@/lib/session";
+import { providersFor } from "@/lib/picks/server";
+import { regionProviders } from "@/lib/tmdb/providers";
+import { ServicesPicker } from "@/components/settings/services-picker";
 
 export const metadata = { title: "Settings" };
 
@@ -21,6 +24,12 @@ export default function SettingsPage() {
       <div className="grid gap-x-16 gap-y-12 lg:grid-cols-2">
         <Section title="Look" note="This device only. Your other devices keep their own setting.">
           <LookPicker />
+        </Section>
+
+        <Section title="Streaming services" note="What you subscribe to in India. Decks favour films on these.">
+          <Suspense fallback={<p className="text-muted">Loading services…</p>}>
+            <Services />
+          </Suspense>
         </Section>
 
         <Section
@@ -55,6 +64,13 @@ function Section({ title, note, children }: { title: string; note?: string; chil
       {children}
     </section>
   );
+}
+
+async function Services() {
+  const owner = await requireOwner();
+  const [providers, selected] = await Promise.all([regionProviders().catch(() => null), providersFor(owner.id)]);
+  if (!providers) return <p className="text-muted">Couldn&apos;t load the list from the movie database just now.</p>;
+  return <ServicesPicker providers={providers} selected={selected} />;
 }
 
 const dateFormat = new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", year: "numeric" });

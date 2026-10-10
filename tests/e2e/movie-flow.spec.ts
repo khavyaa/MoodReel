@@ -114,22 +114,159 @@ test("saved and history show the run, and you can tidy and rate them", async ({ 
   await page.reload();
   await expect(page.getByText("Saved · 1 film")).toBeVisible();
 
-  // History: the pick, its mood and reason, and a rating.
+  // History: the pick, its mood and reason. It isn't watched until you say so.
   await page.goto("/history");
   await expect(page.getByText("History · 1 pick")).toBeVisible();
   await expect(page.getByText(/beat 3 other saves/)).toBeVisible();
+  await page.getByRole("button", { name: "Yes, watched it" }).click();
   await page.getByRole("button", { name: "4 stars" }).click();
-  await expect(page.getByRole("button", { name: "4 stars" })).toHaveAttribute("aria-pressed", "true");
   await expect
-    .poll(async () => (await query<{ rating: number | null }>("select rating from title_states where picked_at is not null"))[0].rating)
-    .toBe(8);
+    .poll(async () => (await query<{ rating: number | null; seen: boolean }>("select rating, seen from title_states where picked_at is not null"))[0])
+    .toEqual({ rating: 8, seen: true });
   await page.reload();
   await expect(page.getByRole("button", { name: "4 stars" })).toHaveAttribute("aria-pressed", "true");
 
+  // Re-rating changes the state only, never the taste log.
+  await page.getByRole("button", { name: "5 stars" }).click();
+  await expect
+    .poll(async () => (await query<{ rating: number }>("select rating from title_states where picked_at is not null"))[0].rating)
+    .toBe(10);
   const [{ actions }] = await query<{ actions: string }>(
     "select count(*) as actions from title_actions where action in ('unsaved', 'seen') and pick_session_id is null",
   );
-  expect(actions).toBe("2"); // remove and seen are logged; the rating is not
+  expect(actions).toBe("3"); // remove, seen, and "watched it"; ratings are not logged
+  const [{ follow_up }] = await query<{ follow_up: string }>("select follow_up from pick_sessions where status = 'picked'");
+  expect(follow_up).toBe("watched");
+});
+
+test("not for me, undo, and the full synopsis", async ({ page, isMobile }) => {
+  await page.goto("/movies");
+  await page.getByRole("button", { name: /Deal 15 films/ }).click();
+  await expect(page.getByText("1/15")).toBeVisible();
+  const before = Number((await query<{ n: string }>("select count(*) as n from title_actions"))[0].n);
+
+  // The synopsis is clipped, with More to read the rest.
+  await page.getByRole("button", { name: "More" }).click();
+  await expect(page.getByText(/The end\./)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Less" })).toBeVisible();
+
+  // Not for me, then undo: the same card is back and nothing was kept.
+  const first = await currentTitle(page);
+  await page.getByRole("button", { name: "Not for me", exact: true }).click();
+  await expect(page.getByText("2/15")).toBeVisible();
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(page.getByText("1/15")).toBeVisible();
+  await expect.poll(() => currentTitle(page)).toBe(first);
+  await expect
+    .poll(async () => Number((await query<{ n: string }>("select count(*) as n from title_actions"))[0].n))
+    .toBe(before);
+  expect(await query("select 1 from title_states where external_id = (select external_id from title_states order by updated_at desc limit 1) and disliked")).toEqual([]);
+
+  // Two steps forward, two back (Z on a laptop, the button on a phone).
+  await page.getByRole("button", { name: "Skip", exact: true }).click();
+  await page.getByRole("button", { name: "Seen it", exact: true }).click();
+  await expect(page.getByText("3/15")).toBeVisible();
+  for (const n of [2, 1]) {
+    if (isMobile) await page.getByRole("button", { name: "Undo" }).click();
+    else await page.keyboard.press("z");
+    await expect(page.getByText(`${n}/15`)).toBeVisible();
+  }
+  await expect.poll(() => currentTitle(page)).toBe(first);
+  await expect(page.getByRole("button", { name: "Undo" })).toBeHidden(); // nothing left to undo
+  await expect
+    .poll(async () => Number((await query<{ n: string }>("select count(*) as n from title_actions"))[0].n))
+    .toBe(before);
+
+  // Drag down: not for me, for good. Wait for the returned card to settle first.
+  const card = page.locator("[class*='cursor-grab']").first();
+  await card.scrollIntoViewIfNeeded();
+  let box = (await card.boundingBox())!;
+  await expect
+    .poll(async () => {
+      const now = (await card.boundingBox())!;
+      const still = Math.abs(now.y - box.y) < 1 && Math.abs(now.x - box.x) < 1;
+      box = now;
+      return still;
+    })
+    .toBe(true);
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 + 120, { steps: 6 });
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 + 240, { steps: 6 });
+  await page.mouse.up();
+  await expect(page.getByText("2/15")).toBeVisible();
+  await expect
+    .poll(async () => (await query<{ n: string }>("select count(*) as n from title_states where disliked"))[0].n)
+    .toBe("1");
+});
+
+test("pick from saved: the best-fitting saves go straight to the head-to-head", async ({ page }) => {
+  // Save two more, then leave the deck.
+  await page.goto("/movies");
+  await page.getByRole("button", { name: /Deal 15 films/ }).click();
+  await expect(page.getByText("1/15")).toBeVisible();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByText("3/15")).toBeVisible();
+  await expect
+    .poll(async () => (await query<{ n: string }>("select count(*) as n from title_states where saved"))[0].n)
+    .toBe("3");
+
+  await page.goto("/saved");
+  await expect(page.getByText("Saved · 3 films")).toBeVisible();
+  await page.getByRole("button", { name: "Pick from my saved" }).click();
+  await expect(page.getByRole("heading", { name: "This or that?" })).toBeVisible();
+  await expect(page.getByText(/From your saved list · Round 1 of 2/)).toBeVisible();
+  await page.getByRole("button", { name: /^Choose / }).first().click();
+  await page.getByRole("button", { name: /^Choose / }).first().click();
+  await expect(page.getByText(/Tonight's pick · Gripping/)).toBeVisible();
+
+  await expect
+    .poll(async () => (await query<{ origin: string; status: string }>("select origin, status from pick_sessions order by created_at desc limit 1"))[0])
+    .toEqual({ origin: "saved", status: "picked" });
+  const [{ n }] = await query<{ n: string }>("select count(*) as n from title_states where saved");
+  expect(n).toBe("2"); // the winner moved to history; the others stay saved
+});
+
+test("a few hours after a pick, the start screen asks if you watched it", async ({ page }) => {
+  await query("update pick_sessions set completed_at = now() - interval '4 hours' where status = 'picked' and follow_up is null");
+  await page.goto("/movies");
+  await expect(page.getByText(/Did you watch/)).toBeVisible();
+  await page.getByRole("button", { name: "Not yet" }).click();
+  await expect(page.getByText(/is back in Saved/)).toBeVisible();
+  await expect
+    .poll(async () => (await query<{ follow_up: string | null }>("select follow_up from pick_sessions where origin = 'saved'"))[0].follow_up)
+    .toBe("later");
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "What kind of night is it?" })).toBeVisible();
+  await expect(page.getByText(/Did you watch/)).toHaveCount(0);
+  const [{ n }] = await query<{ n: string }>("select count(*) as n from title_states where saved");
+  expect(n).toBe("3");
+});
+
+test("your streaming services are a setting", async ({ page }) => {
+  await page.goto("/settings");
+  await expect(page.getByRole("checkbox", { name: "Netflix" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByRole("checkbox", { name: "Prime Video" })).toBeVisible();
+  // Rent-or-buy stores and add-on channels aren't subscriptions.
+  await expect(page.getByRole("checkbox", { name: "Apple TV Store" })).toHaveCount(0);
+  await expect(page.getByRole("checkbox", { name: /Channel/ })).toHaveCount(0);
+
+  await page.getByRole("checkbox", { name: "Zee5" }).click();
+  await page.getByRole("checkbox", { name: "Netflix" }).click();
+  await expect
+    .poll(async () => (await query<{ providers: number[] }>("select providers from preferences"))[0]?.providers)
+    .toEqual([119, 350, 2336, 232]);
+
+  // Decks now badge Zee5, never Netflix.
+  await page.goto("/movies");
+  await page.getByRole("button", { name: /Deal 15 films/ }).click();
+  await expect(page.getByText("1/15")).toBeVisible();
+  for (let i = 0; i < 4 && !(await page.getByText("On Zee5").isVisible()); i++) {
+    await page.getByRole("button", { name: "Skip", exact: true }).click();
+  }
+  await expect(page.getByText("On Zee5")).toBeVisible();
+  await expect(page.getByText("On Netflix")).toHaveCount(0);
 });
 
 test("swipe gestures and keys work on the deck", async ({ page, isMobile }) => {

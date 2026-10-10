@@ -17,7 +17,7 @@ const MOOD_LINES: Record<MoodId, string> = {
   romantic: "Love stories, slow burns and grand gestures.",
 };
 
-function Chip({
+export function Chip({
   pressed,
   onClick,
   children,

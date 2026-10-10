@@ -1,4 +1,6 @@
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
+import { WatchCheck } from "@/components/library/watch-check";
 import { AppFrame } from "@/components/shell/app-frame";
 import { MovieFlow } from "@/components/pick/movie-flow";
 import { MEDIA, MEDIA_SLUGS, MOODS, isMediaSlug } from "@/lib/moods";
@@ -15,7 +17,17 @@ export async function generateMetadata({ params }: PageProps<"/[media]">) {
 export default async function MediaPage({ params }: PageProps<"/[media]">) {
   const { media } = await params;
   if (!isMediaSlug(media)) notFound();
-  if (media === "movies") return <MovieFlow />;
+  if (media === "movies") {
+    return (
+      <MovieFlow
+        notice={
+          <Suspense fallback={null}>
+            <WatchCheck />
+          </Suspense>
+        }
+      />
+    );
+  }
 
   // Series arrive in Phase 3, books in Phase 4.
   const config = MEDIA[media];

@@ -11,6 +11,7 @@ import {
   timestamp,
   uuid,
   boolean,
+  integer,
 } from "drizzle-orm/pg-core";
 import { user } from "./auth";
 
@@ -109,6 +110,11 @@ export const pickSessions = pgTable(
     /** The one-line "why" shown with the pick, and whether AI or the rules wrote it. */
     why: text("why"),
     whySource: text("why_source"),
+    /** "deck" for a normal run, "saved" when the shortlist came from your saved list. */
+    origin: text("origin").notNull().default("deck"),
+    /** Your answer to "Did you watch it?": watched, later or skipped. Null until asked and answered. */
+    followUp: text("follow_up"),
+    followedUpAt: timestamp("followed_up_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     completedAt: timestamp("completed_at", { withTimezone: true }),
   },
@@ -120,9 +126,10 @@ export const preferences = pgTable("preferences", {
     .primaryKey()
     .references(() => user.id, { onDelete: "cascade" }),
   region: text("region").notNull().default("IN"),
-  services: text("services")
+  /** TMDb watch-provider ids you subscribe to. Starts as Netflix, Prime Video, Apple TV, JioHotstar. */
+  providers: integer("providers")
     .array()
     .notNull()
-    .default(sql`array['Apple TV','Netflix','Prime Video','JioHotstar']::text[]`),
+    .default(sql`array[8,119,350,2336]::integer[]`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

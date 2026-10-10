@@ -1,0 +1,1 @@
+ALTER TABLE "preferences" ADD COLUMN "providers" integer[] DEFAULT array[8,119,350,2336]::integer[] NOT NULL;

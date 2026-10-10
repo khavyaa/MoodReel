@@ -5,18 +5,6 @@ import type { MovieCandidate } from "@/lib/taste/types";
 
 export const WATCH_REGION = process.env.TMDB_WATCH_REGION || "IN";
 
-/**
- * Your services, by TMDb provider id in India (checked Oct 2026). "Apple TV"
- * here is the subscription; the rent-or-buy "Apple TV Store" (id 2) and
- * "Netflix Kids" (175) are left out on purpose.
- */
-export const MY_SERVICES: Record<number, string> = {
-  8: "Netflix",
-  119: "Prime Video",
-  350: "Apple TV",
-  2336: "JioHotstar",
-};
-const SERVICE_FILTER = Object.keys(MY_SERVICES).join("|");
 
 type TmdbMovie = {
   id: number;
@@ -64,7 +52,8 @@ export type DiscoverQuery = {
   /** Cap on votes: pulls well-rated films fewer people have seen. */
   maxVotes?: number;
   runtimeMax: number | null;
-  onlyMyServices: boolean;
+  /** Restrict to these TMDb provider ids (flat-rate, in your region); empty means anywhere. */
+  providers: number[];
   sortBy: "vote_average.desc" | "popularity.desc";
   page: number;
 };
@@ -88,15 +77,15 @@ export function discoverParams(q: DiscoverQuery, today = new Date().toISOString(
     "primary_release_date.lte": today, // released, not announced
     sort_by: q.sortBy,
     page: q.page,
-    ...(q.onlyMyServices
-      ? { with_watch_providers: SERVICE_FILTER, watch_region: WATCH_REGION, with_watch_monetization_types: "flatrate" }
+    ...(q.providers.length
+      ? { with_watch_providers: q.providers.join("|"), watch_region: WATCH_REGION, with_watch_monetization_types: "flatrate" }
       : {}),
   };
 }
 
 export async function discoverMovies(q: DiscoverQuery): Promise<MovieCandidate[]> {
   const data = await tmdb<{ results: TmdbMovie[] }>("/discover/movie", discoverParams(q), 60 * 60 * 6);
-  return data.results.map((m) => toCandidate(m, q.onlyMyServices));
+  return data.results.map((m) => toCandidate(m, q.providers.length > 0));
 }
 
 /* ---------------------------------------------------------------- details */
@@ -116,8 +105,11 @@ export type MovieDetails = {
   directors: string[];
   cast: string[];
   trailerKey: string | null;
-  /** Your services that stream it in your region, by name. */
-  streamingOn: string[];
+  /** Every flat-rate service streaming it in your region; filter with servicesOn(). */
+  providers: { id: number; name: string }[];
+  votes: number;
+  originalTitle: string;
+  backdropPath: string | null;
 };
 
 type TmdbDetails = TmdbMovie & {
@@ -126,7 +118,7 @@ type TmdbDetails = TmdbMovie & {
   credits?: { cast: { name: string }[]; crew: { name: string; job: string }[] };
   videos?: { results: { key: string; site: string; type: string; official: boolean }[] };
   "watch/providers"?: {
-    results: Record<string, { link?: string; flatrate?: { provider_id: number; provider_name: string }[] }>;
+    results: Record<string, { flatrate?: { provider_id: number; provider_name: string }[] }>;
   };
 };
 
@@ -157,8 +149,9 @@ export async function getMovieDetails(id: number): Promise<MovieDetails> {
     directors: (d.credits?.crew ?? []).filter((c) => c.job === "Director").map((c) => c.name),
     cast: (d.credits?.cast ?? []).slice(0, 4).map((c) => c.name),
     trailerKey: trailer?.key ?? null,
-    streamingOn: (region?.flatrate ?? [])
-      .filter((p) => p.provider_id in MY_SERVICES)
-      .map((p) => MY_SERVICES[p.provider_id]),
+    providers: (region?.flatrate ?? []).map((p) => ({ id: p.provider_id, name: p.provider_name })),
+    votes: base.voteCount,
+    originalTitle: base.originalTitle,
+    backdropPath: base.backdropPath,
   };
 }

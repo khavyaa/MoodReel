@@ -3,6 +3,8 @@ import { DECK_SIZE, composeDeck, type Scored } from "@/lib/deck/compose";
 import { MAX_SAVES, choose, deckIsDone, startFinale } from "@/lib/deck/finale";
 import type { MovieCandidate } from "@/lib/taste/types";
 
+const MINE = [8, 119, 350, 2336];
+
 function scored(id: number, language: string, score: number): Scored {
   return {
     score,
@@ -93,13 +95,13 @@ describe("pool queries and animation cap", () => {
   it("queries mind-bending English films by keyword and Indian films by genre", async () => {
     const { poolQueries } = await import("@/lib/deck/build-movies");
     const taps = { mood: "mind", energy: 2, time: 2 } as const;
-    expect(poolQueries("en", taps).every((q) => q.keywords?.length)).toBe(true);
-    expect(poolQueries("ta", taps).every((q) => !q.keywords)).toBe(true);
+    expect(poolQueries("en", taps, MINE).every((q) => q.keywords?.length)).toBe(true);
+    expect(poolQueries("ta", taps, MINE).every((q) => !q.keywords)).toBe(true);
   });
 
   it("includes a 'well rated, fewer votes' pool for English", async () => {
     const { poolQueries } = await import("@/lib/deck/build-movies");
-    expect(poolQueries("en", { mood: "gripping", energy: 1, time: 1 }).some((q) => q.maxVotes)).toBe(true);
+    expect(poolQueries("en", { mood: "gripping", energy: 1, time: 1 }, MINE).some((q) => q.maxVotes)).toBe(true);
   });
 
   it("keeps only the two best animated films", async () => {
@@ -118,16 +120,23 @@ describe("pool query parameters", () => {
     const { discoverParams } = await import("@/lib/tmdb/movies");
     const params = discoverParams({
       language: "en", genres: [35], excludeGenres: [], minVotes: 300, runtimeMax: 100,
-      onlyMyServices: true, sortBy: "vote_average.desc", page: 1,
+      providers: MINE, sortBy: "vote_average.desc", page: 1,
     });
     expect(params.without_keywords).toContain("9716");
     expect(params.with_watch_providers).toBe("8|119|350|2336");
     expect(params["with_runtime.lte"]).toBe(100);
   });
 
+  it("uses whichever services you ticked, and only open pools when you tick none", async () => {
+    const { poolQueries } = await import("@/lib/deck/build-movies");
+    const taps = { mood: "gripping", energy: 1, time: 1 } as const;
+    expect(poolQueries("en", taps, [232]).some((q) => q.providers.join() === "232")).toBe(true);
+    expect(poolQueries("hi", taps, []).every((q) => q.providers.length === 0)).toBe(true);
+  });
+
   it("keeps Indian mind-bending picks to twisty genres", async () => {
     const { poolQueries } = await import("@/lib/deck/build-movies");
-    const genres = poolQueries("ml", { mood: "mind", energy: 1, time: 2 })[0].genres;
+    const genres = poolQueries("ml", { mood: "mind", energy: 1, time: 2 }, MINE)[0].genres;
     expect(genres).not.toContain(18); // drama
   });
 });

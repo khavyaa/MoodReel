@@ -10,6 +10,8 @@ import { watchSearchUrl } from "@/lib/watch";
 import { buttonClasses } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 import { Poster } from "@/components/pick/poster";
+import type { FollowUpAnswer } from "@/lib/picks/server";
+import { WatchAnswer } from "./watch-prompt";
 
 // You're in India; dates read the same on the server (UTC) and in the browser.
 const DATE = new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Kolkata" });
@@ -102,6 +104,7 @@ export type HistoryEntry = {
   why: string | null;
   pickedAt: string | null;
   seen: boolean;
+  followUp: FollowUpAnswer | null;
   /** 1–5 stars, or null when not rated yet. */
   stars: number | null;
   movie: LibraryMovie;
@@ -128,7 +131,16 @@ export function HistoryList({ entries }: { entries: HistoryEntry[] }) {
               <h2 className="text-xl leading-tight font-black sm:text-2xl">{e.movie.title}</h2>
               <p className="text-sm text-muted">{meta(e.movie)}</p>
               {e.why && <p className="max-w-[60ch] leading-snug">{e.why}</p>}
-              <Stars movieId={e.movie.id} stars={e.stars} title={e.movie.title} />
+              {e.seen ? (
+                <Stars movieId={e.movie.id} stars={e.stars} title={e.movie.title} />
+              ) : e.followUp ? (
+                <p className="text-sm text-muted">{e.followUp === "later" ? "Not watched yet: it's in Saved." : "You skipped this one."}</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <p className="text-sm font-semibold">Did you watch it?</p>
+                  <WatchAnswer sessionId={e.sessionId} />
+                </div>
+              )}
               <WatchLinks movie={e.movie} />
             </div>
           </li>
@@ -167,7 +179,7 @@ function Stars({ movieId, stars, title }: { movieId: number; stars: number | nul
           </button>
         ))}
       </div>
-      <span className="text-sm text-muted">{shown === null ? "Watched it? Rate it." : "Your rating"}</span>
+      <span className="text-sm text-muted">{shown === null ? "Watched. Rate it?" : "Your rating"}</span>
     </div>
   );
 }

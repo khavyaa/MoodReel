@@ -13,7 +13,8 @@ function film(id, title, language, extra = {}) {
     original_language: language,
     release_date: "2015-06-01",
     genre_ids: THRILLER,
-    overview: `${title} is a tense film used by the MoodReel end-to-end tests.`,
+    // Long enough to be clipped on the card, so "More" shows.
+    overview: `${title} is a tense film used by the MoodReel end-to-end tests. ${"A detective follows a trail of small lies through a city that would rather forget them, and every answer opens a worse question. ".repeat(4)}The end.`,
     poster_path: null,
     backdrop_path: null,
     vote_average: 7.6,
@@ -58,8 +59,25 @@ http
         credits: { cast: [{ name: "A. Actor" }], crew: [{ name: "D. Director", job: "Director" }] },
         videos: { results: [] },
         "watch/providers": {
-          results: { IN: { link: `https://www.themoviedb.org/movie/${f.id}/watch?locale=IN`, flatrate: f.id % 2 ? [{ provider_id: 8, provider_name: "Netflix" }] : [] } },
+          results: {
+            IN: {
+              flatrate: f.id % 2
+                ? [{ provider_id: 8, provider_name: "Netflix" }, { provider_id: 232, provider_name: "Zee5" }]
+                : [],
+            },
+          },
         },
+      });
+    }
+    if (url.pathname === "/3/watch/providers/movie") {
+      const p = (provider_id, provider_name, priority) => ({
+        provider_id, provider_name, logo_path: null, display_priorities: { IN: priority },
+      });
+      return json(res, {
+        results: [
+          p(8, "Netflix", 0), p(119, "Amazon Prime Video", 1), p(350, "Apple TV", 2), p(2336, "JioHotstar", 3),
+          p(2, "Apple TV Store", 5), p(232, "Zee5", 7), p(2243, "Apple TV Amazon Channel", 65),
+        ],
       });
     }
     json(res, { status_message: "Unknown path" }, 404);

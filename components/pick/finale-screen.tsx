@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { Undo2 } from "lucide-react";
 import type { DeckCard } from "@/lib/deck/build-movies";
 import type { Finale } from "@/lib/deck/finale";
 import { formatRuntime } from "@/lib/picks/why";
@@ -10,9 +11,14 @@ import { Poster } from "./poster";
 export function FinaleScreen({
   finale,
   onChoose,
+  onBack,
+  fromSaved,
 }: {
   finale: Finale<DeckCard>;
   onChoose: (side: "champion" | "challenger") => void;
+  /** Undo the save that ended the deck and go back to it. Only before the first round is chosen. */
+  onBack: (() => void) | null;
+  fromSaved: boolean;
 }) {
   const left = finale.champion;
   const right = finale.challengers[0];
@@ -32,7 +38,7 @@ export function FinaleScreen({
       <div className="flex flex-wrap items-end justify-between gap-3">
         <h1 className="display text-[clamp(3rem,8vw,7rem)]">This or that?</h1>
         <p className="label text-muted">
-          Round {finale.round} of {finale.rounds}
+          {fromSaved && "From your saved list · "}Round {finale.round} of {finale.rounds}
         </p>
       </div>
       <div className="grid flex-1 items-center gap-3 lg:grid-cols-[1fr_auto_1fr] lg:gap-8">
@@ -42,7 +48,18 @@ export function FinaleScreen({
         </span>
         <Option card={right} onPick={() => onChoose("challenger")} keyHint="→" />
       </div>
-      <p className="hidden text-sm text-muted lg:block">Keys: ← for the left, → for the right.</p>
+      <div className="flex items-center justify-between gap-4">
+        <p className="hidden text-sm text-muted lg:block">Keys: ← for the left, → for the right.</p>
+        {onBack && finale.round === 1 && (
+          <button
+            type="button"
+            onClick={onBack}
+            className="inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-sm font-bold underline-offset-4 hover:underline"
+          >
+            <Undo2 className="size-4" aria-hidden /> Back to the deck
+          </button>
+        )}
+      </div>
     </div>
   );
 }

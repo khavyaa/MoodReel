@@ -1,42 +1,65 @@
 import "server-only";
-import { getMovieDetails } from "@/lib/tmdb/movies";
-import { LANGUAGE_LABEL } from "@/lib/taste/types";
+import type { DeckCard } from "@/lib/deck/build-movies";
+import { passesGate } from "@/lib/taste/rules";
+import { LANGUAGE_LABEL, type MovieCandidate } from "@/lib/taste/types";
+import { getMovieDetails, type MovieDetails } from "@/lib/tmdb/movies";
+import { servicesOn } from "@/lib/tmdb/providers";
 
-/** What a Saved or History row shows. Details come fresh from TMDb (cached for hours). */
-export type LibraryMovie = {
-  id: number;
-  title: string;
-  year: number | null;
-  languageLabel: string;
-  posterPath: string | null;
-  rating: number;
-  runtime: number | null;
-  genres: string[];
-  overview: string;
-  streamingOn: string[];
-  trailerKey: string | null;
-};
+/** A Saved or History row shows the same card the deck does. */
+export type LibraryMovie = DeckCard;
 
-/** Fetches details for each id; a title TMDb can't return right now is left out rather than failing the page. */
-export async function libraryMovies(ids: number[]): Promise<Map<number, LibraryMovie>> {
+export function detailsToCandidate(d: MovieDetails, providers: number[]): MovieCandidate {
+  return {
+    id: d.id,
+    title: d.title,
+    originalTitle: d.originalTitle,
+    language: d.language,
+    year: d.year,
+    releaseDate: d.year ? `${d.year}-01-01` : null,
+    genreIds: d.genreIds,
+    overview: d.overview,
+    posterPath: d.posterPath,
+    backdropPath: d.backdropPath,
+    voteAverage: d.rating,
+    voteCount: d.votes,
+    popularity: 0,
+    onMyServices: servicesOn(d.providers, providers).length > 0,
+  };
+}
+
+export function detailsToCard(d: MovieDetails, providers: number[]): DeckCard {
+  return {
+    id: d.id,
+    title: d.title,
+    originalTitle: d.originalTitle,
+    year: d.year,
+    language: d.language,
+    languageLabel: LANGUAGE_LABEL[d.language] ?? d.language.toUpperCase(),
+    overview: d.overview,
+    posterPath: d.posterPath,
+    backdropPath: d.backdropPath,
+    rating: d.rating,
+    votes: d.votes,
+    genreIds: d.genreIds,
+    genres: d.genres,
+    runtime: d.runtime,
+    directors: d.directors,
+    cast: d.cast,
+    streamingOn: servicesOn(d.providers, providers),
+    gate: passesGate(detailsToCandidate(d, providers)).reason ?? null,
+    trailerKey: d.trailerKey,
+  };
+}
+
+/** Details for each id, fresh from TMDb (cached for hours). One TMDb can't return right now is left out, not fatal. */
+export async function movieDetailsFor(ids: number[]): Promise<Map<number, MovieDetails>> {
   const results = await Promise.allSettled(ids.map((id) => getMovieDetails(id)));
-  const movies = new Map<number, LibraryMovie>();
-  for (const r of results) {
-    if (r.status !== "fulfilled") continue;
-    const d = r.value;
-    movies.set(d.id, {
-      id: d.id,
-      title: d.title,
-      year: d.year,
-      languageLabel: LANGUAGE_LABEL[d.language] ?? d.language.toUpperCase(),
-      posterPath: d.posterPath,
-      rating: d.rating,
-      runtime: d.runtime,
-      genres: d.genres,
-      overview: d.overview,
-      streamingOn: d.streamingOn,
-      trailerKey: d.trailerKey,
-    });
-  }
-  return movies;
+  const found = new Map<number, MovieDetails>();
+  for (const r of results) if (r.status === "fulfilled") found.set(r.value.id, r.value);
+  return found;
+}
+
+export async function libraryMovies(ids: number[], providers: number[]): Promise<Map<number, LibraryMovie>> {
+  const details = await movieDetailsFor(ids);
+  return new Map([...details].map(([id, d]) => [id, detailsToCard(d, providers)]));
 }

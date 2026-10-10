@@ -9,8 +9,10 @@ import {
   createMovieSession,
   handledMovieIds,
   markSessionEmpty,
+  providersFor,
   recordSwipe,
   tasteFor,
+  undoSwipe,
 } from "@/lib/picks/server";
 import { writeWhy } from "@/lib/ai/why";
 import { MEDIA } from "@/lib/moods";
@@ -35,9 +37,13 @@ export async function dealMovies(input: unknown): Promise<DealResponse> {
   const owner = await requireOwner();
   const taps = tapsSchema.parse(input);
   try {
-    const [exclude, taste] = await Promise.all([handledMovieIds(owner.id), tasteFor(owner.id)]);
+    const [exclude, taste, providers] = await Promise.all([
+      handledMovieIds(owner.id),
+      tasteFor(owner.id),
+      providersFor(owner.id),
+    ]);
     const seed = Date.now() % 100_000;
-    const { cards, missingLanguages, curatedByAi } = await buildMovieDeck(taps, { exclude, taste, seed });
+    const { cards, missingLanguages, curatedByAi } = await buildMovieDeck(taps, { exclude, taste, seed, providers });
     console.info(`[moodreel] dealt ${cards.length} cards (${curatedByAi ? "AI-curated" : "rules only"})`);
     const sessionId = await createMovieSession(owner.id, taps, cards.map((c) => c.id));
     return { ok: true, sessionId, cards, missingLanguages };
@@ -50,11 +56,18 @@ export async function dealMovies(input: unknown): Promise<DealResponse> {
   }
 }
 
-export async function swipeMovie(sessionId: string, title: unknown, action: "saved" | "skipped" | "seen") {
+const swipeSchema = z.enum(["saved", "skipped", "seen", "disliked"]);
+
+export async function swipeMovie(sessionId: string, title: unknown, action: z.infer<typeof swipeSchema>) {
   const owner = await requireOwner();
   z.string().uuid().parse(sessionId);
-  z.enum(["saved", "skipped", "seen"]).parse(action);
-  await recordSwipe(owner.id, sessionId, titleSchema.parse(title), action);
+  await recordSwipe(owner.id, sessionId, titleSchema.parse(title), swipeSchema.parse(action));
+}
+
+/** Takes back your last swipe on this card. */
+export async function undoMovieSwipe(sessionId: string, movieId: number) {
+  const owner = await requireOwner();
+  await undoSwipe(owner.id, z.string().uuid().parse(sessionId), z.number().int().positive().parse(movieId));
 }
 
 export async function noSavesThisTime(sessionId: string) {

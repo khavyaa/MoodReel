@@ -6,7 +6,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { HistoryList, type HistoryEntry } from "@/components/library/library-lists";
 import { LibrarySkeleton } from "@/components/library/library-skeleton";
 import { libraryMovies } from "@/lib/library";
-import { movieHistory } from "@/lib/picks/server";
+import { movieHistory, providersFor } from "@/lib/picks/server";
 import { requireOwner } from "@/lib/session";
 
 export const metadata = { title: "History" };
@@ -39,7 +39,7 @@ async function History() {
     );
   }
 
-  const details = await libraryMovies([...new Set(picks.map((p) => p.id))]);
+  const details = await libraryMovies([...new Set(picks.map((p) => p.id))], await providersFor(owner.id));
   const entries: HistoryEntry[] = picks.flatMap((p) => {
     const movie = details.get(p.id);
     if (!movie) return [];
@@ -50,6 +50,7 @@ async function History() {
         why: p.why,
         pickedAt: p.pickedAt?.toISOString() ?? null,
         seen: p.seen,
+        followUp: p.followUp,
         stars: p.rating === null ? null : Math.round(p.rating / 2),
         movie,
       },

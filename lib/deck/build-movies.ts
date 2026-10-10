@@ -3,6 +3,7 @@ import { composeDeck, DECK_SIZE } from "./compose";
 import { applyCuration } from "./curation";
 import { curateWithAi } from "@/lib/ai/curate";
 import { discoverMovies, getMovieDetails, type DiscoverQuery } from "@/lib/tmdb/movies";
+import { servicesOn } from "@/lib/tmdb/providers";
 import {
   GENRE,
   LANGUAGES,
@@ -45,7 +46,7 @@ export type DeckCard = {
  * deck), including "well rated, fewer votes" pools so the deck isn't just the
  * films everyone has already seen.
  */
-export function poolQueries(language: Language, taps: Taps): DiscoverQuery[] {
+export function poolQueries(language: Language, taps: Taps, providers: number[]): DiscoverQuery[] {
   const rule = MOVIE_MOODS[taps.mood];
   const rules = LANGUAGES[language];
   const base = {
@@ -57,20 +58,22 @@ export function poolQueries(language: Language, taps: Taps): DiscoverQuery[] {
     minVotes: rules.minVotes,
     runtimeMax: RUNTIME_LIMIT[taps.time],
   };
+  const mine = { providers };
+  const anywhere = { providers: [] as number[] };
   if (language !== "en") {
     return [
-      { ...base, onlyMyServices: true, sortBy: "vote_average.desc", page: 1 },
-      { ...base, onlyMyServices: true, sortBy: "popularity.desc", page: 1 },
-      { ...base, onlyMyServices: false, sortBy: "vote_average.desc", page: 1 },
+      { ...base, ...mine, sortBy: "vote_average.desc", page: 1 },
+      { ...base, ...mine, sortBy: "popularity.desc", page: 1 },
+      { ...base, ...anywhere, sortBy: "vote_average.desc", page: 1 },
     ];
   }
   const lesserSeen = { ...base, maxVotes: rules.ubiquitous };
   return [
-    { ...lesserSeen, onlyMyServices: true, sortBy: "vote_average.desc", page: 1 },
-    { ...lesserSeen, onlyMyServices: true, sortBy: "vote_average.desc", page: 2 },
-    { ...lesserSeen, onlyMyServices: false, sortBy: "vote_average.desc", page: 1 },
-    { ...base, onlyMyServices: true, sortBy: "vote_average.desc", page: 1 },
-    { ...base, onlyMyServices: true, sortBy: "popularity.desc", page: 1 },
+    { ...lesserSeen, ...mine, sortBy: "vote_average.desc", page: 1 },
+    { ...lesserSeen, ...mine, sortBy: "vote_average.desc", page: 2 },
+    { ...lesserSeen, ...anywhere, sortBy: "vote_average.desc", page: 1 },
+    { ...base, ...mine, sortBy: "vote_average.desc", page: 1 },
+    { ...base, ...mine, sortBy: "popularity.desc", page: 1 },
   ];
 }
 
@@ -97,10 +100,18 @@ const CURATE_TOP = 30;
 
 export async function buildMovieDeck(
   taps: Taps,
-  { exclude, taste, seed }: { exclude: Set<number>; taste: TasteProfile; seed: number },
+  {
+    exclude,
+    taste,
+    seed,
+    providers,
+  }: { exclude: Set<number>; taste: TasteProfile; seed: number; providers: number[] },
 ): Promise<DealResult> {
   const queries = MOVIE_LANGUAGES.flatMap((language) =>
-    poolQueries(language, taps).map((q) => ({ language, q })),
+    poolQueries(language, taps, providers)
+      // With no services ticked, the services-only pools repeat the open ones.
+      .filter((q, i, all) => all.findIndex((o) => JSON.stringify(o) === JSON.stringify(q)) === i)
+      .map((q) => ({ language, q })),
   );
   const results = await Promise.allSettled(queries.map(({ q }) => discoverMovies(q)));
 
@@ -152,7 +163,7 @@ export async function buildMovieDeck(
       directors: d?.directors ?? [],
       cast: d?.cast ?? [],
       // Details know exactly which service; the pool flag is the fallback.
-      streamingOn: d?.streamingOn ?? (m.onMyServices ? ["your services"] : []),
+      streamingOn: d ? servicesOn(d.providers, providers) : m.onMyServices ? ["your services"] : [],
       gate: passesGate(m).reason ?? null,
       trailerKey: d?.trailerKey ?? null,
     };

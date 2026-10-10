@@ -1,12 +1,12 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
-import { dealMovies, noSavesThisTime, pickMovie, swipeMovie } from "@/app/(app)/[media]/actions";
+import { useCallback, useRef, useState, type ReactNode } from "react";
+import { dealMovies, noSavesThisTime, pickMovie, swipeMovie, undoMovieSwipe } from "@/app/(app)/[media]/actions";
 import type { DeckCard } from "@/lib/deck/build-movies";
 import { DECK_SIZE } from "@/lib/deck/compose";
 import { choose, deckIsDone, startFinale, type Finale } from "@/lib/deck/finale";
 import { buttonClasses } from "@/components/ui/button";
-import { DeckScreen, type SwipeAction } from "./deck-screen";
+import { DeckScreen, type ExitAs, type SwipeAction } from "./deck-screen";
 import { FinaleScreen } from "./finale-screen";
 import { FlowFrame } from "./flow-frame";
 import { PickScreen } from "./pick-screen";
@@ -17,23 +17,43 @@ type Step =
   | { kind: "dealing" }
   | { kind: "error"; message: string }
   | { kind: "empty" }
+  | DeckStep
   | {
-      kind: "deck";
+      kind: "finale";
       sessionId: string;
-      cards: DeckCard[];
-      index: number;
+      finale: Finale<DeckCard>;
       saves: DeckCard[];
-      missing: string[];
-      last: SwipeAction;
+      /** The deck it came from, so "Back to the deck" can undo the last save. Null when picking from Saved. */
+      deck: DeckStep | null;
     }
-  | { kind: "finale"; sessionId: string; finale: Finale<DeckCard>; saves: DeckCard[] }
   | { kind: "pick"; sessionId: string; pick: DeckCard; saves: DeckCard[]; why: string | null };
+
+type DeckStep = {
+  kind: "deck";
+  sessionId: string;
+  cards: DeckCard[];
+  /** What you did with each card so far, in order; its length is where you are in the deck. */
+  actions: SwipeAction[];
+  missing: string[];
+  exitAs: ExitAs;
+  returning: { id: number; action: SwipeAction } | null;
+};
 
 const titleRef = (c: DeckCard) => ({ id: c.id, language: c.language, genreIds: c.genreIds });
 
-export function MovieFlow() {
-  const [taps, setTaps] = useState<TapsValue>({ mood: "gripping", energy: 1, time: 1 });
-  const [step, setStep] = useState<Step>({ kind: "taps" });
+const savesOf = (d: DeckStep) => d.cards.filter((_, i) => d.actions[i] === "saved");
+
+/** A shortlist that skips the deck, from "Pick from my saved". With one film, it's already the pick. */
+export type FlowStart = { sessionId: string; cards: DeckCard[]; taps: TapsValue; why: string | null };
+
+export function MovieFlow({ start, notice, onExit }: { start?: FlowStart; notice?: ReactNode; onExit?: () => void }) {
+  const [taps, setTaps] = useState<TapsValue>(start?.taps ?? { mood: "gripping", energy: 1, time: 1 });
+  const [step, setStep] = useState<Step>(() => {
+    if (!start) return { kind: "taps" };
+    const finale = startFinale(start.cards);
+    if (finale) return { kind: "finale", sessionId: start.sessionId, finale, saves: start.cards, deck: null };
+    return { kind: "pick", sessionId: start.sessionId, pick: start.cards[0], saves: start.cards, why: start.why };
+  });
 
   // Swipes save in the background, strictly in order, so a fast swiper never
   // races their own saves. A failed save is logged, never blocks the deck.
@@ -58,10 +78,10 @@ export function MovieFlow() {
       kind: "deck",
       sessionId: result.sessionId,
       cards: result.cards,
-      index: 0,
-      saves: [],
+      actions: [],
       missing: result.missingLanguages,
-      last: "skipped",
+      exitAs: "skipped",
+      returning: null,
     });
   }, [taps]);
 
@@ -92,15 +112,16 @@ export function MovieFlow() {
   );
 
   const finishDeck = useCallback(
-    (sessionId: string, saves: DeckCard[]) => {
+    (deck: DeckStep) => {
+      const saves = savesOf(deck);
       if (saves.length === 0) {
-        void enqueue(() => noSavesThisTime(sessionId));
+        void enqueue(() => noSavesThisTime(deck.sessionId));
         setStep({ kind: "empty" });
         return;
       }
       const finale = startFinale(saves);
-      if (!finale) reveal(sessionId, saves[0], saves);
-      else setStep({ kind: "finale", sessionId, finale, saves });
+      if (!finale) reveal(deck.sessionId, saves[0], saves);
+      else setStep({ kind: "finale", sessionId: deck.sessionId, finale, saves, deck });
     },
     [enqueue, reveal],
   );
@@ -108,15 +129,27 @@ export function MovieFlow() {
   const onSwipe = useCallback(
     (action: SwipeAction) => {
       if (step.kind !== "deck") return;
-      const card = step.cards[step.index];
+      const card = step.cards[step.actions.length];
       if (!card) return;
       void enqueue(() => swipeMovie(step.sessionId, titleRef(card), action));
-      const saves = action === "saved" ? [...step.saves, card] : step.saves;
-      const index = step.index + 1;
-      if (deckIsDone(index, step.cards.length, saves.length)) finishDeck(step.sessionId, saves);
-      else setStep({ ...step, index, saves, last: action });
+      const next: DeckStep = { ...step, actions: [...step.actions, action], exitAs: action, returning: null };
+      if (deckIsDone(next.actions.length, next.cards.length, savesOf(next).length)) finishDeck(next);
+      else setStep(next);
     },
     [enqueue, finishDeck, step],
+  );
+
+  /** Step back one card: it returns to the top of the pile and its swipe is erased. */
+  const undo = useCallback(
+    (deck: DeckStep) => {
+      const i = deck.actions.length - 1;
+      if (i < 0) return;
+      const card = deck.cards[i];
+      const action = deck.actions[i];
+      void enqueue(() => undoMovieSwipe(deck.sessionId, card.id));
+      setStep({ ...deck, actions: deck.actions.slice(0, i), exitAs: "undo", returning: { id: card.id, action } });
+    },
+    [enqueue],
   );
 
   const onChoose = useCallback(
@@ -129,11 +162,16 @@ export function MovieFlow() {
     [reveal, step],
   );
 
-  const toTaps = useCallback(() => setStep({ kind: "taps" }), []);
+  const toTaps = useCallback(() => (onExit ? onExit() : setStep({ kind: "taps" })), [onExit]);
 
   return (
     <FlowFrame mood={taps.mood}>
-      {step.kind === "taps" && <TapsScreen value={taps} onChange={setTaps} onDeal={deal} />}
+      {step.kind === "taps" && (
+        <>
+          {notice}
+          <TapsScreen value={taps} onChange={setTaps} onDeal={deal} />
+        </>
+      )}
 
       {step.kind === "dealing" && (
         <div className="flex flex-1 flex-col items-center justify-center gap-6" role="status">
@@ -145,15 +183,24 @@ export function MovieFlow() {
       {step.kind === "deck" && (
         <DeckScreen
           cards={step.cards}
-          index={step.index}
-          saves={step.saves}
-          lastAction={step.last}
+          index={step.actions.length}
+          saves={savesOf(step)}
+          exitAs={step.exitAs}
+          returning={step.returning}
           missingLanguages={step.missing}
           onSwipe={onSwipe}
+          onUndo={step.actions.length > 0 ? () => undo(step) : null}
         />
       )}
 
-      {step.kind === "finale" && <FinaleScreen finale={step.finale} onChoose={onChoose} />}
+      {step.kind === "finale" && (
+        <FinaleScreen
+          finale={step.finale}
+          onChoose={onChoose}
+          onBack={step.deck ? () => undo(step.deck!) : null}
+          fromSaved={!step.deck}
+        />
+      )}
 
       {step.kind === "pick" && (
         <PickScreen

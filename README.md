@@ -7,7 +7,8 @@ the next book.
 Built for one person on an iPhone and a Mac. Sign-in is a passkey; there is no sign-up page.
 
 > **Status:** Phase 2 of the v2 rebuild. Movies work end to end: taps → deck → head-to-head →
-> tonight's pick. Series (Phase 3) and books (Phase 4) come next.
+> tonight's pick, plus Saved (with "Pick from my saved"), History with ratings, and a "Did you
+> watch it?" check a few hours after each pick. Series (Phase 3) and books (Phase 4) come next.
 
 ## Run it locally
 
@@ -57,18 +58,19 @@ a preview deployment's own URL; previews are for checking builds.
 
 1. **Pools.** TMDb Discover, per language (English, Hindi, Tamil, Malayalam), filtered by the
    mood's genres or keywords, your runtime limit, and a per-language vote floor. Separate pools
-   pull what's on your services (Netflix, Prime Video, Apple TV, JioHotstar) and well-rated films
-   fewer people have seen.
+   pull what's on your services (set in Settings; Netflix, Prime Video, Apple TV and JioHotstar to
+   start) and well-rated films fewer people have seen.
 2. **Your rules.** English: any genre. Tamil, Malayalam, Hindi: only crime/thriller/mystery, or
-   acclaimed. Anything you've seen, disliked, saved or picked never returns; skips return after
-   60 days.
+   acclaimed. Anything you've seen, marked "Not for me", saved or picked never returns; skips
+   return after 60 days.
 3. **Score.** Weighted rating (new releases damped), mood fit, energy fit, taste learned from your
    swipes, a bonus for your services, and a markdown for films everyone has seen. No raw
    popularity.
 4. **AI pass (optional).** The top 30 go to a fast model through Vercel's AI Gateway, which flags
    which genuinely fit the mood. It only re-weights; if it's slow or unavailable, the rules decide.
-5. **Deck.** 15 films, about two-thirds English, the rest spread through. Four saves start the
-   head-to-head.
+5. **Deck.** 15 films, about two-thirds English, the rest spread through. Swipe right to save,
+   left to skip, up for seen it, down for not for me; Undo steps back as far as you like. Four
+   saves start the head-to-head.
 
 The rules live in `lib/taste/rules.ts`, each with a unit test, and their thresholds came from
 probing real TMDb data.

@@ -2,31 +2,44 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, animate, motion, useMotionValue, useReducedMotion, useTransform } from "framer-motion";
-import { ArrowLeft, ArrowRight, ArrowUp, Check, Star } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, Star, Undo2 } from "lucide-react";
 import type { DeckCard } from "@/lib/deck/build-movies";
 import { MAX_SAVES } from "@/lib/deck/finale";
 import { formatRuntime } from "@/lib/picks/why";
 import { cn } from "@/lib/cn";
 import { Poster } from "./poster";
 
-export type SwipeAction = "saved" | "skipped" | "seen";
+export type SwipeAction = "saved" | "skipped" | "seen" | "disliked";
+/** How the card leaving the pile goes: the way it was swiped, or quietly to the back on undo. */
+export type ExitAs = SwipeAction | "undo";
 
 const EXIT: Record<SwipeAction, { x: number; y: number; rotate: number }> = {
   saved: { x: 640, y: 40, rotate: 16 },
   skipped: { x: -640, y: 40, rotate: -16 },
   seen: { x: 0, y: -820, rotate: 0 },
+  disliked: { x: 0, y: 820, rotate: 0 },
 };
 
 /** Cards rendered in the pile: the one you're deciding on and two beneath it. */
 const PILE = 3;
 /** Where each card in the pile rests, top first. */
+// Every property an entrance or exit touches is listed, so a card coming back
+// from an undo (which starts off-screen) always lands back in the pile.
 const RESTING = [
-  { scale: 1, y: 0, rotate: 0, opacity: 1 },
-  { scale: 0.94, y: 14, rotate: -3, opacity: 1 },
-  { scale: 0.88, y: 28, rotate: 2.5, opacity: 0.7 },
+  { x: 0, scale: 1, y: 0, rotate: 0, opacity: 1, zIndex: 3 },
+  { x: 0, scale: 0.94, y: 14, rotate: -3, opacity: 1, zIndex: 2 },
+  { x: 0, scale: 0.88, y: 28, rotate: 2.5, opacity: 0.7, zIndex: 1 },
 ] as const;
+const BEHIND = { ...RESTING[PILE - 1], scale: 0.82, y: 40, opacity: 0 };
 /** A soft, quick settle: no bounce, so it reads the same on 60 and 120 Hz screens. */
 const SETTLE = { type: "spring", stiffness: 420, damping: 38, mass: 0.9 } as const;
+
+const KEYS: Record<string, SwipeAction> = {
+  ArrowLeft: "skipped",
+  ArrowRight: "saved",
+  ArrowUp: "seen",
+  ArrowDown: "disliked",
+};
 
 /** Distance or flick speed that commits a swipe instead of springing back. */
 const COMMIT = 110;
@@ -36,28 +49,38 @@ export function DeckScreen({
   cards,
   index,
   saves,
-  lastAction,
+  exitAs,
+  returning,
   missingLanguages,
   onSwipe,
+  onUndo,
 }: {
   cards: DeckCard[];
   index: number;
   saves: DeckCard[];
-  lastAction: SwipeAction;
+  exitAs: ExitAs;
+  /** A card coming back after an undo, and the way it had gone. */
+  returning: { id: number; action: SwipeAction } | null;
   missingLanguages: string[];
   onSwipe: (action: SwipeAction) => void;
+  onUndo: (() => void) | null;
 }) {
   const card = cards[index];
 
-  // Arrow keys on a laptop. Ignored while typing, and while a modifier is held.
+  // Keys on a laptop: arrows to swipe, Z or ⌘Z to undo. Ignored while typing.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
       const target = e.target as HTMLElement | null;
       if (target?.closest("input, textarea, select, [contenteditable]")) return;
-      const action = ({ ArrowLeft: "skipped", ArrowRight: "saved", ArrowUp: "seen" } as const)[
-        e.key as "ArrowLeft" | "ArrowRight" | "ArrowUp"
-      ];
+      if (e.key.toLowerCase() === "z" && !e.altKey && !e.shiftKey) {
+        if (onUndo) {
+          e.preventDefault();
+          onUndo();
+        }
+        return;
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const action = KEYS[e.key];
       if (action) {
         e.preventDefault();
         onSwipe(action);
@@ -65,7 +88,7 @@ export function DeckScreen({
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onSwipe]);
+  }, [onSwipe, onUndo]);
 
   if (!card) return null;
 
@@ -84,10 +107,18 @@ export function DeckScreen({
           top card leaves, they slide forward instead of a new card popping in.
         */}
         <div className="relative mx-auto aspect-[2/3] w-[min(50vw,240px)] lg:w-full lg:max-w-[380px]">
-          <AnimatePresence custom={lastAction} initial={false}>
+          <AnimatePresence custom={exitAs} initial={false}>
             {cards
               .slice(index, index + PILE)
-              .map((c, depth) => <SwipeCard key={c.id} card={c} depth={depth} onSwipe={onSwipe} />)
+              .map((c, depth) => (
+                <SwipeCard
+                  key={c.id}
+                  card={c}
+                  depth={depth}
+                  returnFrom={returning?.id === c.id ? returning.action : null}
+                  onSwipe={onSwipe}
+                />
+              ))
               .reverse()}
           </AnimatePresence>
         </div>
@@ -95,14 +126,27 @@ export function DeckScreen({
         <CardInfo key={card.id} card={card} />
       </div>
 
-      <div className="mt-auto grid grid-cols-[1fr_1fr_1.3fr] gap-2 lg:mt-0 lg:flex lg:flex-wrap lg:gap-3">
-        <ActionButton label="Skip" hint="←" icon={<ArrowLeft className="size-5" aria-hidden />} onClick={() => onSwipe("skipped")} />
-        <ActionButton label="Seen it" hint="↑" icon={<ArrowUp className="size-5" aria-hidden />} onClick={() => onSwipe("seen")} />
-        <ActionButton label="Save" hint="→" icon={<ArrowRight className="size-5" aria-hidden />} onClick={() => onSwipe("saved")} primary />
+      <div className="mt-auto flex flex-col gap-2 lg:mt-0 lg:flex-row lg:items-center lg:gap-3">
+        <div className="grid grid-cols-[1fr_1fr_1fr_1.25fr] gap-2 lg:flex lg:gap-3">
+          <ActionButton label="Skip" hint="←" icon={<ArrowLeft className="size-5" aria-hidden />} onClick={() => onSwipe("skipped")} />
+          <ActionButton label="Not for me" hint="↓" icon={<ArrowDown className="size-5" aria-hidden />} onClick={() => onSwipe("disliked")} />
+          <ActionButton label="Seen it" hint="↑" icon={<ArrowUp className="size-5" aria-hidden />} onClick={() => onSwipe("seen")} />
+          <ActionButton label="Save" hint="→" icon={<ArrowRight className="size-5" aria-hidden />} onClick={() => onSwipe("saved")} primary />
+        </div>
+        <div className="flex min-h-9 items-center justify-between gap-4 lg:ml-auto">
+          <p className="text-xs text-muted lg:hidden">Skip brings it back in a couple of months. Not for me never does.</p>
+          <button
+            type="button"
+            onClick={onUndo ?? undefined}
+            disabled={!onUndo}
+            aria-keyshortcuts="Z"
+            className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm font-bold underline-offset-4 hover:underline disabled:invisible"
+          >
+            <Undo2 className="size-4" aria-hidden /> Undo
+            <kbd aria-hidden className="hidden font-mono text-xs opacity-60 lg:inline">Z</kbd>
+          </button>
+        </div>
       </div>
-      <p className="hidden text-sm text-muted lg:block">
-        Keys: ← skip · ↑ seen it · → save. {MAX_SAVES} saves go to the head-to-head.
-      </p>
       <p aria-live="polite" className="sr-only">
         {card.title}, card {index + 1} of {cards.length}.
       </p>
@@ -110,7 +154,17 @@ export function DeckScreen({
   );
 }
 
-function SwipeCard({ card, depth, onSwipe }: { card: DeckCard; depth: number; onSwipe: (a: SwipeAction) => void }) {
+function SwipeCard({
+  card,
+  depth,
+  returnFrom,
+  onSwipe,
+}: {
+  card: DeckCard;
+  depth: number;
+  returnFrom: SwipeAction | null;
+  onSwipe: (a: SwipeAction) => void;
+}) {
   const reduce = useReducedMotion();
   const isTop = depth === 0;
   // Drag lives on an inner layer, the pile position and the exit on the outer
@@ -121,21 +175,24 @@ function SwipeCard({ card, depth, onSwipe }: { card: DeckCard; depth: number; on
   const saveHint = useTransform(x, [40, 140], [0, 1]);
   const skipHint = useTransform(x, [-140, -40], [1, 0]);
   const seenHint = useTransform(y, [-140, -40], [1, 0]);
+  const nopeHint = useTransform(y, [40, 140], [0, 1]);
   const committed = useRef(false);
 
   return (
     <motion.div
       aria-hidden={!isTop}
       className={cn("absolute inset-0 will-change-transform", !isTop && "pointer-events-none")}
-      style={{ zIndex: PILE - depth }}
       variants={{
         // The card leaves the way you sent it: right for save, left for skip, up for seen.
-        exit: (a: SwipeAction) =>
+        exit: (a: ExitAs) =>
           reduce
             ? { opacity: 0, transition: { duration: 0.15 } }
-            : { ...EXIT[a], opacity: 0, zIndex: PILE + 1, transition: { duration: 0.38, ease: [0.3, 0.7, 0.4, 1] } },
+            : a === "undo"
+              ? { ...BEHIND, transition: { duration: 0.2 } }
+              : { ...EXIT[a], opacity: 0, zIndex: PILE + 1, transition: { duration: 0.38, ease: [0.3, 0.7, 0.4, 1] } },
       }}
-      initial={reduce ? false : { ...RESTING[PILE - 1], scale: 0.82, y: 40, opacity: 0 }}
+      // New cards rise from behind the pile; an undone card comes back from where it went.
+      initial={reduce ? false : returnFrom ? { ...EXIT[returnFrom], opacity: 0, zIndex: PILE + 1 } : BEHIND}
       animate={reduce ? { ...RESTING[depth], rotate: 0 } : RESTING[depth]}
       exit="exit"
       transition={SETTLE}
@@ -146,11 +203,17 @@ function SwipeCard({ card, depth, onSwipe }: { card: DeckCard; depth: number; on
         drag={isTop}
         dragElastic={0.9}
         dragMomentum={false}
+        // A card back from an undo may be the same instance that was swiped: each drag starts fresh.
+        onDragStart={() => {
+          committed.current = false;
+        }}
         onDragEnd={(_, info: { offset: { x: number; y: number }; velocity: { x: number; y: number } }) => {
           if (committed.current) return;
           const { offset, velocity } = info;
           let action: SwipeAction | null = null;
-          if ((offset.y < -COMMIT || velocity.y < -FLICK) && Math.abs(offset.y) > Math.abs(offset.x)) action = "seen";
+          const vertical = Math.abs(offset.y) > Math.abs(offset.x);
+          if (vertical && (offset.y < -COMMIT || velocity.y < -FLICK)) action = "seen";
+          else if (vertical && (offset.y > COMMIT || velocity.y > FLICK)) action = "disliked";
           else if (offset.x > COMMIT || velocity.x > FLICK) action = "saved";
           else if (offset.x < -COMMIT || velocity.x < -FLICK) action = "skipped";
           if (action) {
@@ -169,6 +232,7 @@ function SwipeCard({ card, depth, onSwipe }: { card: DeckCard; depth: number; on
             <Stamp label="Save" opacity={saveHint} className="left-4 -rotate-12" />
             <Stamp label="Skip" opacity={skipHint} className="right-4 rotate-12" />
             <Stamp label="Seen it" opacity={seenHint} className="left-1/2 -translate-x-1/2" />
+            <Stamp label="Not for me" opacity={nopeHint} className="top-auto bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap" />
           </>
         )}
       </motion.div>
@@ -298,9 +362,11 @@ function ActionButton({
     <button
       type="button"
       onClick={onClick}
-      aria-keyshortcuts={hint === "←" ? "ArrowLeft" : hint === "→" ? "ArrowRight" : "ArrowUp"}
+      title={`${label} (${hint})`}
+      aria-keyshortcuts={{ "←": "ArrowLeft", "→": "ArrowRight", "↑": "ArrowUp", "↓": "ArrowDown" }[hint]}
       className={cn(
-        "inline-flex h-14 items-center justify-center gap-1.5 rounded-full border-2 px-3 text-[15px] font-bold whitespace-nowrap transition-colors sm:gap-2 sm:px-6 sm:text-base",
+        // iPhone: icon over a short label, four across. Laptop: one pill each.
+        "inline-flex h-16 flex-col items-center justify-center gap-0.5 rounded-2xl border-2 px-1 text-xs font-bold whitespace-nowrap transition-colors sm:h-14 sm:flex-row sm:gap-2 sm:rounded-full sm:px-6 sm:text-base",
         primary
           ? "border-accent bg-accent text-on-accent hover:opacity-90"
           : "border-line hover:bg-soft",
