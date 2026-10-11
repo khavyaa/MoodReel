@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState, type ReactNode } from "react";
+import { useOffline } from "next/offline";
 import { deal as dealDeck, noSavesThisTime, pick as pickTitle, swipe, undo as undoSwipe } from "@/app/(app)/[media]/actions";
 import type { DeckCard } from "@/lib/deck/build-movies";
 import { DECK_SIZE } from "@/lib/deck/compose";
@@ -193,9 +194,7 @@ export function PickFlow({
       {step.kind === "dealing" && (
         <div className="flex flex-1 flex-col items-center justify-center gap-6" role="status">
           <div className="aspect-[2/3] w-[min(56vw,300px)] animate-pulse rounded-2xl bg-soft" />
-          <p className="label">
-            Dealing {DECK_SIZE} {noun}…
-          </p>
+          <DealingLabel noun={noun} />
         </div>
       )}
 
@@ -277,5 +276,15 @@ function Message({
         </button>
       </div>
     </div>
+  );
+}
+
+/** "Dealing 15 films…", or, offline, that it's waiting: the deal is sent when the connection returns. */
+function DealingLabel({ noun }: { noun: string }) {
+  const offline = useOffline();
+  return (
+    <p className="label">
+      {offline ? `Offline: dealing as soon as you're back` : `Dealing ${DECK_SIZE} ${noun}…`}
+    </p>
   );
 }

@@ -5,6 +5,7 @@ import { useState } from "react";
 import { KeyRound, LogOut, Trash2 } from "lucide-react";
 import { authClient, passkeyErrorMessage } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
+import { forgetOfflinePages } from "@/components/shell/service-worker";
 
 export function SignOutButton() {
   const router = useRouter();
@@ -16,6 +17,7 @@ export function SignOutButton() {
       onClick={async () => {
         setPending(true);
         await authClient.signOut();
+        await forgetOfflinePages();
         router.replace("/sign-in");
         router.refresh();
       }}

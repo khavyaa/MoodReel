@@ -6,10 +6,10 @@ the next book.
 
 Built for one person on an iPhone and a Mac. Sign-in is a passkey; there is no sign-up page.
 
-> **Status:** Phase 4 of the v2 rebuild. Movies, series and books work end to end: taps → deck →
-> head-to-head → tonight's pick (or "Read next"), plus Saved (with "Pick from my saved"), History
-> with ratings, a "Did you watch it?" check after a film, and Watching / Reading lists with
-> check-ins for series and books.
+> **Status:** the v2 rebuild is complete (Phases 1–5). Movies, series and books work end to end:
+> taps → deck → head-to-head → tonight's pick (or "Read next"), plus Saved (with "Pick from my
+> saved"), History with ratings, a "Did you watch it?" check after a film, Watching / Reading lists
+> with check-ins for series and books, and an app that still opens offline.
 
 ## Run it locally
 
@@ -146,6 +146,12 @@ proxy.ts           sends signed-out requests to /sign-in
 
 **Looks.** Bold & playful in light mode, cinematic dark in dark mode, following the device. An
 override is stored per device in the browser and applied before the first paint.
+
+**Offline.** Offline, swipes, saves and check-ins wait and are sent when the connection returns
+(Next's `useOffline`), and a banner says so. A service worker (`public/sw.js`, production only) lets
+the home-screen app open with no connection: Saved, History and the start screens open from your
+last visit, anything else shows `/offline`. Kept pages live on the device only and are deleted on
+sign-out.
 
 **Data.** Titles are keyed by media, source and external id, since TMDb movie and TV ids
 overlap. Only ids and your own actions are stored; details come fresh from TMDb and Open
