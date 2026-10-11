@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { MEDIA_LINKS, PLACES, mediaFromPath } from "./nav-items";
+import { OfflineBanner } from "./offline-banner";
 
 export function AppHeader() {
   const pathname = usePathname();
@@ -55,6 +56,7 @@ export function AppHeader() {
           })}
         </nav>
       </div>
+      <OfflineBanner />
     </header>
   );
 }

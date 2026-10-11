@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Big_Shoulders, Instrument_Serif, JetBrains_Mono, Onest } from "next/font/google";
 import "./globals.css";
+import { ServiceWorker } from "@/components/shell/service-worker";
 
 const shoulders = Big_Shoulders({
   subsets: ["latin"],
@@ -56,7 +57,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <head>
         <script dangerouslySetInnerHTML={{ __html: LOOK_SCRIPT }} />
       </head>
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        {children}
+        <ServiceWorker />
+      </body>
     </html>
   );
 }

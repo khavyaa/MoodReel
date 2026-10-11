@@ -8,7 +8,7 @@ import { getSessionCookie } from "better-auth/cookies";
  */
 
 // /api/cron checks its own secret (Vercel's cron sends it); it has no session cookie.
-const PUBLIC_PATHS = ["/sign-in", "/setup", "/about", "/api/cron"];
+const PUBLIC_PATHS = ["/sign-in", "/setup", "/about", "/offline", "/api/cron"];
 
 function isPublic(pathname: string) {
   return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
@@ -37,6 +37,6 @@ export function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!api/auth|_next/static|_next/image|favicon.ico|icon|apple-icon|manifest|.*\\.(?:svg|png|jpg|jpeg|webp|ico|txt|webmanifest)$).*)",
+    "/((?!api/auth|_next/static|_next/image|favicon.ico|icon|apple-icon|manifest|sw\\.js|.*\\.(?:svg|png|jpg|jpeg|webp|ico|txt|webmanifest)$).*)",
   ],
 };
