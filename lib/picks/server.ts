@@ -12,7 +12,9 @@ import type { TasteProfile } from "@/lib/taste/rules";
  * are keyed by (media, source, external id): TMDb movie and TV ids overlap.
  */
 
-export type Media = "movie" | "series";
+export type Media = "movie" | "series" | "book";
+/** Where a media type's ids come from: TMDb for films and series, Open Library for books. */
+export const sourceOf = (media: Media) => (media === "book" ? ("openlibrary" as const) : ("tmdb" as const));
 
 /** A skip means "not tonight", not "never": it hides a title for this long. */
 export const SKIP_COOLDOWN_DAYS = 60;
@@ -21,7 +23,7 @@ function titleKey(userId: string, media: Media, id: number | string) {
   return and(
     eq(titleStates.userId, userId),
     eq(titleStates.media, media),
-    eq(titleStates.source, "tmdb"),
+    eq(titleStates.source, sourceOf(media)),
     eq(titleStates.externalId, String(id)),
   );
 }
@@ -30,12 +32,12 @@ function actionKey(userId: string, media: Media, id: number | string) {
   return and(
     eq(titleActions.userId, userId),
     eq(titleActions.media, media),
-    eq(titleActions.source, "tmdb"),
+    eq(titleActions.source, sourceOf(media)),
     eq(titleActions.externalId, String(id)),
   );
 }
 
-/** TMDb ids you've already dealt with: seen, disliked, saved, picked, or skipped recently. */
+/** Ids you've already dealt with: seen, disliked, saved, picked, or skipped recently. */
 export async function handledIds(userId: string, media: Media): Promise<Set<number>> {
   const rows = await getDb()
     .select({ id: titleStates.externalId })
@@ -44,7 +46,7 @@ export async function handledIds(userId: string, media: Media): Promise<Set<numb
       and(
         eq(titleStates.userId, userId),
         eq(titleStates.media, media),
-        eq(titleStates.source, "tmdb"),
+        eq(titleStates.source, sourceOf(media)),
         or(
           eq(titleStates.seen, true),
           eq(titleStates.disliked, true),
@@ -86,7 +88,7 @@ export async function createDeckSession(
       energy: taps.energy,
       time: taps.time,
       status: ids.length ? "dealing" : "empty",
-      deck: ids.map((id) => ({ source: "tmdb" as const, externalId: String(id) })),
+      deck: ids.map((id) => ({ source: sourceOf(media), externalId: String(id) })),
     })
     .returning({ id: pickSessions.id });
   return row.id;
@@ -101,10 +103,11 @@ async function ownedSession(userId: string, sessionId: string) {
 }
 
 export type SwipeAction = "saved" | "skipped" | "seen" | "disliked";
-type TitleRef = { id: number; language: string; genreIds: number[] };
+type TitleRef = { id: number; language: string; genreIds: number[]; tags?: string[] };
 
+/** Taste tags: genre ids and language for films and series; books send subject tags. */
 function tagsFor(title: TitleRef) {
-  return [...title.genreIds.map(String), `lang:${title.language}`];
+  return title.tags?.length ? title.tags : [...title.genreIds.map(String), `lang:${title.language}`];
 }
 
 async function logAction(
@@ -117,7 +120,7 @@ async function logAction(
   state: Partial<typeof titleStates.$inferInsert>,
 ) {
   const db = getDb();
-  const key = { userId, media, source: "tmdb" as const, externalId: String(title.id) };
+  const key = { userId, media, source: sourceOf(media), externalId: String(title.id) };
   await db.transaction(async (tx) => {
     await tx.insert(titleActions).values({
       ...key,
@@ -148,7 +151,7 @@ export async function recordSwipe(userId: string, sessionId: string, title: Titl
   await logAction(userId, session.media, sessionId, session.mood, title, action, state);
 
   if (action === "saved") {
-    const entry = { source: "tmdb" as const, externalId: String(title.id) };
+    const entry = { source: sourceOf(session.media), externalId: String(title.id) };
     if (!session.shortlist.some((e) => e.externalId === entry.externalId)) {
       await getDb()
         .update(pickSessions)
@@ -200,7 +203,7 @@ export async function undoSwipe(userId: string, sessionId: string, titleId: numb
   });
 }
 
-/** The pick moves from "saved" into history (a series onto your Watching list); the other saves stay saved. */
+/** The pick moves from "saved" into history (a series or book onto your Watching or Reading list); the other saves stay saved. */
 export async function completePick(
   userId: string,
   sessionId: string,
@@ -212,13 +215,13 @@ export async function completePick(
   await logAction(userId, session.media, sessionId, session.mood, title, "picked", {
     pickedAt: now,
     saved: false,
-    ...(session.media === "series" ? { watchingSince: now, checkedInAt: null } : {}),
+    ...(session.media !== "movie" ? { watchingSince: now, checkedInAt: null } : {}),
   });
   await getDb()
     .update(pickSessions)
     .set({
       status: "picked",
-      pick: { source: "tmdb", externalId: String(title.id) },
+      pick: { source: sourceOf(session.media), externalId: String(title.id) },
       why: why.text,
       whySource: why.source,
       completedAt: now,
@@ -268,7 +271,7 @@ export async function updateTitleState(
       await tx.insert(titleActions).values({
         userId,
         media,
-        source: "tmdb",
+        source: sourceOf(media),
         externalId: String(id),
         action,
         language: earlier?.language ?? null,
@@ -287,12 +290,10 @@ export async function savedTitles(userId: string, limit = 80) {
   const rows = await getDb()
     .select({ id: titleStates.externalId, media: titleStates.media, savedAt: titleStates.updatedAt })
     .from(titleStates)
-    .where(and(eq(titleStates.userId, userId), eq(titleStates.source, "tmdb"), eq(titleStates.saved, true)))
+    .where(and(eq(titleStates.userId, userId), eq(titleStates.saved, true)))
     .orderBy(desc(titleStates.updatedAt))
     .limit(limit);
-  return rows.flatMap((r) =>
-    r.media === "book" ? [] : [{ id: Number(r.id), media: r.media as Media, savedAt: r.savedAt }],
-  );
+  return rows.map((r) => ({ id: Number(r.id), media: r.media as Media, savedAt: r.savedAt }));
 }
 
 /** Past picks, newest first, with the mood, the reason, and what you made of it. */
@@ -312,7 +313,7 @@ export async function pickHistory(userId: string, limit = 50) {
     .where(
       and(
         eq(pickSessions.userId, userId),
-        inArray(pickSessions.media, ["movie", "series"]),
+        inArray(pickSessions.media, ["movie", "series", "book"]),
         eq(pickSessions.status, "picked"),
       ),
     )
@@ -331,9 +332,7 @@ export async function pickHistory(userId: string, limit = 50) {
           watchingSince: titleStates.watchingSince,
         })
         .from(titleStates)
-        .where(
-          and(eq(titleStates.userId, userId), eq(titleStates.source, "tmdb"), inArray(titleStates.externalId, ids)),
-        )
+        .where(and(eq(titleStates.userId, userId), inArray(titleStates.externalId, ids)))
     : [];
   const stateOf = new Map(states.map((s) => [`${s.media}:${s.id}`, s]));
 
@@ -384,7 +383,7 @@ export async function createSavedSession(
   taps: { mood: string; energy: number; time: number },
   ids: number[],
 ) {
-  const entries = ids.map((id) => ({ source: "tmdb" as const, externalId: String(id) }));
+  const entries = ids.map((id) => ({ source: sourceOf(media), externalId: String(id) }));
   const [row] = await getDb()
     .insert(pickSessions)
     .values({ userId, media, origin: "saved", status: "finale", ...taps, deck: entries, shortlist: entries })
@@ -442,21 +441,21 @@ export async function answerFollowUp(userId: string, sessionId: string, answer: 
     .where(eq(pickSessions.id, sessionId));
 }
 
-/* ------------------------------------------------------ watching (series) */
+/* ------------------------------------------ watching (series), reading (books) */
 
-/** Days between "still watching?" questions for each show. */
-export const CHECK_IN_EVERY_DAYS = 3;
+/** Days between "still watching?" / "still reading?" questions for each title. */
+export const CHECK_IN_EVERY_DAYS: Record<"series" | "book", number> = { series: 3, book: 7 };
 
-/** Series on your Watching list, most recently started first. */
-export async function watchingSeries(userId: string) {
+/** Series on your Watching list, or books on your Reading list, most recently started first. */
+export async function inProgress(userId: string, media: "series" | "book") {
   const rows = await getDb()
     .select({ id: titleStates.externalId, since: titleStates.watchingSince, checkedInAt: titleStates.checkedInAt })
     .from(titleStates)
     .where(
       and(
         eq(titleStates.userId, userId),
-        eq(titleStates.media, "series"),
-        eq(titleStates.source, "tmdb"),
+        eq(titleStates.media, media),
+        eq(titleStates.source, sourceOf(media)),
         isNotNull(titleStates.watchingSince),
       ),
     )
@@ -464,20 +463,20 @@ export async function watchingSeries(userId: string) {
   return rows.map((r) => ({ id: Number(r.id), since: r.since!, checkedInAt: r.checkedInAt }));
 }
 
-/** The show you've gone longest without being asked about, once it's been a few days. */
-export async function pendingCheckIn(userId: string) {
+/** The title you've gone longest without being asked about, once enough days have passed. */
+export async function pendingCheckIn(userId: string, media: "series" | "book") {
   const [row] = await getDb()
     .select({ id: titleStates.externalId })
     .from(titleStates)
     .where(
       and(
         eq(titleStates.userId, userId),
-        eq(titleStates.media, "series"),
-        eq(titleStates.source, "tmdb"),
+        eq(titleStates.media, media),
+        eq(titleStates.source, sourceOf(media)),
         isNotNull(titleStates.watchingSince),
         lt(
           sql`coalesce(${titleStates.checkedInAt}, ${titleStates.watchingSince})`,
-          sql`now() - make_interval(days => ${CHECK_IN_EVERY_DAYS})`,
+          sql`now() - make_interval(days => ${CHECK_IN_EVERY_DAYS[media]})`,
         ),
       ),
     )
@@ -489,21 +488,27 @@ export async function pendingCheckIn(userId: string) {
 export type CheckInAnswer = "watching" | "finished" | "dropped";
 
 /**
- * Still watching: ask again in a few days. Finished: seen, rated if you gave
- * stars, off the list. Dropped: off the list, and it counts like "not for me".
+ * Still going: ask again later. Finished: seen (read), rated if you gave stars,
+ * off the list. Dropped (or "gave up"): off the list, and it counts like "not for me".
  */
-export async function checkInSeries(userId: string, id: number, answer: CheckInAnswer, stars: number | null) {
+export async function checkIn(
+  userId: string,
+  media: "series" | "book",
+  id: number,
+  answer: CheckInAnswer,
+  stars: number | null,
+) {
   const now = new Date();
   if (answer === "watching") {
-    await updateTitleState(userId, "series", id, null, { checkedInAt: now });
+    await updateTitleState(userId, media, id, null, { checkedInAt: now });
   } else if (answer === "finished") {
-    await updateTitleState(userId, "series", id, "finished", {
+    await updateTitleState(userId, media, id, "finished", {
       seen: true,
       watchingSince: null,
       checkedInAt: now,
       ...(stars ? { rating: stars * 2 } : {}),
     });
   } else {
-    await updateTitleState(userId, "series", id, "dropped", { disliked: true, watchingSince: null, checkedInAt: now });
+    await updateTitleState(userId, media, id, "dropped", { disliked: true, watchingSince: null, checkedInAt: now });
   }
 }

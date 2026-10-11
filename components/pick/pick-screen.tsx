@@ -3,8 +3,8 @@
 import { Check, ExternalLink, Play, Star } from "lucide-react";
 import type { DeckCard } from "@/lib/deck/build-movies";
 import { MOODS, type MoodId } from "@/lib/moods";
-import { cardMeta, startLine } from "@/lib/card-meta";
-import { watchSearchUrl } from "@/lib/watch";
+import { bestsellerLabel, cardMeta, makersLabel, readLine, startLine } from "@/lib/card-meta";
+import { whereTo } from "@/lib/watch";
 import { buttonClasses } from "@/components/ui/button";
 import { Poster } from "./poster";
 
@@ -24,6 +24,10 @@ export function PickScreen({
   onAgain: () => void;
 }) {
   const start = startLine(pick);
+  const read = readLine(pick);
+  const where = whereTo(pick);
+  const by = pick.book ? makersLabel(pick) : null;
+  const bestseller = bestsellerLabel(pick);
   return (
     <div className="grid flex-1 items-center gap-5 lg:grid-cols-[minmax(260px,380px)_minmax(0,1fr)] lg:gap-16">
       <div className="mx-auto w-[min(40vw,200px)] lg:w-full">
@@ -35,10 +39,17 @@ export function PickScreen({
           {resultLabel} · {MOODS[mood].label}
         </p>
         <h1 className="display text-[clamp(3rem,8vw,7.5rem)]">{pick.title}</h1>
+        {by && <p className="-mt-1 text-lg font-bold">{by}</p>}
         <p className="max-w-[40ch] text-xl leading-snug lg:text-2xl" aria-live="polite">
           {why ?? "Working out why…"}
         </p>
         <p className="label text-muted">{cardMeta(pick)}</p>
+        {read && (
+          <div className="flex max-w-md flex-col gap-0.5 rounded-2xl bg-soft px-4 py-3">
+            <span className="font-bold">{read}</span>
+            {pick.genres.length > 0 && <span className="text-sm text-muted">{pick.genres.slice(0, 3).join(" · ")}</span>}
+          </div>
+        )}
         {start && (
           <div className="flex max-w-md flex-col gap-0.5 rounded-2xl bg-soft px-4 py-3">
             <span className="font-bold">Start with Season 1</span>
@@ -49,7 +60,11 @@ export function PickScreen({
         <div className="flex flex-wrap gap-2 text-[13px] font-semibold">
           <span className="inline-flex items-center gap-1.5 rounded-lg bg-soft px-2.5 py-1 shadow-[inset_0_0_0_1.5px_var(--line)]">
             <Star className="size-3.5 fill-current" aria-hidden /> {pick.rating.toFixed(1)}
+            {pick.book && <span className="font-normal opacity-70">/ 5</span>}
           </span>
+          {bestseller && (
+            <span className="inline-flex items-center rounded-lg bg-accent px-2.5 py-1 text-on-accent">{bestseller}</span>
+          )}
           {pick.streamingOn.map((s) => (
             <span key={s} className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-2.5 py-1 text-on-accent">
               <Check className="size-3.5" aria-hidden /> On {s}
@@ -58,8 +73,8 @@ export function PickScreen({
         </div>
 
         <div className="flex flex-wrap gap-3 pt-2">
-          <a href={watchSearchUrl(pick.title, pick.year, pick.media)} target="_blank" rel="noreferrer noopener" className={buttonClasses("solid", "lg")}>
-            Where to watch <ExternalLink className="size-4" aria-hidden />
+          <a href={where.href} target="_blank" rel="noreferrer noopener" className={buttonClasses("solid", "lg")}>
+            {where.label} <ExternalLink className="size-4" aria-hidden />
           </a>
           {pick.trailerKey && (
             <a
@@ -91,7 +106,14 @@ export function PickScreen({
         {pick.media === "series" && (
           <p className="text-sm">It&apos;s on your Watching list. Every few days MoodReel asks how it&apos;s going.</p>
         )}
-        <p className="text-xs text-muted">Streaming badges from JustWatch, via TMDb.</p>
+        {pick.media === "book" && (
+          <p className="text-sm">It&apos;s on your Reading list. About once a week MoodReel asks how it&apos;s going.</p>
+        )}
+        <p className="text-xs text-muted">
+          {pick.media === "book"
+            ? "Book data and ratings from Open Library; bestseller weeks from the New York Times lists."
+            : "Streaming badges from JustWatch, via TMDb."}
+        </p>
       </div>
     </div>
   );

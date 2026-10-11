@@ -5,7 +5,7 @@ import { z } from "zod";
 import { requireOwner } from "@/lib/session";
 import {
   answerFollowUp,
-  checkInSeries,
+  checkIn,
   completePick,
   createSavedSession,
   providersFor,
@@ -20,14 +20,17 @@ import {
 import type { DeckCard } from "@/lib/deck/build-movies";
 import { seriesCard } from "@/lib/deck/build-series";
 import { MAX_SAVES } from "@/lib/deck/finale";
-import { detailsToCandidate, detailsToCard, movieDetailsFor, seriesDetailsFor } from "@/lib/library";
+import { bookCardsFor, detailsToCandidate, detailsToCard, movieDetailsFor, seriesDetailsFor } from "@/lib/library";
+import { withNytWeeks } from "@/lib/deck/build-books";
+import { booksByWork } from "@/lib/books/openlibrary";
+import { fitsLength, scoreBook, type BookCandidate } from "@/lib/books/rules";
 import { MEDIA, type MoodId } from "@/lib/moods";
 import { RUNTIME_LIMIT, scoreMovie } from "@/lib/taste/rules";
 import { fitsCommitment, scoreSeries } from "@/lib/taste/series-rules";
 import { writeWhy } from "@/lib/ai/why";
 
 const titleId = z.number().int().positive();
-const mediaSchema = z.enum(["movie", "series"]);
+const mediaSchema = z.enum(["movie", "series", "book"]);
 const starsSchema = z.number().int().min(1).max(5).nullable();
 
 /** Take a title off the saved list without saying you've seen it. */
@@ -91,7 +94,18 @@ export async function pickFromSaved(input: unknown): Promise<SavedPickResponse> 
   const ids = saved.filter((s) => s.media === media).map((s) => s.id);
 
   let best: DeckCard[];
-  if (media === "movie") {
+  if (media === "book") {
+    const bookMood = z.enum(MEDIA.books.moods).parse(mood);
+    const cards = await bookCardsFor(ids);
+    const found = await booksByWork(ids).catch(() => new Map<number, BookCandidate>());
+    const books = await withNytWeeks([...found.values()]);
+    best = books
+      .filter((b) => fitsLength(b.pages, time))
+      .map((b) => ({ b, score: scoreBook(b, { ...taps, mood: bookMood }, taste) }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, MAX_SAVES)
+      .flatMap(({ b }) => cards.get(b.id) ?? []);
+  } else if (media === "movie") {
     const details = await movieDetailsFor(ids);
     const limit = RUNTIME_LIMIT[time];
     best = [...details.values()]
@@ -116,7 +130,9 @@ export async function pickFromSaved(input: unknown): Promise<SavedPickResponse> 
       error:
         media === "movie"
           ? "None of your saved films fit in that time. Try a longer slot."
-          : "None of your saved series fit that commitment. Try another.",
+          : media === "series"
+            ? "None of your saved series fit that commitment. Try another."
+            : "None of your saved books are that length. Try another.",
     };
   }
 
@@ -132,8 +148,9 @@ export async function pickFromSaved(input: unknown): Promise<SavedPickResponse> 
     beat: 0,
     seasons: only.series?.seasons ?? null,
     firstSeasonEpisodes: only.series?.firstSeasonEpisodes ?? null,
+    book: only.book,
   });
-  await completePick(owner.id, sessionId, only, why);
+  await completePick(owner.id, sessionId, { ...only, tags: only.book?.tags }, why);
   return { ok: true, sessionId, cards: best, taps, why: why.text };
 }
 
@@ -156,17 +173,19 @@ export async function answerWatched(
   if (options.refresh) refresh();
 }
 
-/* ------------------------------------------------- still watching? (series) */
+/* ------------------------- still watching? (series) / still reading? (books) */
 
 export async function answerCheckIn(
+  media: "series" | "book",
   id: number,
   answer: CheckInAnswer,
   stars: number | null = null,
   options: { refresh: boolean } = { refresh: true },
 ) {
   const owner = await requireOwner();
-  await checkInSeries(
+  await checkIn(
     owner.id,
+    z.enum(["series", "book"]).parse(media),
     titleId.parse(id),
     z.enum(["watching", "finished", "dropped"]).parse(answer),
     starsSchema.parse(stars),

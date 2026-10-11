@@ -83,6 +83,67 @@ function showDetails(f) {
   };
 }
 
+// Books (Open Library under /ol) and NYT bestseller lists (under /nyt).
+function book(n, title, author, extra = {}) {
+  return {
+    key: `/works/OL${n}W`,
+    title,
+    author_name: [author],
+    first_publish_year: 2018,
+    number_of_pages_median: 340,
+    ratings_average: 4.3,
+    ratings_count: 120,
+    already_read_count: 300,
+    subject: ["Fiction", "Thriller", "Suspense", "Fiction, thrillers, psychological"],
+    cover_i: null,
+    isbn: [`97800000${n}`],
+    ...extra,
+  };
+}
+
+const BOOKS = [
+  ...Array.from({ length: 12 }, (_, i) => book(7000 + i, `Thriller Book ${i + 1}`, `Author ${i + 1}`)),
+  // Only gets in through the NYT lists: too few Open Library ratings on its own.
+  book(7100, "Bestseller Only", "Nyt Author", { ratings_count: 2, ratings_average: 4.0, isbn: ["9780000007100"] }),
+  // Never dealt: young adult, romance, a graphic novel filed by its comics class code, children's.
+  book(7900, "Teen Thriller", "Ya Author", { subject: ["Thriller", "Young adult fiction"] }),
+  book(7901, "Romantic Suspense", "Ro Author", { subject: ["Suspense", "Romance", "Fiction"] }),
+  book(7902, "Dark Knight Panels", "Gn Author", { subject: ["Thriller", "Suspense", "741.5/973"] }),
+  book(7903, "Kids Mystery", "Kid Author", { subject: ["Mystery", "Juvenile fiction"] }),
+];
+
+function olSearch(url) {
+  const q = url.searchParams.get("q") || "";
+  const keys = [...q.matchAll(/key:"\/works\/(OL\d+W)"/g)].map((m) => `/works/${m[1]}`);
+  if (keys.length) return BOOKS.filter((b) => keys.includes(b.key));
+  const isbn = q.match(/isbn:(\d+)/);
+  if (isbn) return BOOKS.filter((b) => b.isbn.includes(isbn[1]));
+  const pages = q.match(/number_of_pages_median:\[(\d+) TO (\d+)\]/);
+  const minRatings = Number(q.match(/ratings_count:\[(\d+) TO/)?.[1] ?? 0);
+  return BOOKS.filter(
+    (b) =>
+      (!pages || (b.number_of_pages_median >= Number(pages[1]) && b.number_of_pages_median <= Number(pages[2]))) &&
+      b.ratings_count >= minRatings,
+  );
+}
+
+const NYT_OVERVIEW = {
+  results: {
+    published_date: "2026-10-04",
+    lists: [
+      {
+        list_name_encoded: "hardcover-fiction",
+        books: [{ primary_isbn13: "9780000007100", title: "BESTSELLER ONLY", author: "Nyt Author", rank: 3, weeks_on_list: 12 }],
+      },
+      // Not an adult list: ignored.
+      {
+        list_name_encoded: "young-adult-hardcover",
+        books: [{ primary_isbn13: "9780000007900", title: "TEEN THRILLER", author: "Ya Author", rank: 1, weeks_on_list: 30 }],
+      },
+    ],
+  },
+};
+
 function json(res, body, status = 200) {
   res.writeHead(status, { "content-type": "application/json" });
   res.end(JSON.stringify(body));
@@ -96,6 +157,20 @@ http
       const page = Number(url.searchParams.get("page") || 1);
       const results = page === 1 ? FILMS.filter((f) => f.original_language === lang) : [];
       return json(res, { page, results, total_pages: 1, total_results: results.length });
+    }
+    if (url.pathname === "/ol/search.json") {
+      const docs = olSearch(url);
+      return json(res, { numFound: docs.length, docs });
+    }
+    const w = url.pathname.match(/^\/ol\/works\/(OL\d+W)\.json$/);
+    if (w) {
+      const b = BOOKS.find((x) => x.key === `/works/${w[1]}`);
+      if (!b) return json(res, { error: "notfound" }, 404);
+      return json(res, { description: `${b.title} is a tense book used by the MoodReel end-to-end tests. The detective and the killer play a long game in the city.` });
+    }
+    if (url.pathname === "/nyt/lists/full-overview.json") {
+      if (!url.searchParams.get("api-key")) return json(res, { fault: "no key" }, 401);
+      return json(res, NYT_OVERVIEW);
     }
     if (url.pathname === "/3/discover/tv") {
       const lang = url.searchParams.get("with_original_language");

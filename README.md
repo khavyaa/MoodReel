@@ -6,10 +6,10 @@ the next book.
 
 Built for one person on an iPhone and a Mac. Sign-in is a passkey; there is no sign-up page.
 
-> **Status:** Phase 3 of the v2 rebuild. Movies and series work end to end: taps → deck →
-> head-to-head → tonight's pick, plus Saved (with "Pick from my saved"), History with ratings, a
-> "Did you watch it?" check after a film, and a Watching list with "Still watching?" check-ins for
-> series. Books (Phase 4) come next.
+> **Status:** Phase 4 of the v2 rebuild. Movies, series and books work end to end: taps → deck →
+> head-to-head → tonight's pick (or "Read next"), plus Saved (with "Pick from my saved"), History
+> with ratings, a "Did you watch it?" check after a film, and Watching / Reading lists with
+> check-ins for series and books.
 
 ## Run it locally
 
@@ -53,7 +53,7 @@ unit, database and browser tests) runs on every PR.
    Turn on a database branch per preview deployment if offered, so previews never migrate
    production.
 2. Add `BETTER_AUTH_SECRET`, `OWNER_SETUP_TOKEN` and `TMDB_ACCESS_TOKEN` (Production and
-   Preview). AI needs nothing: on Vercel the AI Gateway authenticates itself. Locally, set
+   Preview). For book bestsellers, also `NYT_API_KEY` and `CRON_SECRET` (optional). AI needs nothing: on Vercel the AI Gateway authenticates itself. Locally, set
    `AI_GATEWAY_API_KEY` to try it, or leave it unset and the rules do everything.
 3. Deploy. Migrations run during production builds only; pull-request previews share the
    production database, so they never migrate it.
@@ -103,6 +103,27 @@ probing real TMDb data.
 
 Series rules live in `lib/taste/series-rules.ts`.
 
+## How a book deck works
+
+- **Catalogue:** Open Library (free, no key): subjects, page counts, covers, and reader ratings out
+  of 5. Its ratings are thin (a famous book has a few hundred), so quality also uses how many people logged it as read and NYT weeks.
+- **Bestsellers:** the New York Times lists. A daily Vercel cron (`/api/cron/nyt`) syncs the adult
+  fiction and non-fiction lists into the database, about two years back, and matches each ISBN to
+  its Open Library work. Weeks on the lists count towards quality, and lasting bestsellers join the
+  pool even with few Open Library ratings. Without `NYT_API_KEY` this is skipped; Open Library's own
+  NYT subject tags still give a smaller signal.
+- **Never:** children's and young adult, romance and romantasy, self-help and business, comics and
+  graphic novels (including ones only tagged with a comics class code), box sets and omnibuses.
+- **Mix:** English only, mostly the last 30 years, at most two classics and one book per author in
+  a deck. Length replaces time: short (under 250 pages), medium, long (450+).
+- **Clean-up:** works filed under a foreign title get their English edition's title, messy edition
+  titles are tidied, and descriptions that aren't in English are dropped.
+- **After "Read next"** a book goes on your Reading list. About once a week the books screen asks
+  "Still reading?": finished (with optional stars) moves it to History, gave up counts like "not
+  for me". "Where to get it" searches Amazon India's books.
+
+Book rules live in `lib/books/rules.ts`.
+
 ## How it's put together
 
 ```
@@ -116,6 +137,8 @@ lib/moods.ts       moods, energy and time vocabulary, and their colours
 lib/taste/         language gates, weighted rating, mood/energy fit, taste from swipes (films and series)
 lib/deck/          deck composition, head-to-head, AI re-weighting, the movie and series deck builders
 lib/tmdb/          TMDb client (retries flaky connections), movie, series and provider queries
+lib/books/         Open Library client, NYT bestseller sync, book rules
+app/api/cron/      the daily NYT sync (Vercel cron, guarded by CRON_SECRET)
 lib/ai/            AI Gateway calls, each with a rule-based fallback
 components/pick/   the flow: taps, deck, head-to-head, pick
 proxy.ts           sends signed-out requests to /sign-in
@@ -134,4 +157,5 @@ Library.
 ## Credits
 
 This product uses the TMDb API but is not endorsed or certified by TMDb. Where-to-watch data is
-provided by JustWatch via TMDb. Book data comes from Open Library.
+provided by JustWatch via TMDb. Book data comes from Open Library. Bestseller data: The New York
+Times Books API.

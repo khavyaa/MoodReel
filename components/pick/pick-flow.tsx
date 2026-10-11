@@ -40,7 +40,7 @@ type DeckStep = {
   returning: { id: number; action: SwipeAction } | null;
 };
 
-const titleRef = (c: DeckCard) => ({ id: c.id, language: c.language, genreIds: c.genreIds });
+const titleRef = (c: DeckCard) => ({ id: c.id, language: c.language, genreIds: c.genreIds, tags: c.book?.tags });
 
 const savesOf = (d: DeckStep) => d.cards.filter((_, i) => d.actions[i] === "saved");
 
@@ -54,13 +54,13 @@ export function PickFlow({
   notice,
   onExit,
 }: {
-  media: "movie" | "series";
+  media: "movie" | "series" | "book";
   start?: FlowStart;
   notice?: ReactNode;
   onExit?: () => void;
 }) {
-  const config = MEDIA[media === "movie" ? "movies" : "series"];
-  const noun = media === "movie" ? "films" : "series";
+  const config = MEDIA[media === "movie" ? "movies" : media === "series" ? "series" : "books"];
+  const noun = media === "movie" ? "films" : media === "series" ? "series" : "books";
   const [taps, setTaps] = useState<TapsValue>(start?.taps ?? { mood: config.moods[0], energy: 1, time: 1 });
   const [step, setStep] = useState<Step>(() => {
     if (!start) return { kind: "taps" };
@@ -118,6 +118,7 @@ export function PickFlow({
             overview: pick.overview,
             seasons: pick.series?.seasons ?? null,
             firstSeasonEpisodes: pick.series?.firstSeasonEpisodes ?? null,
+            book: pick.book ? { authors: pick.book.authors, pages: pick.book.pages, nytWeeks: pick.book.nytWeeks } : null,
           },
           { mood: taps.mood, energy: taps.energy, beat: saves.length - 1 },
         );

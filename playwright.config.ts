@@ -17,6 +17,10 @@ const env = {
   // Decks come from a fixed fake TMDb (tests/e2e/mock-tmdb.mjs), never the real one.
   TMDB_BASE_URL: `http://localhost:${MOCK_TMDB_PORT}/3`,
   TMDB_ACCESS_TOKEN: "e2e-fake-token",
+  OPEN_LIBRARY_BASE_URL: `http://localhost:${MOCK_TMDB_PORT}/ol`,
+  NYT_BASE_URL: `http://localhost:${MOCK_TMDB_PORT}/nyt`,
+  NYT_API_KEY: "e2e-fake-nyt-key",
+  CRON_SECRET: "e2e-cron-secret",
   DATABASE_URL:
     process.env.DATABASE_URL_TEST ?? "postgres://moodreel:moodreel@localhost:5433/moodreel_test",
   BETTER_AUTH_SECRET: "e2e-secret-with-enough-length-0123456789abcdef",

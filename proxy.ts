@@ -7,7 +7,8 @@ import { getSessionCookie } from "better-auth/cookies";
  * verify the session for real through lib/session.ts.
  */
 
-const PUBLIC_PATHS = ["/sign-in", "/setup", "/about"];
+// /api/cron checks its own secret (Vercel's cron sends it); it has no session cookie.
+const PUBLIC_PATHS = ["/sign-in", "/setup", "/about", "/api/cron"];
 
 function isPublic(pathname: string) {
   return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));

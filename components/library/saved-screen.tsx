@@ -12,7 +12,7 @@ import { Chip } from "@/components/pick/taps-screen";
 import { cn } from "@/lib/cn";
 import { SavedList, WatchingList, type WatchingEntry } from "./library-lists";
 
-type Kind = "movie" | "series";
+type Kind = "movie" | "series" | "book";
 type Filter = "all" | Kind;
 
 const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
@@ -25,11 +25,13 @@ const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : 
 export function SavedScreen({
   items,
   watching,
+  reading,
   total,
   missing,
 }: {
   items: LibraryMovie[];
   watching: WatchingEntry[];
+  reading: WatchingEntry[];
   total: number;
   missing: number;
 }) {
@@ -38,10 +40,17 @@ export function SavedScreen({
   if (start) return <PickFlow media={start.media} start={start} onExit={() => setStart(null)} />;
 
   const films = items.filter((i) => i.media === "movie").length;
-  const shows = items.length - films;
-  const both = films > 0 && shows > 0;
+  const shows = items.filter((i) => i.media === "series").length;
+  const books = items.filter((i) => i.media === "book").length;
   const shown = filter === "all" ? items : items.filter((i) => i.media === filter);
-  const kinds: Kind[] = [...(films ? (["movie"] as const) : []), ...(shows ? (["series"] as const) : [])];
+  const kinds: Kind[] = (
+    [
+      ["movie", films],
+      ["series", shows],
+      ["book", books],
+    ] as const
+  ).flatMap(([k, n]) => (n > 0 ? [k] : []));
+  const mixed = kinds.length > 1;
 
   return (
     <AppFrame>
@@ -51,11 +60,13 @@ export function SavedScreen({
             Saved
             {films > 0 && ` · ${count(films, "film", "films")}`}
             {shows > 0 && ` · ${shows} series`}
+            {books > 0 && ` · ${count(books, "book", "books")}`}
             {total === 0 && " · nothing yet"}
           </span>
           <h1 className="display text-[clamp(3rem,7vw,6rem)]">For another night</h1>
         </header>
 
+        {reading.length > 0 && <WatchingList media="book" entries={reading} />}
         {watching.length > 0 && <WatchingList entries={watching} />}
 
         {kinds.length > 0 && (
@@ -63,18 +74,19 @@ export function SavedScreen({
             key={filter}
             kinds={kinds}
             initial={filter === "all" ? kinds[0] : filter}
-            counts={{ movie: films, series: shows }}
+            counts={{ movie: films, series: shows, book: books }}
             onStart={setStart}
           />
         )}
 
-        {both && (
+        {mixed && (
           <div role="group" aria-label="Show" className="flex flex-wrap gap-2">
             {(
               [
                 ["all", `All · ${items.length}`],
-                ["movie", `Movies · ${films}`],
-                ["series", `Series · ${shows}`],
+                ...(films ? ([["movie", `Movies · ${films}`]] as const) : []),
+                ...(shows ? ([["series", `Series · ${shows}`]] as const) : []),
+                ...(books ? ([["book", `Books · ${books}`]] as const) : []),
               ] as const
             ).map(([value, label]) => (
               <Chip key={value} pressed={filter === value} onClick={() => setFilter(value)}>
@@ -107,15 +119,16 @@ function PickFromSaved({
   const [time, setTime] = useState<0 | 1 | 2>(kind === "movie" ? 2 : 1);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const media = MEDIA[kind === "movie" ? "movies" : "series"];
+  const slug = (k: Kind): "movies" | "series" | "books" => (k === "movie" ? "movies" : k === "series" ? "series" : "books");
+  const media = MEDIA[slug(kind)];
   const n = counts[kind];
-  const noun = kind === "movie" ? "film" : "series";
+  const noun = kind === "movie" ? "film" : kind === "series" ? "series" : "book";
   const moods: readonly MoodId[] = media.moods;
 
   function choose(next: Kind) {
     setKind(next);
     setError(null);
-    if (!(MEDIA[next === "movie" ? "movies" : "series"].moods as readonly MoodId[]).includes(mood)) setMood("gripping");
+    if (!(MEDIA[slug(next)].moods as readonly MoodId[]).includes(mood)) setMood("gripping");
   }
 
   function go() {
@@ -146,7 +159,7 @@ function PickFromSaved({
         <div role="group" aria-label="Pick a" className="flex gap-2">
           {kinds.map((k) => (
             <Chip key={k} pressed={kind === k} onClick={() => choose(k)}>
-              {k === "movie" ? "A film" : "A series"}
+              {k === "movie" ? "A film" : k === "series" ? "A series" : "A book"}
             </Chip>
           ))}
         </div>
@@ -159,7 +172,11 @@ function PickFromSaved({
           </Chip>
         ))}
       </div>
-      <div className="flex flex-wrap gap-2" role="group" aria-label={kind === "movie" ? "Time" : "Commitment"}>
+      <div
+        className="flex flex-wrap gap-2"
+        role="group"
+        aria-label={kind === "movie" ? "Time" : kind === "series" ? "Commitment" : "Length"}
+      >
         {media.time.map((label, i) => (
           <Chip key={label} pressed={time === i} onClick={() => setTime(i as 0 | 1 | 2)}>
             {label}

@@ -95,6 +95,7 @@ export function seriesCard(d: SeriesDetails, providers: number[], fallbackOnMine
     gate: seriesGate(d.candidate).reason ?? null,
     trailerKey: d.trailerKey,
     series: d.facts,
+    book: null,
   };
 }
 

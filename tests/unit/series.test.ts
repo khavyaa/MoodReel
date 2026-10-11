@@ -138,6 +138,7 @@ describe("series cards and reasons", () => {
     gate: "acclaimed",
     trailerKey: null,
     series: facts({ seasons: 2, episodes: 17, firstSeasonEpisodes: 9, ongoing: true }),
+    book: null,
   } satisfies DeckCard;
 
   it("shows seasons, episode length and whether it's still airing", () => {

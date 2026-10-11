@@ -50,19 +50,30 @@ const SERIES_LINES: Partial<Record<MoodId, string>> = {
   moving: "Dramas and documentaries that land somewhere real.",
 };
 
+const BOOK_LINES: Partial<Record<MoodId, string>> = {
+  gripping: "Thrillers, crime and mysteries you'll read in one go.",
+  dark: "Psychological, unsettling, or bleak in the best way.",
+  mind: "Science fiction and speculative stories that bend your head.",
+  funny: "Books that make you laugh out loud. Satire, wit, comic novels.",
+  feelgood: "Warm stories about people being good to each other.",
+  moving: "Literary fiction, memoirs and lives that stay with you.",
+};
+
 export function TapsScreen({
   media: kind,
   value,
   onChange,
   onDeal,
 }: {
-  media: "movie" | "series";
+  media: "movie" | "series" | "book";
   value: TapsValue;
   onChange: (next: TapsValue) => void;
   onDeal: () => void;
 }) {
-  const media = MEDIA[kind === "movie" ? "movies" : "series"];
+  const media = MEDIA[kind === "movie" ? "movies" : kind === "series" ? "series" : "books"];
   const series = kind === "series";
+  const book = kind === "book";
+  const timeLabel = series ? "Commitment" : book ? "Length" : "Time";
   return (
     <div className="grid flex-1 gap-10 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:gap-16">
       <div className="flex flex-col gap-7">
@@ -100,7 +111,7 @@ export function TapsScreen({
         </fieldset>
 
         <fieldset className="flex flex-col gap-3">
-          <legend className="label mb-3 text-muted">{series ? "Commitment" : "Time"}</legend>
+          <legend className="label mb-3 text-muted">{timeLabel}</legend>
           <div className="flex flex-wrap gap-2">
             {media.time.map((label, n) => (
               <Chip key={label} pressed={value.time === n} onClick={() => onChange({ ...value, time: n as TapsValue["time"] })}>
@@ -115,7 +126,7 @@ export function TapsScreen({
           onClick={onDeal}
           className="mt-2 inline-flex h-14 w-full items-center justify-center gap-3 rounded-full bg-accent px-8 text-lg font-bold text-on-accent transition-opacity hover:opacity-90 sm:w-auto sm:self-start"
         >
-          Deal {DECK_SIZE} {series ? "series" : "films"}
+          Deal {DECK_SIZE} {series ? "series" : book ? "books" : "films"}
           <ArrowRight className="size-5" aria-hidden />
         </button>
       </div>
@@ -125,16 +136,23 @@ export function TapsScreen({
         <div className="flex flex-col gap-3">
           <span className="label text-muted">Tonight feels</span>
           <p className="display text-[clamp(4rem,7vw,7.5rem)]">{MOODS[value.mood].label}</p>
-          <p className="max-w-[34ch] text-lg">{(series && SERIES_LINES[value.mood]) || MOOD_LINES[value.mood]}</p>
+          <p className="max-w-[34ch] text-lg">
+            {(series && SERIES_LINES[value.mood]) || (book && BOOK_LINES[value.mood]) || MOOD_LINES[value.mood]}
+          </p>
         </div>
         <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
           <dt className="label pt-0.5 text-muted">Energy</dt>
           <dd>{ENERGY[value.energy]}</dd>
-          <dt className="label pt-0.5 text-muted">{series ? "Commitment" : "Time"}</dt>
+          <dt className="label pt-0.5 text-muted">{timeLabel}</dt>
           <dd>{media.time[value.time]}</dd>
           <dt className="label pt-0.5 text-muted">Deck</dt>
           <dd>
-            {series ? (
+            {book ? (
+              <>
+                {DECK_SIZE} books in English. No children&apos;s or young adult, romance, self-help or comics. Mostly
+                the last 30 years, with the odd classic.
+              </>
+            ) : series ? (
               <>
                 {DECK_SIZE} series, about three in four English, the rest Hindi when it&apos;s well rated. No soaps,
                 reality, talk or animation. What&apos;s on your services comes first.

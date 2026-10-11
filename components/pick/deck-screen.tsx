@@ -5,7 +5,7 @@ import { AnimatePresence, animate, motion, useMotionValue, useReducedMotion, use
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, Star, Undo2 } from "lucide-react";
 import type { DeckCard } from "@/lib/deck/build-movies";
 import { MAX_SAVES } from "@/lib/deck/finale";
-import { airingLabel, cardMeta, makersLabel } from "@/lib/card-meta";
+import { airingLabel, bestsellerLabel, cardMeta, makersLabel, ratingCountLabel } from "@/lib/card-meta";
 import { cn } from "@/lib/cn";
 import { Poster } from "./poster";
 
@@ -130,7 +130,12 @@ export function DeckScreen({
         <div className="grid grid-cols-[1fr_1fr_1fr_1.25fr] gap-2 lg:flex lg:gap-3">
           <ActionButton label="Skip" hint="←" icon={<ArrowLeft className="size-5" aria-hidden />} onClick={() => onSwipe("skipped")} />
           <ActionButton label="Not for me" hint="↓" icon={<ArrowDown className="size-5" aria-hidden />} onClick={() => onSwipe("disliked")} />
-          <ActionButton label="Seen it" hint="↑" icon={<ArrowUp className="size-5" aria-hidden />} onClick={() => onSwipe("seen")} />
+          <ActionButton
+            label={card.media === "book" ? "Read it" : "Seen it"}
+            hint="↑"
+            icon={<ArrowUp className="size-5" aria-hidden />}
+            onClick={() => onSwipe("seen")}
+          />
           <ActionButton label="Save" hint="→" icon={<ArrowRight className="size-5" aria-hidden />} onClick={() => onSwipe("saved")} primary />
         </div>
         <div className="flex min-h-9 items-center justify-between gap-4 lg:ml-auto">
@@ -231,7 +236,7 @@ function SwipeCard({
           <>
             <Stamp label="Save" opacity={saveHint} className="left-4 -rotate-12" />
             <Stamp label="Skip" opacity={skipHint} className="right-4 rotate-12" />
-            <Stamp label="Seen it" opacity={seenHint} className="left-1/2 -translate-x-1/2" />
+            <Stamp label={card.media === "book" ? "Read it" : "Seen it"} opacity={seenHint} className="left-1/2 -translate-x-1/2" />
             <Stamp label="Not for me" opacity={nopeHint} className="top-auto bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap" />
           </>
         )}
@@ -266,18 +271,21 @@ function Stamp({
 function CardInfo({ card }: { card: DeckCard }) {
   const people = makersLabel(card);
   const airing = airingLabel(card);
+  const bestseller = bestsellerLabel(card);
   return (
     <div className="flex min-w-0 flex-col gap-3 lg:gap-4">
       <p className="label text-muted">{cardMeta(card)}</p>
       <h2 className="display text-[clamp(2.25rem,6vw,5.5rem)]">{card.title}</h2>
-      {card.originalTitle !== card.title && <p className="-mt-1 text-sm text-muted">{card.originalTitle}</p>}
+      {card.book && people && <p className="-mt-1 font-bold lg:text-lg">{people}</p>}
+      {!card.book && card.originalTitle !== card.title && <p className="-mt-1 text-sm text-muted">{card.originalTitle}</p>}
 
       <div className="flex flex-wrap gap-2">
         <Badge>
           <Star className="size-3.5 fill-current" aria-hidden />
           {card.rating.toFixed(1)}
-          <span className="font-normal opacity-70">· {card.votes.toLocaleString("en-IN")} votes</span>
+          <span className="font-normal opacity-70">· {ratingCountLabel(card)}</span>
         </Badge>
+        {bestseller && <Badge strong>{bestseller}</Badge>}
         {card.streamingOn.map((s) => (
           <Badge key={s} strong>
             <Check className="size-3.5" aria-hidden /> On {s}
@@ -292,7 +300,7 @@ function CardInfo({ card }: { card: DeckCard }) {
       {card.series?.firstSeasonEpisodes ? (
         <p className="hidden text-sm text-muted sm:block">Season 1: {card.series.firstSeasonEpisodes} episodes</p>
       ) : null}
-      {people && <p className="hidden text-sm text-muted sm:block">{people}{card.cast.length ? ` · with ${card.cast.slice(0, 3).join(", ")}` : ""}</p>}
+      {!card.book && people && <p className="hidden text-sm text-muted sm:block">{people}{card.cast.length ? ` · with ${card.cast.slice(0, 3).join(", ")}` : ""}</p>}
     </div>
   );
 }

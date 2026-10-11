@@ -143,11 +143,13 @@ export function WatchPrompt({
  * optional stars; dropped takes it off the list and counts like "not for me".
  */
 export function CheckInAnswers({
+  media = "series",
   seriesId,
   onDone,
   quiet = false,
   showStillWatching = true,
 }: {
+  media?: "series" | "book";
   seriesId: number;
   onDone?: (answer: CheckInAnswer) => void;
   quiet?: boolean;
@@ -158,7 +160,7 @@ export function CheckInAnswers({
 
   function answer(a: CheckInAnswer, stars: number | null = null) {
     startTransition(async () => {
-      await answerCheckIn(seriesId, a, stars, { refresh: !quiet });
+      await answerCheckIn(media, seriesId, a, stars, { refresh: !quiet });
       onDone?.(a);
     });
   }
@@ -197,44 +199,55 @@ export function CheckInAnswers({
     <div className="flex flex-wrap gap-2">
       {showStillWatching && (
         <AnswerButton onClick={() => answer("watching")} disabled={pending} primary>
-          Still watching
+          {media === "book" ? "Still reading" : "Still watching"}
         </AnswerButton>
       )}
       <AnswerButton onClick={() => setRating(true)} disabled={pending}>
         Finished it
       </AnswerButton>
       <AnswerButton onClick={() => answer("dropped")} disabled={pending}>
-        Dropped it
+        {media === "book" ? "Gave up" : "Dropped it"}
       </AnswerButton>
     </div>
   );
 }
 
-/** The card on the series start screen. */
-export function CheckInPrompt({ seriesId, title, posterUrl }: { seriesId: number; title: string; posterUrl: string | null }) {
+/** The card on the series or books start screen. */
+export function CheckInPrompt({
+  media = "series",
+  seriesId,
+  title,
+  posterUrl,
+}: {
+  media?: "series" | "book";
+  seriesId: number;
+  title: string;
+  posterUrl: string | null;
+}) {
   const [answered, setAnswered] = useState<CheckInAnswer | null>(null);
+  const book = media === "book";
   if (answered) {
     return (
       <p role="status" className="mb-6 rounded-2xl bg-soft px-4 py-3 text-sm font-semibold">
         {answered === "watching"
-          ? "Enjoy it. We'll ask again in a few days."
+          ? `Enjoy it. We'll ask again in ${book ? "a week" : "a few days"}.`
           : answered === "finished"
             ? `Nice. ${title} is in your history.`
-            : `Dropped. ${title} won't come back.`}
+            : `${book ? "Put down" : "Dropped"}. ${title} won't come back.`}
       </p>
     );
   }
   return (
-    <section aria-label="A show you're watching" className="mb-8 flex items-center gap-4 rounded-3xl bg-soft p-4 sm:p-5">
+    <section aria-label={book ? "A book you're reading" : "A show you're watching"} className="mb-8 flex items-center gap-4 rounded-3xl bg-soft p-4 sm:p-5">
       {posterUrl && (
         // eslint-disable-next-line @next/next/no-img-element -- a 56px thumb straight from TMDb's CDN
         <img src={posterUrl} alt="" className="aspect-[2/3] w-14 shrink-0 rounded-lg object-cover" />
       )}
       <div className="flex min-w-0 flex-col gap-3">
         <p className="font-bold">
-          Still watching <span className="italic">{title}</span>?
+          {book ? "Still reading" : "Still watching"} <span className="italic">{title}</span>?
         </p>
-        <CheckInAnswers seriesId={seriesId} onDone={setAnswered} quiet />
+        <CheckInAnswers media={media} seriesId={seriesId} onDone={setAnswered} quiet />
       </div>
     </section>
   );

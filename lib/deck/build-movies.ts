@@ -21,7 +21,7 @@ import { LANGUAGE_LABEL, type GateReason, type Language, type MovieCandidate, ty
 
 /** Everything a card shows. Sent to the browser, so nothing secret goes in here. */
 export type DeckCard = {
-  media: "movie" | "series";
+  media: "movie" | "series" | "book";
   id: number;
   title: string;
   originalTitle: string;
@@ -43,6 +43,17 @@ export type DeckCard = {
   trailerKey: string | null;
   /** Seasons, episodes, still airing: series only. */
   series: SeriesFacts | null;
+  /** Authors, pages, NYT weeks: books only. Ratings are then Open Library's, out of 5. */
+  book: BookFacts | null;
+};
+
+export type BookFacts = {
+  authors: string[];
+  pages: number | null;
+  nytWeeks: number;
+  subjects: string[];
+  /** Taste tags from the subjects, sent back with each swipe. */
+  tags: string[];
 };
 
 /**
@@ -172,6 +183,7 @@ export async function buildMovieDeck(
       gate: passesGate(m).reason ?? null,
       trailerKey: d?.trailerKey ?? null,
       series: null,
+      book: null,
     };
   });
 
