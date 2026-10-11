@@ -4,6 +4,7 @@ import { z } from "zod";
 import { requireOwner } from "@/lib/session";
 import { buildMovieDeck, type DeckCard } from "@/lib/deck/build-movies";
 import { buildSeriesDeck } from "@/lib/deck/build-series";
+import { buildBookDeck } from "@/lib/deck/build-books";
 import { TmdbError } from "@/lib/tmdb/client";
 import {
   completePick,
@@ -22,23 +23,26 @@ import { MEDIA } from "@/lib/moods";
 const level = z.union([z.literal(0), z.literal(1), z.literal(2)]);
 const movieTaps = z.object({ mood: z.enum(MEDIA.movies.moods), energy: level, time: level });
 const seriesTaps = z.object({ mood: z.enum(MEDIA.series.moods), energy: level, time: level });
-const mediaSchema = z.enum(["movie", "series"]);
+const bookTaps = z.object({ mood: z.enum(MEDIA.books.moods), energy: level, time: level });
+const mediaSchema = z.enum(["movie", "series", "book"]);
 
 const titleSchema = z.object({
   id: z.number().int().positive(),
   language: z.string().min(2).max(3),
   genreIds: z.array(z.number().int()).max(20),
+  /** Books: subject tags for taste. */
+  tags: z.array(z.string().max(60)).max(12).optional(),
 });
 
 export type DealResponse =
   | { ok: true; sessionId: string; cards: DeckCard[]; missingLanguages: string[] }
   | { ok: false; error: string };
 
-/** Deals a deck of films or series for these taps. */
+/** Deals a deck of films, series or books for these taps. */
 export async function deal(media: Media, input: unknown): Promise<DealResponse> {
   const owner = await requireOwner();
   mediaSchema.parse(media);
-  const noun = media === "movie" ? "movie" : "TV";
+  const source = media === "book" ? "Open Library" : "TMDb";
   try {
     const [exclude, taste, providers] = await Promise.all([
       handledIds(owner.id, media),
@@ -47,11 +51,13 @@ export async function deal(media: Media, input: unknown): Promise<DealResponse> 
     ]);
     const seed = Date.now() % 100_000;
     const options = { exclude, taste, seed, providers };
-    const taps = media === "movie" ? movieTaps.parse(input) : seriesTaps.parse(input);
+    const taps = media === "movie" ? movieTaps.parse(input) : media === "series" ? seriesTaps.parse(input) : bookTaps.parse(input);
     const { cards, missingLanguages, curatedByAi } =
       media === "movie"
         ? await buildMovieDeck(movieTaps.parse(input), options)
-        : await buildSeriesDeck(seriesTaps.parse(input), options);
+        : media === "series"
+          ? await buildSeriesDeck(seriesTaps.parse(input), options)
+          : await buildBookDeck(bookTaps.parse(input), options);
     console.info(`[moodreel] dealt ${cards.length} ${media} cards (${curatedByAi ? "AI-curated" : "rules only"})`);
     const sessionId = await createDeckSession(owner.id, media, taps, cards.map((c) => c.id));
     return { ok: true, sessionId, cards, missingLanguages };
@@ -59,9 +65,9 @@ export async function deal(media: Media, input: unknown): Promise<DealResponse> 
     if (error instanceof z.ZodError) throw error;
     console.error("[moodreel] deal failed", error);
     if (error instanceof TmdbError && error.status === 0 && !error.retryable) {
-      return { ok: false, error: `${noun === "TV" ? "Series" : "Movie"} data isn't set up on the server (TMDb token missing).` };
+      return { ok: false, error: "Movie and series data isn't set up on the server (TMDb token missing)." };
     }
-    return { ok: false, error: `Couldn't reach the ${noun} database just now. Try again in a moment.` };
+    return { ok: false, error: `Couldn't reach ${source} just now. Try again in a moment.` };
   }
 }
 
@@ -96,6 +102,10 @@ const pickSchema = titleSchema.extend({
   overview: z.string().max(2000),
   seasons: z.number().int().nullable().optional(),
   firstSeasonEpisodes: z.number().int().nullable().optional(),
+  book: z
+    .object({ authors: z.array(z.string()).max(5), pages: z.number().int().nullable(), nytWeeks: z.number().int() })
+    .nullable()
+    .optional(),
 });
 
 export async function pick(

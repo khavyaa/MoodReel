@@ -5,8 +5,8 @@ import { Check, ExternalLink, Play, Star, X } from "lucide-react";
 import { markSeen, rateTitle, removeSaved } from "@/app/(app)/library-actions";
 import type { LibraryMovie } from "@/lib/library";
 import { MOODS, type MoodId } from "@/lib/moods";
-import { airingLabel, cardMeta } from "@/lib/card-meta";
-import { watchSearchUrl } from "@/lib/watch";
+import { airingLabel, bestsellerLabel, cardMeta, makersLabel } from "@/lib/card-meta";
+import { whereTo } from "@/lib/watch";
 import { buttonClasses } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 import { Poster } from "@/components/pick/poster";
@@ -17,21 +17,18 @@ import { CheckInAnswers, WatchAnswer } from "./watch-prompt";
 const DATE = new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Kolkata" });
 
 function meta(m: LibraryMovie) {
-  return `${m.media === "series" ? "Series · " : ""}${cardMeta(m)}`;
+  const kind = m.media === "series" ? "Series · " : m.media === "book" ? "Book · " : "";
+  return `${kind}${cardMeta(m)}`;
 }
 
 const keyOf = (m: { media: Media; id: number }) => `${m.media}:${m.id}`;
 
 function WatchLinks({ movie }: { movie: LibraryMovie }) {
+  const where = whereTo(movie);
   return (
     <div className="flex flex-wrap gap-2">
-      <a
-        href={watchSearchUrl(movie.title, movie.year, movie.media)}
-        target="_blank"
-        rel="noreferrer noopener"
-        className={buttonClasses("solid", "sm")}
-      >
-        Where to watch <ExternalLink className="size-3.5" aria-hidden />
+      <a href={where.href} target="_blank" rel="noreferrer noopener" className={buttonClasses("solid", "sm")}>
+        {where.label} <ExternalLink className="size-3.5" aria-hidden />
       </a>
       {movie.trailerKey && (
         <a
@@ -81,12 +78,14 @@ export function SavedList({ movies }: { movies: LibraryMovie[] }) {
                 </span>
               ))}
               {airingLabel(m) && <span className="text-xs text-muted">{airingLabel(m)}</span>}
+              {bestsellerLabel(m) && <span className="text-xs text-muted">{bestsellerLabel(m)}</span>}
             </p>
+            {m.book && makersLabel(m) && <p className="-mt-1 text-sm font-semibold">{makersLabel(m)}</p>}
             {m.overview && <p className="line-clamp-2 text-sm text-muted">{m.overview}</p>}
             <WatchLinks movie={m} />
             <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1 text-sm font-semibold">
               <button type="button" onClick={() => act(m, markSeen)} className="inline-flex items-center gap-1 underline-offset-4 hover:underline">
-                <Check className="size-4" aria-hidden /> Seen it
+                <Check className="size-4" aria-hidden /> {m.media === "book" ? "Read it" : "Seen it"}
               </button>
               <button type="button" onClick={() => act(m, removeSaved)} className="inline-flex items-center gap-1 text-muted underline-offset-4 hover:underline">
                 <X className="size-4" aria-hidden /> Remove
@@ -140,14 +139,20 @@ export function HistoryList({ entries }: { entries: HistoryEntry[] }) {
               {e.why && <p className="max-w-[60ch] leading-snug">{e.why}</p>}
               {e.seen ? (
                 <Stars media={e.movie.media} id={e.movie.id} stars={e.stars} title={e.movie.title} />
-              ) : e.movie.media === "series" ? (
+              ) : e.movie.media !== "movie" ? (
                 e.watching ? (
                   <div className="flex flex-col gap-2">
-                    <p className="text-sm font-semibold">Watching. Done with it?</p>
-                    <CheckInAnswers seriesId={e.movie.id} showStillWatching={false} />
+                    <p className="text-sm font-semibold">{e.movie.media === "book" ? "Reading." : "Watching."} Done with it?</p>
+                    <CheckInAnswers media={e.movie.media} seriesId={e.movie.id} showStillWatching={false} />
                   </div>
                 ) : (
-                  <p className="text-sm text-muted">{e.dropped ? "You dropped this one." : "Off your Watching list."}</p>
+                  <p className="text-sm text-muted">
+                    {e.dropped
+                      ? e.movie.media === "book"
+                        ? "You gave up on this one."
+                        : "You dropped this one."
+                      : `Off your ${e.movie.media === "book" ? "Reading" : "Watching"} list.`}
+                  </p>
                 )
               ) : e.followUp ? (
                 <p className="text-sm text-muted">{e.followUp === "later" ? "Not watched yet: it's in Saved." : "You skipped this one."}</p>
@@ -195,7 +200,7 @@ function Stars({ media, id, stars, title }: { media: Media; id: number; stars: n
           </button>
         ))}
       </div>
-      <span className="text-sm text-muted">{shown === null ? (media === "series" ? "Finished. Rate it?" : "Watched. Rate it?") : "Your rating"}</span>
+      <span className="text-sm text-muted">{shown === null ? (media === "movie" ? "Watched. Rate it?" : "Finished. Rate it?") : "Your rating"}</span>
     </div>
   );
 }
@@ -206,12 +211,14 @@ export type WatchingEntry = { since: string; show: LibraryMovie };
 
 const SHORT_DATE = new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", timeZone: "Asia/Kolkata" });
 
-/** Series you picked and are part-way through, with "finished" and "dropped". */
-export function WatchingList({ entries }: { entries: WatchingEntry[] }) {
+/** Series or books you picked and are part-way through, with "finished" and "dropped" / "gave up". */
+export function WatchingList({ entries, media = "series" }: { entries: WatchingEntry[]; media?: "series" | "book" }) {
+  const book = media === "book";
+  const id = book ? "reading" : "watching";
   return (
-    <section aria-labelledby="watching" className="flex flex-col gap-4 rounded-3xl bg-soft p-5 sm:p-7">
-      <h2 id="watching" className="text-2xl font-black">
-        Watching · {entries.length}
+    <section aria-labelledby={id} className="flex flex-col gap-4 rounded-3xl bg-soft p-5 sm:p-7">
+      <h2 id={id} className="text-2xl font-black">
+        {book ? "Reading" : "Watching"} · {entries.length}
       </h2>
       <ul className="grid gap-5 md:grid-cols-2">
         {entries.map(({ since, show }) => (
@@ -221,17 +228,23 @@ export function WatchingList({ entries }: { entries: WatchingEntry[] }) {
               <div>
                 <p className="font-black">{show.title}</p>
                 <p className="text-sm text-muted">
-                  {[`Started ${SHORT_DATE.format(new Date(since))}`, show.streamingOn[0], cardMeta(show).split(" · ").slice(2, 3)[0]]
+                  {(book
+                    ? [show.book?.authors[0], `started ${SHORT_DATE.format(new Date(since))}`, show.book?.pages ? `${show.book.pages} pages` : null]
+                    : [`Started ${SHORT_DATE.format(new Date(since))}`, show.streamingOn[0], cardMeta(show).split(" · ").slice(2, 3)[0]]
+                  )
                     .filter(Boolean)
                     .join(" · ")}
                 </p>
               </div>
-              <CheckInAnswers seriesId={show.id} showStillWatching={false} />
+              <CheckInAnswers media={media} seriesId={show.id} showStillWatching={false} />
             </div>
           </li>
         ))}
       </ul>
-      <p className="text-sm text-muted">Finished asks for stars, then it moves to History. Dropped counts like &ldquo;not for me&rdquo;.</p>
+      <p className="text-sm text-muted">
+        Finished asks for stars, then it moves to History. {book ? "Gave up" : "Dropped"} counts like &ldquo;not for
+        me&rdquo;.
+      </p>
     </section>
   );
 }

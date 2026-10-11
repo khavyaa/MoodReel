@@ -21,6 +21,8 @@ export type WhyInput = {
   /** Series only: how big a commitment it is. `runtime` is then the episode length. */
   seasons?: number | null;
   firstSeasonEpisodes?: number | null;
+  /** Books only: then `rating` is out of 5 (Open Library) and there's no runtime. */
+  book?: { authors: string[]; pages: number | null; nytWeeks: number } | null;
 };
 
 export function formatRuntime(minutes: number | null): string | null {
@@ -43,6 +45,14 @@ export function ruleBasedWhy(w: WhyInput): string {
       : `Your one save for a ${mood}, ${energy} night`;
 
   const facts: string[] = [];
+  if (w.book) {
+    const save = w.beat > 0 ? `It beat ${w.beat} other ${w.beat === 1 ? "book" : "books"}` : "Your one save";
+    if (w.book.authors[0]) facts.push(`by ${w.book.authors[0]}`);
+    if (w.book.pages) facts.push(`${w.book.pages} pages`);
+    if (w.book.nytWeeks >= 2) facts.push(`${w.book.nytWeeks} weeks a New York Times bestseller`);
+    if (w.votes >= 10) facts.push(`rated ${w.rating.toFixed(1)}/5 by ${votesLabel(w.votes)} Open Library readers`);
+    return `${save} for a ${mood}, ${energy} read: ${facts.join(", ")}.`;
+  }
   const series = w.seasons != null;
   if (w.gate === "acclaimed") facts.push(`one of the best-rated ${w.languageLabel} ${series ? "shows" : "films"} around`);
   else if (w.gate === "crime/thriller") facts.push(`a ${w.languageLabel} crime pick`);

@@ -5,6 +5,14 @@ import { useState } from "react";
 import { cn } from "@/lib/cn";
 
 const SIZES = { sm: "w185", md: "w342", lg: "w500", xl: "w780" } as const;
+/** Open Library cover sizes: "M" is ~180px wide, "L" full size. */
+const COVER_SIZES = { sm: "M", md: "M", lg: "L", xl: "L" } as const;
+
+/** TMDb poster paths ("/abc.jpg") or Open Library covers ("ol:12345"). */
+function imageUrl(path: string, size: keyof typeof SIZES) {
+  if (path.startsWith("ol:")) return `https://covers.openlibrary.org/b/id/${path.slice(3)}-${COVER_SIZES[size]}.jpg`;
+  return `https://image.tmdb.org/t/p/${SIZES[size]}${path}`;
+}
 
 function hueOf(text: string) {
   let h = 0;
@@ -13,8 +21,8 @@ function hueOf(text: string) {
 }
 
 /**
- * A TMDb poster, or a typographic stand-in when TMDb has none or the image
- * fails, so a missing image never leaves an empty box.
+ * A TMDb poster or Open Library cover, or a typographic stand-in when there's
+ * none or the image fails, so a missing image never leaves an empty box.
  *
  * Loaded straight from TMDb's CDN (`unoptimized`): TMDb already serves exact
  * sizes, and routing through Next's optimizer added a second fetch that could
@@ -47,7 +55,7 @@ export function Poster({
     >
       {showImage ? (
         <Image
-          src={`https://image.tmdb.org/t/p/${SIZES[size]}${path}`}
+          src={imageUrl(path, size)}
           alt={`Poster for ${title}`}
           fill
           sizes={sizes}

@@ -25,16 +25,19 @@ const MOOD_MEANING: Record<string, string> = {
 export async function curateWithAi(
   taps: Taps,
   candidates: MovieCandidate[],
-  media: "movie" | "series" = "movie",
+  media: "movie" | "series" | "book" = "movie",
 ): Promise<number[] | null> {
-  const noun = media === "movie" ? "film" : "TV series";
-  const genreNames = media === "movie" ? MOVIE_GENRE_NAMES : TV_GENRE_NAMES;
-  const timeLabel = media === "movie" ? MEDIA.movies.time[taps.time] : MEDIA.series.time[taps.time];
+  const noun = media === "movie" ? "film" : media === "series" ? "TV series" : "book";
+  const genreNames: Record<number, string> = media === "movie" ? MOVIE_GENRE_NAMES : media === "series" ? TV_GENRE_NAMES : {};
+  const timeLabel = MEDIA[media === "movie" ? "movies" : media === "series" ? "series" : "books"].time[taps.time];
   if (!aiAvailable() || candidates.length < 10) return null;
   const offered = new Set(candidates.map((c) => c.id));
   const list = candidates
     .map((c) => {
-      const genres = c.genreIds.map((g) => genreNames[g]).filter(Boolean).join("/");
+      const subjects = (c as MovieCandidate & { subjects?: string[] }).subjects;
+      const genres = subjects
+        ? subjects.filter((x) => !x.startsWith("nyt:")).slice(0, 4).join("/")
+        : c.genreIds.map((g) => genreNames[g]).filter(Boolean).join("/");
       return `${c.id} | ${c.title} (${c.year ?? "?"}, ${LANGUAGE_LABEL[c.language] ?? c.language}, ${genres}) | ${c.overview.slice(0, 160)}`;
     })
     .join("\n");
@@ -48,7 +51,7 @@ export async function curateWithAi(
       output: Output.object({ schema: z.object({ approved: z.array(z.number().int()) }) }),
       prompt: [
         `Someone wants a ${noun} tonight. Mood: ${MOODS[taps.mood].label} (${MOOD_MEANING[taps.mood]}).`,
-        `Energy: ${ENERGY[taps.energy]}. ${media === "movie" ? "Time" : "Commitment"}: ${timeLabel}.`,
+        `Energy: ${ENERGY[taps.energy]}. ${media === "movie" ? "Time" : media === "series" ? "Commitment" : "Length"}: ${timeLabel}.`,
         "From the candidates below, return the ids of the ones that genuinely fit this mood and energy,",
         "best fit first. Leave out anything that only matches on genre but not on feel",
         `(e.g. a light caper for 'dark', a sad ${noun} for 'feel-good'). Use only ids from the list.`,

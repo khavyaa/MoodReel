@@ -6,6 +6,9 @@ import { getMovieDetails, type MovieDetails } from "@/lib/tmdb/movies";
 import { servicesOn } from "@/lib/tmdb/providers";
 import { getSeriesDetails, type SeriesDetails } from "@/lib/tmdb/series";
 import { seriesCard } from "@/lib/deck/build-series";
+import { bookCard, withNytWeeks } from "@/lib/deck/build-books";
+import { bookDescription, booksByWork } from "@/lib/books/openlibrary";
+import type { BookCandidate } from "@/lib/books/rules";
 
 /** A Saved or History row shows the same card the deck does, film or series. */
 export type LibraryMovie = DeckCard;
@@ -52,6 +55,7 @@ export function detailsToCard(d: MovieDetails, providers: number[]): DeckCard {
     gate: passesGate(detailsToCandidate(d, providers)).reason ?? null,
     trailerKey: d.trailerKey,
     series: null,
+    book: null,
   };
 }
 
@@ -72,18 +76,31 @@ export async function seriesDetailsFor(ids: number[]): Promise<Map<number, Serie
   return found;
 }
 
-export const libraryKey = (media: "movie" | "series", id: number) => `${media}:${id}`;
+export const libraryKey = (media: "movie" | "series" | "book", id: number) => `${media}:${id}`;
 
 /** Cards for a mixed list of films and series, keyed by `libraryKey`. */
 export async function libraryTitles(
-  items: { media: "movie" | "series"; id: number }[],
+  items: { media: "movie" | "series" | "book"; id: number }[],
   providers: number[],
 ): Promise<Map<string, LibraryMovie>> {
-  const movieIds = [...new Set(items.filter((i) => i.media === "movie").map((i) => i.id))];
-  const seriesIds = [...new Set(items.filter((i) => i.media === "series").map((i) => i.id))];
-  const [movies, shows] = await Promise.all([movieDetailsFor(movieIds), seriesDetailsFor(seriesIds)]);
+  const idsOf = (m: string) => [...new Set(items.filter((i) => i.media === m).map((i) => i.id))];
+  const [movies, shows, books] = await Promise.all([
+    movieDetailsFor(idsOf("movie")),
+    seriesDetailsFor(idsOf("series")),
+    bookCardsFor(idsOf("book")),
+  ]);
   const cards = new Map<string, LibraryMovie>();
   for (const [id, d] of movies) cards.set(libraryKey("movie", id), detailsToCard(d, providers));
   for (const [id, d] of shows) cards.set(libraryKey("series", id), seriesCard(d, providers));
+  for (const [id, c] of books) cards.set(libraryKey("book", id), c);
   return cards;
+}
+
+/** Book cards by Open Library work, with NYT weeks and descriptions. A work Open Library can't return is left out. */
+export async function bookCardsFor(ids: number[]): Promise<Map<number, LibraryMovie>> {
+  if (!ids.length) return new Map();
+  const found = await booksByWork(ids).catch(() => new Map<number, BookCandidate>());
+  const books = await withNytWeeks([...found.values()]);
+  const descriptions = await Promise.all(books.map((b) => bookDescription(b.id)));
+  return new Map(books.map((b, i) => [b.id, bookCard(b, descriptions[i])]));
 }

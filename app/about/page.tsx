@@ -16,7 +16,12 @@ const CREDITS = [
   {
     name: "Open Library",
     href: "https://openlibrary.org/",
-    body: "Book details and covers, from the Internet Archive's open catalogue.",
+    body: "Book details, covers and reader ratings, from the Internet Archive's open catalogue.",
+  },
+  {
+    name: "The New York Times",
+    href: "https://developer.nytimes.com/",
+    body: "Bestseller weeks for books. Data provided by The New York Times.",
   },
 ];
 

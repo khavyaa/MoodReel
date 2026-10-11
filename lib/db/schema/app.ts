@@ -139,3 +139,32 @@ export const preferences = pgTable("preferences", {
     .default(sql`array[8,119,350,2336]::integer[]`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * New York Times bestseller entries, synced weekly (lib/books/nyt.ts) and
+ * matched to Open Library works by ISBN. Shared reference data, not per user.
+ */
+export const bookSignals = pgTable(
+  "book_signals",
+  {
+    isbn13: text("isbn13").primaryKey(),
+    /** Open Library work number (OL…W); null until matched, or when Open Library doesn't know the ISBN. */
+    workId: integer("work_id"),
+    title: text("title").notNull(),
+    author: text("author").notNull(),
+    /** The longest run seen on any adult list. */
+    weeksOnList: integer("weeks_on_list").notNull().default(0),
+    bestRank: integer("best_rank").notNull(),
+    lists: text("lists").array().notNull().default(sql`'{}'::text[]`),
+    lastSeen: text("last_seen").notNull(),
+    matchTried: boolean("match_tried").notNull().default(false),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("book_signals_work_idx").on(t.workId)],
+);
+
+/** Which weekly NYT list dates have been synced, so the backfill can resume. */
+export const nytSync = pgTable("nyt_sync", {
+  publishedDate: text("published_date").primaryKey(),
+  syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
+});
