@@ -8,7 +8,7 @@ const SESSION = "playwright/.cache/books-flow-session.json";
 
 test.beforeAll(async ({ browser }) => {
   await resetDatabase();
-  await query("delete from book_signals; delete from nyt_sync;");
+  await query("delete from book_signals; delete from nyt_sync; delete from sync_runs;");
   const context = await browser.newContext({ storageState: undefined });
   const page = await context.newPage();
   await claimAccount(page, E2E_SETUP_TOKEN);
@@ -33,6 +33,15 @@ test("the NYT sync only runs for Vercel's cron, and stores adult-list bestseller
   );
   // The young-adult list was ignored; the hardcover-fiction bestseller was matched to its Open Library work.
   expect(signals).toEqual([{ isbn13: "9780000007100", work_id: 7100, weeks_on_list: 12 }]);
+});
+
+test("Settings shows how the last bestseller sync went", async ({ page }) => {
+  await page.goto("/settings");
+  const section = page.getByRole("heading", { name: "Book bestsellers" }).locator("xpath=../..");
+  await expect(section.getByText(/weeks? fetched, 1 matched/)).toBeVisible();
+  await expect(section.getByText(/\d+ weeks? synced, latest 4 Oct 2026/)).toBeVisible();
+  await expect(section.getByText("1 bestseller, 1 matched to Open Library")).toBeVisible();
+  await expect(section.getByText("Problems")).toHaveCount(0);
 });
 
 test("books: taps → deck → head-to-head → read next, on your Reading list", async ({ page }) => {
