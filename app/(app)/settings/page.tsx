@@ -9,6 +9,7 @@ import { auth } from "@/lib/auth";
 import { requireOwner } from "@/lib/session";
 import { providersFor } from "@/lib/picks/server";
 import { regionProviders } from "@/lib/tmdb/providers";
+import { nytStatus } from "@/lib/books/nyt";
 import { ServicesPicker } from "@/components/settings/services-picker";
 
 export const metadata = { title: "Settings" };
@@ -41,6 +42,12 @@ export default function SettingsPage() {
           </Suspense>
         </Section>
 
+        <Section title="Book bestsellers" note="New York Times lists, synced daily at 8:00 IST.">
+          <Suspense fallback={<p className="text-muted">Checking the last sync…</p>}>
+            <Bestsellers />
+          </Suspense>
+        </Section>
+
         <Section title="Account">
           <div className="flex flex-wrap items-center gap-3">
             <SignOutButton />
@@ -63,6 +70,56 @@ function Section({ title, note, children }: { title: string; note?: string; chil
       </div>
       {children}
     </section>
+  );
+}
+
+const SYNC_TIME = new Intl.DateTimeFormat("en-IN", {
+  day: "numeric",
+  month: "short",
+  hour: "numeric",
+  minute: "2-digit",
+  timeZone: "Asia/Kolkata",
+});
+const LIST_DATE = new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+
+/** How the NYT sync is doing: Vercel keeps its logs for only an hour, so the app keeps a short report. */
+async function Bestsellers() {
+  await requireOwner();
+  const status = await nytStatus().catch(() => null);
+  if (!status) return <p className="text-muted">Couldn&apos;t read the sync status just now.</p>;
+  if (!status.configured) {
+    return <p className="text-muted">Off: no NYT key is set. Books still work on Open Library alone.</p>;
+  }
+  const run = status.lastRun;
+  return (
+    <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-2 text-sm">
+      <dt className="text-muted">Last sync</dt>
+      <dd>
+        {run ? (
+          <>
+            {SYNC_TIME.format(run.at)} · {run.report.skipped ? `skipped: ${run.report.skipped}` : `${run.report.weeks.length} ${run.report.weeks.length === 1 ? "week" : "weeks"} fetched, ${run.report.matched} matched`}
+          </>
+        ) : (
+          "Not recorded yet (runs are recorded from this update on)"
+        )}
+      </dd>
+      <dt className="text-muted">Lists</dt>
+      <dd>
+        {status.weeksSynced} {status.weeksSynced === 1 ? "week" : "weeks"} synced
+        {status.latestList ? `, latest ${LIST_DATE.format(new Date(status.latestList))}` : ""}
+      </dd>
+      <dt className="text-muted">Books</dt>
+      <dd>
+        {status.books.toLocaleString("en-IN")} {status.books === 1 ? "bestseller" : "bestsellers"},{" "}
+        {status.matched.toLocaleString("en-IN")} matched to Open Library
+      </dd>
+      {run && run.report.errors.length > 0 && (
+        <>
+          <dt className="font-semibold">Problems</dt>
+          <dd className="font-semibold">{run.report.errors.join("; ")}</dd>
+        </>
+      )}
+    </dl>
   );
 }
 

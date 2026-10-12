@@ -1,7 +1,7 @@
 import "server-only";
 import { and, desc, eq, gte, inArray, isNotNull, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { bookSignals, nytSync } from "@/lib/db/schema";
+import { bookSignals, nytSync, syncRuns } from "@/lib/db/schema";
 import { bookByIsbn } from "./openlibrary";
 
 /*
@@ -115,8 +115,23 @@ const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export type SyncReport = { skipped?: string; weeks: string[]; entries: number; matched: number; errors: string[] };
 
-/** One cron run: this week, a few unsynced past weeks, then match some ISBNs to Open Library works. */
+/** One cron run, with its report saved so Settings can show how the last run went. */
 export async function syncNyt(now = new Date()): Promise<SyncReport> {
+  let report: SyncReport;
+  try {
+    report = await runSync(now);
+  } catch (error) {
+    report = { weeks: [], entries: 0, matched: 0, errors: [error instanceof Error ? error.message : String(error)] };
+  }
+  await getDb()
+    .insert(syncRuns)
+    .values({ kind: "nyt", report })
+    .catch(() => undefined);
+  return report;
+}
+
+/** This week, a few unsynced past weeks, then match some ISBNs to Open Library works. */
+async function runSync(now: Date): Promise<SyncReport> {
   const report: SyncReport = { weeks: [], entries: 0, matched: 0, errors: [] };
   if (!nytConfigured()) return { ...report, skipped: "NYT_API_KEY is not set" };
   const db = getDb();
@@ -178,4 +193,41 @@ export async function nytPoolWorks(minWeeks = 3, limit = 200): Promise<Map<numbe
     .orderBy(sql`max(${bookSignals.weeksOnList}) desc`)
     .limit(limit);
   return new Map(rows.map((r) => [r.workId!, Number(r.weeks)]));
+}
+
+export type NytStatus = {
+  configured: boolean;
+  lastRun: { at: Date; report: SyncReport } | null;
+  weeksSynced: number;
+  latestList: string | null;
+  books: number;
+  matched: number;
+};
+
+/** What Settings shows about the bestseller sync. */
+export async function nytStatus(): Promise<NytStatus> {
+  const db = getDb();
+  const [last] = await db
+    .select({ at: syncRuns.ranAt, report: syncRuns.report })
+    .from(syncRuns)
+    .where(eq(syncRuns.kind, "nyt"))
+    .orderBy(desc(syncRuns.ranAt))
+    .limit(1);
+  const [weeks] = await db.select({ n: sql<number>`count(*)` }).from(nytSync);
+  // The newest list actually seen, not just the newest date asked for.
+  const [books] = await db
+    .select({
+      n: sql<number>`count(*)`,
+      matched: sql<number>`count(${bookSignals.workId})`,
+      latest: sql<string | null>`max(${bookSignals.lastSeen})`,
+    })
+    .from(bookSignals);
+  return {
+    configured: nytConfigured(),
+    lastRun: last ? { at: last.at, report: last.report as unknown as SyncReport } : null,
+    weeksSynced: Number(weeks?.n ?? 0),
+    latestList: books?.latest ?? null,
+    books: Number(books?.n ?? 0),
+    matched: Number(books?.matched ?? 0),
+  };
 }

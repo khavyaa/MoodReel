@@ -168,3 +168,19 @@ export const nytSync = pgTable("nyt_sync", {
   publishedDate: text("published_date").primaryKey(),
   syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * One row per background sync run (the NYT cron), so its outcome can be shown
+ * in Settings: Vercel's Hobby plan keeps function logs for only an hour.
+ */
+export const syncRuns = pgTable(
+  "sync_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    kind: text("kind").notNull(),
+    ranAt: timestamp("ran_at", { withTimezone: true }).notNull().defaultNow(),
+    /** What the run did: weeks fetched, entries stored, books matched, errors. */
+    report: jsonb("report").$type<Record<string, unknown>>().notNull(),
+  },
+  (t) => [index("sync_runs_kind_ran_idx").on(t.kind, t.ranAt.desc())],
+);
