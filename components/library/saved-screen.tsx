@@ -28,10 +28,13 @@ export function SavedScreen({
   reading,
   total,
   missing,
+  people,
 }: {
   items: LibraryMovie[];
   watching: WatchingEntry[];
   reading: WatchingEntry[];
+  /** The People section, rendered on the server. */
+  people?: React.ReactNode;
   total: number;
   missing: number;
 }) {
@@ -97,6 +100,7 @@ export function SavedScreen({
         )}
 
         {items.length > 0 && <SavedList movies={shown} />}
+        {people}
         {missing > 0 && <p className="text-sm text-muted">{missing} couldn&apos;t load from TMDb just now.</p>}
       </div>
     </AppFrame>

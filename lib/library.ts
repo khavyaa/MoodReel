@@ -51,6 +51,7 @@ export function detailsToCard(d: MovieDetails, providers: number[]): DeckCard {
     runtime: d.runtime,
     directors: d.directors,
     cast: d.cast,
+    people: d.people,
     streamingOn: servicesOn(d.providers, providers),
     gate: passesGate(detailsToCandidate(d, providers)).reason ?? null,
     trailerKey: d.trailerKey,

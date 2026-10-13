@@ -17,6 +17,8 @@ import {
   type BookMood,
 } from "@/lib/books/rules";
 import type { TasteProfile } from "@/lib/taste/rules";
+import { NO_PEOPLE, applyPeople, capFollowed, followedIn, type PeopleFilter } from "@/lib/people/rules";
+import type { Person } from "@/lib/people/types";
 import type { Taps } from "@/lib/taste/types";
 
 export type BookTaps = Taps & { mood: BookMood };
@@ -43,7 +45,10 @@ export function bookPoolQueries(taps: BookTaps): BookQuery[] {
 
 const CURATE_TOP = 30;
 
-export function bookCard(b: BookCandidate, overview = ""): DeckCard {
+const authorsOf = (b: BookCandidate): Person[] =>
+  b.authorIds.map((a) => ({ source: "openlibrary" as const, id: a.id, name: a.name, role: "author" as const }));
+
+export function bookCard(b: BookCandidate, overview = "", followedName: string | null = null): DeckCard {
   return {
     media: "book",
     id: b.id,
@@ -62,6 +67,8 @@ export function bookCard(b: BookCandidate, overview = ""): DeckCard {
     runtime: null,
     directors: b.authors,
     cast: [],
+    people: authorsOf(b),
+    followedName,
     streamingOn: [],
     gate: null,
     trailerKey: null,
@@ -84,7 +91,20 @@ export async function withNytWeeks(books: BookCandidate[]): Promise<BookCandidat
 
 export async function buildBookDeck(
   taps: BookTaps,
-  { exclude, taste, seed }: { exclude: Set<number>; taste: TasteProfile; seed: number },
+  {
+    exclude,
+    taste,
+    seed,
+    people = NO_PEOPLE,
+    extra = [],
+  }: {
+    exclude: Set<number>;
+    taste: TasteProfile;
+    seed: number;
+    people?: PeopleFilter;
+    /** Followed authors' books, added to the pool. */
+    extra?: BookCandidate[];
+  },
 ): Promise<DealResult> {
   const results = await Promise.allSettled(bookPoolQueries(taps).map((q) => searchBooks(q)));
   const pool = new Map<number, BookCandidate>();
@@ -92,6 +112,8 @@ export async function buildBookDeck(
   if (pool.size === 0 && results.every((r) => r.status === "rejected")) {
     throw (results[0] as PromiseRejectedResult).reason ?? new Error("Open Library returned nothing.");
   }
+
+  for (const b of extra) if (!pool.has(b.id)) pool.set(b.id, b);
 
   // Lasting NYT bestsellers join the pool even with few Open Library ratings.
   const nytWorks = await nytPoolWorks().catch(() => new Map<number, number>());
@@ -105,7 +127,11 @@ export async function buildBookDeck(
   const ranked = candidates
     .map((movie) => ({ movie, score: scoreBook(movie, taps, taste) }))
     .sort((a, b) => b.score - a.score);
-  const scored = capAuthorsAndClassics(ranked);
+  // Avoided authors drop out, followed ones rank higher; then one book per author.
+  const scored = capFollowed(
+    capAuthorsAndClassics(applyPeople(ranked, (r) => authorsOf(r.movie), people).sort((a, b) => b.score - a.score)),
+    (r) => followedIn(authorsOf(r.movie), people),
+  );
 
   const top = scored.slice(0, CURATE_TOP).map((s) => s.movie);
   const approved = await curateWithAi(taps, top, "book");
@@ -113,7 +139,7 @@ export async function buildBookDeck(
 
   const descriptions = await Promise.all(deck.map((b) => bookDescription(b.id)));
   return {
-    cards: deck.map((b, i) => bookCard(b, descriptions[i])),
+    cards: deck.map((b, i) => bookCard(b, descriptions[i], followedIn(authorsOf(b), people))),
     missingLanguages: [],
     curatedByAi: approved !== null,
   };

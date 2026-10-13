@@ -19,6 +19,10 @@ import {
 } from "@/lib/picks/server";
 import { writeWhy } from "@/lib/ai/why";
 import { MEDIA } from "@/lib/moods";
+import { peopleFilterFor } from "@/lib/people/server";
+import { buildPersonDeck, followedWork } from "@/lib/people/works";
+import type { BookCandidate } from "@/lib/books/rules";
+import { parsePersonKey, personKey } from "@/lib/people/types";
 
 const level = z.union([z.literal(0), z.literal(1), z.literal(2)]);
 const movieTaps = z.object({ mood: z.enum(MEDIA.movies.moods), energy: level, time: level });
@@ -38,27 +42,34 @@ export type DealResponse =
   | { ok: true; sessionId: string; cards: DeckCard[]; missingLanguages: string[] }
   | { ok: false; error: string };
 
-/** Deals a deck of films, series or books for these taps. */
-export async function deal(media: Media, input: unknown): Promise<DealResponse> {
+/** Deals a deck of films, series or books for these taps; with a person, only from their work. */
+export async function deal(media: Media, input: unknown, withPerson?: string | null): Promise<DealResponse> {
   const owner = await requireOwner();
   mediaSchema.parse(media);
   const source = media === "book" ? "Open Library" : "TMDb";
   try {
-    const [exclude, taste, providers] = await Promise.all([
+    const [exclude, taste, providers, people] = await Promise.all([
       handledIds(owner.id, media),
       tasteFor(owner.id, media),
       providersFor(owner.id),
+      peopleFilterFor(owner.id),
     ]);
     const seed = Date.now() % 100_000;
-    const options = { exclude, taste, seed, providers };
+    const extra = await followedWork(media, people.follow).catch(() => []);
+    const options = { exclude, taste, seed, providers, people };
     const taps = media === "movie" ? movieTaps.parse(input) : media === "series" ? seriesTaps.parse(input) : bookTaps.parse(input);
-    const { cards, missingLanguages, curatedByAi } =
-      media === "movie"
-        ? await buildMovieDeck(movieTaps.parse(input), options)
+    const person = parsePersonKey(withPerson);
+    if (withPerson && !person) throw new z.ZodError([]);
+    const { cards, missingLanguages, curatedByAi } = person
+      ? await buildPersonDeck(media, taps, person, { exclude, taste, providers, followed: people.follow.has(personKey(person)) })
+      : media === "movie"
+        ? await buildMovieDeck(movieTaps.parse(input), { ...options, extra })
         : media === "series"
-          ? await buildSeriesDeck(seriesTaps.parse(input), options)
-          : await buildBookDeck(bookTaps.parse(input), options);
-    console.info(`[moodreel] dealt ${cards.length} ${media} cards (${curatedByAi ? "AI-curated" : "rules only"})`);
+          ? await buildSeriesDeck(seriesTaps.parse(input), { ...options, extra })
+          : await buildBookDeck(bookTaps.parse(input), { ...options, extra: extra as BookCandidate[] });
+    console.info(
+      `[moodreel] dealt ${cards.length} ${media} cards${person ? ` from ${personKey(person)}` : ""} (${curatedByAi ? "AI-curated" : "rules only"})`,
+    );
     const sessionId = await createDeckSession(owner.id, media, taps, cards.map((c) => c.id));
     return { ok: true, sessionId, cards, missingLanguages };
   } catch (error) {

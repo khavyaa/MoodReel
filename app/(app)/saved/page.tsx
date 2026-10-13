@@ -5,6 +5,7 @@ import { buttonClasses } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LibrarySkeleton } from "@/components/library/library-skeleton";
 import { SavedScreen } from "@/components/library/saved-screen";
+import { PeopleSection } from "@/components/people/people-section";
 import { libraryKey, libraryTitles } from "@/lib/library";
 import { inProgress, providersFor, savedTitles } from "@/lib/picks/server";
 import { requireOwner } from "@/lib/session";
@@ -46,6 +47,9 @@ async function Saved() {
             </Link>
           }
         />
+        <Suspense fallback={null}>
+          <PeopleSection />
+        </Suspense>
       </AppFrame>
     );
   }
@@ -69,6 +73,11 @@ async function Saved() {
       items={items}
       watching={entries("series", watching)}
       reading={entries("book", reading)}
+      people={
+        <Suspense fallback={null}>
+          <PeopleSection />
+        </Suspense>
+      }
       total={saved.length}
       missing={saved.length - items.length}
     />

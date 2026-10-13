@@ -1,5 +1,6 @@
 import "server-only";
 import { tmdb } from "./client";
+import type { Person } from "@/lib/people/types";
 import { WATCH_REGION } from "./movies";
 import { NEVER_SERIES_GENRES, SERIES_TYPES, TV_GENRE_NAMES, type SeriesFacts } from "@/lib/taste/series-rules";
 import type { MovieCandidate } from "@/lib/taste/types";
@@ -10,7 +11,7 @@ import type { MovieCandidate } from "@/lib/taste/types";
  * the deck, curation and finale code is shared.
  */
 
-type TmdbShow = {
+export type TmdbShow = {
   id: number;
   name: string;
   original_name: string;
@@ -26,7 +27,7 @@ type TmdbShow = {
   popularity: number;
 };
 
-function toCandidate(s: TmdbShow, onMyServices: boolean): MovieCandidate {
+export function toCandidate(s: TmdbShow, onMyServices: boolean): MovieCandidate {
   const year = s.first_air_date ? Number(s.first_air_date.slice(0, 4)) : null;
   return {
     id: s.id,
@@ -105,6 +106,8 @@ export type SeriesDetails = {
   overview: string;
   creators: string[];
   cast: string[];
+  /** Creators and three lead actors, with TMDb person ids. */
+  people: Person[];
   trailerKey: string | null;
   providers: { id: number; name: string }[];
   facts: SeriesFacts;
@@ -120,8 +123,8 @@ type TmdbShowDetails = TmdbShow & {
   in_production?: boolean;
   last_episode_to_air?: { runtime?: number | null } | null;
   seasons?: { season_number: number; episode_count: number }[];
-  created_by?: { name: string }[];
-  credits?: { cast: { name: string }[] };
+  created_by?: { id: number; name: string }[];
+  credits?: { cast: { id: number; name: string }[] };
   videos?: { results: { key: string; site: string; type: string; official: boolean }[] };
   "watch/providers"?: { results: Record<string, { flatrate?: { provider_id: number; provider_name: string }[] }> };
 };
@@ -169,6 +172,10 @@ export async function getSeriesDetails(id: number): Promise<SeriesDetails> {
     overview: candidate.overview,
     creators: (d.created_by ?? []).map((c) => c.name),
     cast: (d.credits?.cast ?? []).slice(0, 4).map((c) => c.name),
+    people: [
+      ...(d.created_by ?? []).map((c) => ({ source: "tmdb" as const, id: c.id, name: c.name, role: "creator" as const })),
+      ...(d.credits?.cast ?? []).slice(0, 3).map((c) => ({ source: "tmdb" as const, id: c.id, name: c.name, role: "actor" as const })),
+    ].filter((p, i, all) => p.id && all.findIndex((o) => o.id === p.id) === i),
     trailerKey: trailer?.key ?? null,
     providers: (region?.flatrate ?? []).map((p) => ({ id: p.provider_id, name: p.provider_name })),
     facts: seriesFacts(d),

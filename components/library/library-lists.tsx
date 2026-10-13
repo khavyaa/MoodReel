@@ -61,7 +61,7 @@ export function SavedList({ movies }: { movies: LibraryMovie[] }) {
   if (shown.length === 0) return <p className="text-lg text-muted">All cleared.</p>;
 
   return (
-    <ul className="grid gap-x-10 gap-y-8 md:grid-cols-2 2xl:grid-cols-3">
+    <ul aria-label="Saved titles" className="grid gap-x-10 gap-y-8 md:grid-cols-2 2xl:grid-cols-3">
       {shown.map((m) => (
         <li key={keyOf(m)} className="grid grid-cols-[96px_minmax(0,1fr)] gap-4 sm:grid-cols-[120px_minmax(0,1fr)]">
           <Poster title={m.title} path={m.posterPath} size="md" sizes="120px" className="rounded-xl" />

@@ -43,6 +43,13 @@
       "when": 1791817797893,
       "tag": "0005_sync_runs",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791908095514,
+      "tag": "0006_people_prefs",
+      "breakpoints": true
     }
   ]
 }

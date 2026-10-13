@@ -37,6 +37,9 @@ export const titleAction = pgEnum("title_action", [
   "dropped", // gave up on a series you picked
 ]);
 
+export const personSource = pgEnum("person_source", ["tmdb", "openlibrary"]);
+export const personPrefKind = pgEnum("person_pref", ["follow", "avoid", "dismissed"]);
+
 export const pickStatus = pgEnum("pick_status", ["dealing", "finale", "picked", "empty", "abandoned"]);
 
 /** Append-only log. The taste model learns from this. */
@@ -183,4 +186,26 @@ export const syncRuns = pgTable(
     report: jsonb("report").$type<Record<string, unknown>>().notNull(),
   },
   (t) => [index("sync_runs_kind_ran_idx").on(t.kind, t.ranAt.desc())],
+);
+
+/**
+ * People you follow (their work ranks higher), avoid (their work never comes
+ * up) or turned down as a suggestion. The name is kept so lists don't need a
+ * lookup per person.
+ */
+export const peoplePrefs = pgTable(
+  "people_prefs",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    source: personSource("source").notNull(),
+    personId: text("person_id").notNull(),
+    name: text("name").notNull(),
+    /** What they're known for here: director, creator, writer, actor or author. */
+    role: text("role").notNull(),
+    kind: personPrefKind("kind").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.source, t.personId] })],
 );
