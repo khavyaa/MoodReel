@@ -138,6 +138,7 @@ lib/taste/         language gates, weighted rating, mood/energy fit, taste from 
 lib/deck/          deck composition, head-to-head, AI re-weighting, the movie and series deck builders
 lib/tmdb/          TMDb client (retries flaky connections), movie, series and provider queries
 lib/books/         Open Library client, NYT bestseller sync, book rules
+lib/people/        follow / avoid / suggest rules, a person's work, decks from one person
 app/api/cron/      the daily NYT sync (Vercel cron, guarded by CRON_SECRET)
 lib/ai/            AI Gateway calls, each with a rule-based fallback
 components/pick/   the flow: taps, deck, head-to-head, pick
@@ -146,6 +147,13 @@ proxy.ts           sends signed-out requests to /sign-in
 
 **Looks.** Bold & playful in light mode, cinematic dark in dark mode, following the device. An
 override is stored per device in the browser and applied before the first paint.
+
+**People.** Directors, creators, writers and lead actors (TMDb) and authors (Open Library) are
+tappable on every card. Follow someone and their unseen work joins your decks (skipping the
+"everyone has seen it" markdown, at most two per person and four per deck) with a badge; avoid
+someone and nothing of theirs is dealt. "Deal from …" (a person's page, the start screen's
+search, or People in Saved) makes a deck from their work only. People you keep loving (three
+titles, four for actors) are suggested. Rules: `lib/people/rules.ts`.
 
 **Offline.** Offline, swipes, saves and check-ins wait and are sent when the connection returns
 (Next's `useOffline`), and a banner says so. A service worker (`public/sw.js`, production only) lets

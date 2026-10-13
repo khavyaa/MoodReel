@@ -99,7 +99,7 @@ test("saved and history show the run, and you can tidy and rate them", async ({ 
   // Saved: the three saves that didn't win.
   await page.goto("/saved");
   await expect(page.getByText("Saved · 3 films")).toBeVisible();
-  const saved = page.getByRole("main").getByRole("listitem");
+  const saved = page.getByRole("list", { name: "Saved titles" }).getByRole("listitem");
   await expect(saved).toHaveCount(3);
   const where = saved.first().getByRole("link", { name: /Where to watch/ });
   await expect(where).toHaveAttribute("href", /^https:\/\/www\.google\.com\/search\?q=.+movie/);

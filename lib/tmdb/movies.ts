@@ -1,12 +1,13 @@
 import "server-only";
 import { tmdb } from "./client";
+import { WRITING_JOBS, type Person } from "@/lib/people/types";
 import { EXCLUDED_KEYWORDS, MOVIE_GENRE_NAMES } from "@/lib/taste/rules";
 import type { MovieCandidate } from "@/lib/taste/types";
 
 export const WATCH_REGION = process.env.TMDB_WATCH_REGION || "IN";
 
 
-type TmdbMovie = {
+export type TmdbMovie = {
   id: number;
   title: string;
   original_title: string;
@@ -22,7 +23,7 @@ type TmdbMovie = {
   popularity: number;
 };
 
-function toCandidate(m: TmdbMovie, onMyServices: boolean): MovieCandidate {
+export function toCandidate(m: TmdbMovie, onMyServices: boolean): MovieCandidate {
   const year = m.release_date ? Number(m.release_date.slice(0, 4)) : null;
   return {
     id: m.id,
@@ -104,6 +105,8 @@ export type MovieDetails = {
   tagline: string | null;
   directors: string[];
   cast: string[];
+  /** Directors, up to two writers and three lead actors, with TMDb person ids. */
+  people: Person[];
   trailerKey: string | null;
   /** Every flat-rate service streaming it in your region; filter with servicesOn(). */
   providers: { id: number; name: string }[];
@@ -115,7 +118,7 @@ export type MovieDetails = {
 type TmdbDetails = TmdbMovie & {
   runtime: number | null;
   tagline: string | null;
-  credits?: { cast: { name: string }[]; crew: { name: string; job: string }[] };
+  credits?: { cast: { id: number; name: string }[]; crew: { id: number; name: string; job: string }[] };
   videos?: { results: { key: string; site: string; type: string; official: boolean }[] };
   "watch/providers"?: {
     results: Record<string, { flatrate?: { provider_id: number; provider_name: string }[] }>;
@@ -148,10 +151,26 @@ export async function getMovieDetails(id: number): Promise<MovieDetails> {
     tagline: d.tagline || null,
     directors: (d.credits?.crew ?? []).filter((c) => c.job === "Director").map((c) => c.name),
     cast: (d.credits?.cast ?? []).slice(0, 4).map((c) => c.name),
+    people: moviePeople(d.credits),
     trailerKey: trailer?.key ?? null,
     providers: (region?.flatrate ?? []).map((p) => ({ id: p.provider_id, name: p.provider_name })),
     votes: base.voteCount,
     originalTitle: base.originalTitle,
     backdropPath: base.backdropPath,
   };
+}
+
+/** Directors, up to two writers and the top three billed actors, each once. */
+export function moviePeople(credits: TmdbDetails["credits"]): Person[] {
+  const crew = credits?.crew ?? [];
+  const people: Person[] = [
+    ...crew.filter((c) => c.job === "Director").map((c) => ({ source: "tmdb" as const, id: c.id, name: c.name, role: "director" as const })),
+    ...crew
+      .filter((c) => WRITING_JOBS.has(c.job))
+      .slice(0, 2)
+      .map((c) => ({ source: "tmdb" as const, id: c.id, name: c.name, role: "writer" as const })),
+    ...(credits?.cast ?? []).slice(0, 3).map((c) => ({ source: "tmdb" as const, id: c.id, name: c.name, role: "actor" as const })),
+  ];
+  const seen = new Set<number>();
+  return people.filter((p) => p.id && !seen.has(p.id) && seen.add(p.id));
 }

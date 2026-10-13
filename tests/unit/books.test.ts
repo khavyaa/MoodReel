@@ -34,6 +34,7 @@ function book(over: Partial<BookCandidate> = {}): BookCandidate {
     popularity: 0,
     onMyServices: false,
     authors: ["A. Author"],
+    authorIds: [{ id: 1, name: "A. Author" }],
     pages: 340,
     subjects: ["Fiction", "Thriller", "Suspense"],
     ratingsCount: 120,
@@ -172,6 +173,7 @@ describe("book cards and reasons", () => {
     trailerKey: null,
     series: null,
     book: { authors: ["Susanna Clarke"], pages: 272, nytWeeks: 6, subjects: ["Fantasy"], tags: ["s:fantasy"] },
+    people: [{ source: "openlibrary", id: 1, name: "Susanna Clarke", role: "author" }],
   };
 
   it("shows pages, length and bestseller weeks", () => {

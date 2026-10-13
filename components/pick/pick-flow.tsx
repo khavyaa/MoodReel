@@ -2,6 +2,9 @@
 
 import { useCallback, useRef, useState, type ReactNode } from "react";
 import { useOffline } from "next/offline";
+import { useSearchParams } from "next/navigation";
+import { parsePersonKey } from "@/lib/people/types";
+import type { ChosenPerson } from "@/components/people/someone-in-mind";
 import { deal as dealDeck, noSavesThisTime, pick as pickTitle, swipe, undo as undoSwipe } from "@/app/(app)/[media]/actions";
 import type { DeckCard } from "@/lib/deck/build-movies";
 import { DECK_SIZE } from "@/lib/deck/compose";
@@ -78,9 +81,17 @@ export function PickFlow({
     return queue.current;
   }, []);
 
-  const deal = useCallback(async () => {
+  // A person from the URL (a person page's "Deal from …", the People list) or the start screen's search.
+  const params = useSearchParams();
+  const [person, setPerson] = useState<ChosenPerson | null>(() => {
+    const key = params.get("with");
+    const name = params.get("name");
+    return key && name && parsePersonKey(key) ? { key, name } : null;
+  });
+
+  const deal = useCallback(async (from: ChosenPerson | null = person) => {
     setStep({ kind: "dealing" });
-    const result = await dealDeck(media, taps).catch(() => null);
+    const result = await dealDeck(media, taps, from?.key ?? null).catch(() => null);
     if (!result || !result.ok) {
       setStep({ kind: "error", message: result?.error ?? "Couldn't deal a deck just now." });
       return;
@@ -98,7 +109,7 @@ export function PickFlow({
       exitAs: "skipped",
       returning: null,
     });
-  }, [media, taps]);
+  }, [media, taps, person]);
 
   const reveal = useCallback(
     (sessionId: string, pick: DeckCard, saves: DeckCard[]) => {
@@ -187,7 +198,14 @@ export function PickFlow({
       {step.kind === "taps" && (
         <>
           {notice}
-          <TapsScreen media={media} value={taps} onChange={setTaps} onDeal={deal} />
+          <TapsScreen
+            media={media}
+            value={taps}
+            onChange={setTaps}
+            onDeal={() => deal()}
+            person={person}
+            onPerson={setPerson}
+          />
         </>
       )}
 
@@ -206,6 +224,7 @@ export function PickFlow({
           exitAs={step.exitAs}
           returning={step.returning}
           missingLanguages={step.missing}
+          fromName={person?.name ?? null}
           onSwipe={onSwipe}
           onUndo={step.actions.length > 0 ? () => undo(step) : null}
         />
@@ -231,11 +250,25 @@ export function PickFlow({
         />
       )}
 
-      {step.kind === "empty" && (
+      {step.kind === "empty" && person && (
+        <Message
+          title={`Nothing left from ${person.name}.`}
+          body="Everything of theirs that fits is seen, saved or turned down. Try a longer slot, or deal without them."
+          primary={{
+            label: "Deal without them",
+            onClick: () => {
+              setPerson(null);
+              void deal(null);
+            },
+          }}
+          secondary={{ label: "Change the taps", onClick: toTaps }}
+        />
+      )}
+      {step.kind === "empty" && !person && (
         <Message
           title="Nothing grabbed you."
           body={`That's useful too: those won't come back for a while. Deal ${DECK_SIZE} more, or change the mood.`}
-          primary={{ label: `Deal ${DECK_SIZE} more`, onClick: deal }}
+          primary={{ label: `Deal ${DECK_SIZE} more`, onClick: () => deal() }}
           secondary={{ label: "Change the taps", onClick: toTaps }}
         />
       )}
@@ -244,7 +277,7 @@ export function PickFlow({
         <Message
           title="The deck didn't deal."
           body={step.message}
-          primary={{ label: "Try again", onClick: deal }}
+          primary={{ label: "Try again", onClick: () => deal() }}
           secondary={{ label: "Change the taps", onClick: toTaps }}
         />
       )}

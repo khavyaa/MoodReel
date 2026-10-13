@@ -4,6 +4,7 @@ import { ArrowRight } from "lucide-react";
 import { ENERGY, MEDIA, MOODS, type MoodId } from "@/lib/moods";
 import { DECK_SIZE } from "@/lib/deck/compose";
 import { cn } from "@/lib/cn";
+import { SomeoneInMind, type ChosenPerson } from "@/components/people/someone-in-mind";
 
 export type TapsValue = { mood: MoodId; energy: 0 | 1 | 2; time: 0 | 1 | 2 };
 
@@ -64,11 +65,15 @@ export function TapsScreen({
   value,
   onChange,
   onDeal,
+  person = null,
+  onPerson,
 }: {
   media: "movie" | "series" | "book";
   value: TapsValue;
   onChange: (next: TapsValue) => void;
   onDeal: () => void;
+  person?: ChosenPerson | null;
+  onPerson?: (next: ChosenPerson | null) => void;
 }) {
   const media = MEDIA[kind === "movie" ? "movies" : kind === "series" ? "series" : "books"];
   const series = kind === "series";
@@ -78,6 +83,8 @@ export function TapsScreen({
     <div className="grid flex-1 gap-10 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:gap-16">
       <div className="flex flex-col gap-7">
         <h1 className="display text-[clamp(3.25rem,8.5vw,7.5rem)]">{media.ask}</h1>
+
+        {onPerson && <SomeoneInMind media={kind} value={person} onChange={onPerson} />}
 
         <fieldset className="flex flex-col gap-3">
           <legend className="label mb-3 text-muted">Mood</legend>
@@ -126,7 +133,7 @@ export function TapsScreen({
           onClick={onDeal}
           className="mt-2 inline-flex h-14 w-full items-center justify-center gap-3 rounded-full bg-accent px-8 text-lg font-bold text-on-accent transition-opacity hover:opacity-90 sm:w-auto sm:self-start"
         >
-          Deal {DECK_SIZE} {series ? "series" : book ? "books" : "films"}
+          {person ? `Deal from ${person.name}` : `Deal ${DECK_SIZE} ${series ? "series" : book ? "books" : "films"}`}
           <ArrowRight className="size-5" aria-hidden />
         </button>
       </div>

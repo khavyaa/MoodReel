@@ -113,8 +113,8 @@ function tagsFor(title: TitleRef) {
 async function logAction(
   userId: string,
   media: Media,
-  sessionId: string,
-  mood: string,
+  sessionId: string | null,
+  mood: string | null,
   title: TitleRef,
   action: ActionKind,
   state: Partial<typeof titleStates.$inferInsert>,
@@ -235,6 +235,11 @@ export async function markSessionEmpty(userId: string, sessionId: string) {
     .update(pickSessions)
     .set({ status: "empty", completedAt: new Date() })
     .where(eq(pickSessions.id, sessionId));
+}
+
+/** Save a title outside any deck, from a person's page. */
+export async function saveOutsideDeck(userId: string, media: Media, title: TitleRef) {
+  await logAction(userId, media, null, null, title, "saved", { saved: true, skipped: false });
 }
 
 /* ------------------------------------------------------- saved and history */
@@ -511,4 +516,49 @@ export async function checkIn(
   } else {
     await updateTitleState(userId, media, id, "dropped", { disliked: true, watchingSince: null, checkedInAt: now });
   }
+}
+
+/** Your state for a list of titles (seen, saved, rating, in progress), for a person's page. */
+export async function statesFor(userId: string, media: Media, ids: number[]) {
+  if (!ids.length) return new Map<number, { seen: boolean; saved: boolean; rating: number | null; inProgress: boolean; disliked: boolean }>();
+  const rows = await getDb()
+    .select({
+      id: titleStates.externalId,
+      seen: titleStates.seen,
+      saved: titleStates.saved,
+      rating: titleStates.rating,
+      watchingSince: titleStates.watchingSince,
+      disliked: titleStates.disliked,
+    })
+    .from(titleStates)
+    .where(
+      and(
+        eq(titleStates.userId, userId),
+        eq(titleStates.media, media),
+        eq(titleStates.source, sourceOf(media)),
+        inArray(titleStates.externalId, ids.map(String)),
+      ),
+    );
+  return new Map(
+    rows.map((r) => [
+      Number(r.id),
+      { seen: r.seen, saved: r.saved, rating: r.rating, inProgress: r.watchingSince != null, disliked: r.disliked },
+    ]),
+  );
+}
+
+/** Titles you've loved: saved, picked, or rated four stars and up. Most recent first. */
+export async function lovedTitles(userId: string, limit = 40) {
+  const rows = await getDb()
+    .select({ id: titleStates.externalId, media: titleStates.media })
+    .from(titleStates)
+    .where(
+      and(
+        eq(titleStates.userId, userId),
+        or(eq(titleStates.saved, true), isNotNull(titleStates.pickedAt), gt(titleStates.rating, 7)),
+      ),
+    )
+    .orderBy(desc(titleStates.updatedAt))
+    .limit(limit);
+  return rows.map((r) => ({ id: Number(r.id), media: r.media as Media }));
 }

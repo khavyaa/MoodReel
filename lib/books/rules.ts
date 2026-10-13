@@ -13,6 +13,8 @@ import { NO_TASTE, type TasteProfile } from "@/lib/taste/rules";
 /** A book in the deck pipeline. Shaped like a film candidate so composing and curation are shared. */
 export type BookCandidate = MovieCandidate & {
   authors: string[];
+  /** Open Library author numbers (OL…A), paired with names. */
+  authorIds: { id: number; name: string }[];
   pages: number | null;
   subjects: string[];
   ratingsCount: number;

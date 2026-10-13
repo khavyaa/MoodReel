@@ -2,9 +2,11 @@ import "server-only";
 import { composeDeck, DECK_SIZE } from "./compose";
 import { applyCuration } from "./curation";
 import { curateWithAi } from "@/lib/ai/curate";
-import { discoverMovies, getMovieDetails, type DiscoverQuery } from "@/lib/tmdb/movies";
+import { discoverMovies, getMovieDetails, type DiscoverQuery, type MovieDetails } from "@/lib/tmdb/movies";
+import { FOLLOW_BOOST, NO_PEOPLE, applyPeople, capFollowed, followedIn, type PeopleFilter } from "@/lib/people/rules";
 import { servicesOn } from "@/lib/tmdb/providers";
 import type { SeriesFacts } from "@/lib/taste/series-rules";
+import type { Person } from "@/lib/people/types";
 import {
   GENRE,
   LANGUAGES,
@@ -13,6 +15,7 @@ import {
   MOVIE_MOODS,
   RUNTIME_LIMIT,
   eligible,
+  mainstreamPenalty,
   passesGate,
   scoreMovie,
   type TasteProfile,
@@ -38,11 +41,15 @@ export type DeckCard = {
   runtime: number | null;
   directors: string[];
   cast: string[];
+  /** Directors, writers, lead actors or authors, with ids for their pages. */
+  people: Person[];
   streamingOn: string[];
   gate: GateReason | null;
   trailerKey: string | null;
   /** Seasons, episodes, still airing: series only. */
   series: SeriesFacts | null;
+  /** A followed person on this title, for the card's badge. */
+  followedName?: string | null;
   /** Authors, pages, NYT weeks: books only. Ratings are then Open Library's, out of 5. */
   book: BookFacts | null;
 };
@@ -113,6 +120,47 @@ export type DealResult = {
 /** How many of the best-scoring candidates the AI is asked about. */
 const CURATE_TOP = 30;
 
+/** Candidates whose details (runtime, people, services) are fetched before the deck is composed. */
+const DETAIL_TOP = { en: 32, other: 20 } as const;
+
+export function movieCard(m: MovieCandidate, d: MovieDetails | null, providers: number[], followedName: string | null = null): DeckCard {
+  return {
+    media: "movie",
+    id: m.id,
+    title: m.title,
+    originalTitle: m.originalTitle,
+    year: m.year,
+    language: m.language,
+    languageLabel: LANGUAGE_LABEL[m.language] ?? m.language.toUpperCase(),
+    overview: m.overview,
+    posterPath: m.posterPath,
+    backdropPath: m.backdropPath,
+    rating: Math.round(m.voteAverage * 10) / 10,
+    votes: m.voteCount,
+    genreIds: m.genreIds,
+    genres: d?.genres ?? [],
+    runtime: d?.runtime ?? null,
+    directors: d?.directors ?? [],
+    cast: d?.cast ?? [],
+    people: d?.people ?? [],
+    // Details know exactly which service; the pool flag is the fallback.
+    streamingOn: d ? servicesOn(d.providers, providers) : m.onMyServices ? ["your services"] : [],
+    gate: passesGate(m).reason ?? null,
+    trailerKey: d?.trailerKey ?? null,
+    series: null,
+    book: null,
+    followedName,
+  };
+}
+
+/** Details for many films at once; a film TMDb can't return right now is simply missing. */
+export async function detailsById(ids: number[]): Promise<Map<number, MovieDetails>> {
+  const settled = await Promise.allSettled(ids.map((id) => getMovieDetails(id)));
+  const found = new Map<number, MovieDetails>();
+  settled.forEach((r) => r.status === "fulfilled" && found.set(r.value.id, r.value));
+  return found;
+}
+
 export async function buildMovieDeck(
   taps: Taps,
   {
@@ -120,7 +168,17 @@ export async function buildMovieDeck(
     taste,
     seed,
     providers,
-  }: { exclude: Set<number>; taste: TasteProfile; seed: number; providers: number[] },
+    people = NO_PEOPLE,
+    extra = [],
+  }: {
+    exclude: Set<number>;
+    taste: TasteProfile;
+    seed: number;
+    providers: number[];
+    people?: PeopleFilter;
+    /** Followed people's films, added to the pool. */
+    extra?: MovieCandidate[];
+  },
 ): Promise<DealResult> {
   const queries = MOVIE_LANGUAGES.flatMap((language) =>
     poolQueries(language, taps, providers)
@@ -145,9 +203,31 @@ export async function buildMovieDeck(
     const firstError = results.find((r) => r.status === "rejected") as PromiseRejectedResult | undefined;
     throw firstError?.reason ?? new Error("TMDb returned nothing.");
   }
+  for (const movie of extra) if (!pool.has(movie.id)) pool.set(movie.id, movie);
 
   const candidates = [...pool.values()].filter((m) => !exclude.has(m.id) && eligible(m, taps));
-  const scored = capAnimated(candidates.map((movie) => ({ movie, score: scoreMovie(movie, taps, taste) })));
+  // Followed people's films get their boost now, or famous ones would be cut
+  // before their details are fetched. They also skip the "everyone has seen it"
+  // markdown: for someone you follow, famous is fine.
+  const extraIds = new Set(extra.map((m) => m.id));
+  const followBonus = (m: MovieCandidate) => (extraIds.has(m.id) ? FOLLOW_BOOST + mainstreamPenalty(m) : 0);
+  const ranked = capAnimated(
+    candidates.map((movie) => ({ movie, score: scoreMovie(movie, taps, taste) + followBonus(movie) })),
+  ).sort((a, b) => b.score - a.score);
+
+  // Who made and stars in a film is only in its details, so the best candidates
+  // of each language get theirs before the deck is composed: avoided people's
+  // films drop out here, followed people's rank higher.
+  const shortlist = [
+    ...ranked.filter((r) => r.movie.language === "en").slice(0, DETAIL_TOP.en),
+    ...ranked.filter((r) => r.movie.language !== "en").slice(0, DETAIL_TOP.other),
+  ];
+  const details = await detailsById(shortlist.map((s) => s.movie.id));
+  const peopleOf = (id: number) => details.get(id)?.people ?? null;
+  const scored = capFollowed(
+    applyPeople(shortlist, (s) => peopleOf(s.movie.id), people, (s) => extraIds.has(s.movie.id)).sort((a, b) => b.score - a.score),
+    (s) => followedIn(peopleOf(s.movie.id) ?? [], people),
+  );
 
   // AI gets a say on the strongest candidates; the rules still compose the deck.
   const top = [...scored].sort((a, b) => b.score - a.score).slice(0, CURATE_TOP).map((s) => s.movie);
@@ -157,38 +237,11 @@ export async function buildMovieDeck(
     seed,
   });
 
-  const details = await Promise.allSettled(deck.map((m) => getMovieDetails(m.id)));
-  const cards = deck.map((m, i): DeckCard => {
-    const d = details[i].status === "fulfilled" ? details[i].value : null;
-    return {
-      media: "movie",
-      id: m.id,
-      title: m.title,
-      originalTitle: m.originalTitle,
-      year: m.year,
-      language: m.language,
-      languageLabel: LANGUAGE_LABEL[m.language] ?? m.language.toUpperCase(),
-      overview: m.overview,
-      posterPath: m.posterPath,
-      backdropPath: m.backdropPath,
-      rating: Math.round(m.voteAverage * 10) / 10,
-      votes: m.voteCount,
-      genreIds: m.genreIds,
-      genres: d?.genres ?? [],
-      runtime: d?.runtime ?? null,
-      directors: d?.directors ?? [],
-      cast: d?.cast ?? [],
-      // Details know exactly which service; the pool flag is the fallback.
-      streamingOn: d ? servicesOn(d.providers, providers) : m.onMyServices ? ["your services"] : [],
-      gate: passesGate(m).reason ?? null,
-      trailerKey: d?.trailerKey ?? null,
-      series: null,
-      book: null,
-    };
-  });
-
   return {
-    cards,
+    cards: deck.map((m) => {
+      const d = details.get(m.id) ?? null;
+      return movieCard(m, d, providers, d ? followedIn(d.people, people) : null);
+    }),
     missingLanguages: MOVIE_LANGUAGES.filter((l) => !succeeded.has(l)).map((l) => LANGUAGE_LABEL[l] ?? l),
     curatedByAi: approved !== null,
   };

@@ -74,8 +74,8 @@ function showDetails(f) {
     type: seasons === 1 ? "Miniseries" : "Scripted",
     // The soap's first season is short, so only its 300-episode total gives it away.
     seasons: Array.from({ length: seasons }, (_, i) => ({ season_number: i + 1, episode_count: soap && i > 0 ? 26 : 8 })),
-    created_by: [{ name: "C. Creator" }],
-    credits: { cast: [{ name: "A. Actor" }] },
+    created_by: [{ id: 800 + (f.id % 3), name: `Creator ${(f.id % 3) + 1}` }],
+    credits: { cast: [{ id: 850, name: "Series Lead", order: 0 }] },
     videos: { results: [] },
     "watch/providers": {
       results: { IN: { flatrate: f.id % 2 ? [{ provider_id: 119, provider_name: "Amazon Prime Video" }] : [] } },
@@ -89,6 +89,7 @@ function book(n, title, author, extra = {}) {
     key: `/works/OL${n}W`,
     title,
     author_name: [author],
+    author_key: [`OL${9000 + n}A`],
     first_publish_year: 2018,
     number_of_pages_median: 340,
     ratings_average: 4.3,
@@ -114,6 +115,8 @@ const BOOKS = [
 
 function olSearch(url) {
   const q = url.searchParams.get("q") || "";
+  const byAuthor = q.match(/author_key:(OL\d+A)/);
+  if (byAuthor) return BOOKS.filter((b) => b.author_key?.includes(byAuthor[1]));
   const keys = [...q.matchAll(/key:"\/works\/(OL\d+W)"/g)].map((m) => `/works/${m[1]}`);
   if (keys.length) return BOOKS.filter((b) => keys.includes(b.key));
   const isbn = q.match(/isbn:(\d+)/);
@@ -144,6 +147,41 @@ const NYT_OVERVIEW = {
   },
 };
 
+// People: five directors share the English thrillers, so one director has several films.
+const DIRECTORS = ["Ava Director", "Ben Director", "Cara Director", "Dev Director", "Eli Director"];
+const directorOf = (f) => ({ id: 700 + (f.id % 5), name: DIRECTORS[f.id % 5] });
+function filmCredits(f) {
+  const d = directorOf(f);
+  return {
+    crew: [
+      { id: d.id, name: d.name, job: "Director", department: "Directing" },
+      { id: 760, name: "Wren Writer", job: "Screenplay", department: "Writing" },
+    ],
+    cast: [
+      { id: 780, name: "Lead Actor", order: 0 },
+      { id: 781 + (f.id % 2), name: f.id % 2 ? "Second Odd" : "Second Even", order: 1 },
+    ],
+  };
+}
+
+function personResponse(id) {
+  const directed = FILMS.filter((f) => directorOf(f).id === id);
+  const starred = id === 780 ? FILMS : [];
+  const name =
+    id >= 700 && id < 705 ? DIRECTORS[id - 700] : id === 780 ? "Lead Actor" : id === 760 ? "Wren Writer" : null;
+  if (!name) return null;
+  return {
+    id,
+    name,
+    known_for_department: id < 705 ? "Directing" : id === 760 ? "Writing" : "Acting",
+    movie_credits: {
+      crew: directed.map((f) => ({ ...f, job: "Director", department: "Directing" })),
+      cast: starred.map((f) => ({ ...f, order: 0 })),
+    },
+    tv_credits: { cast: [], crew: [] },
+  };
+}
+
 function json(res, body, status = 200) {
   res.writeHead(status, { "content-type": "application/json" });
   res.end(JSON.stringify(body));
@@ -157,6 +195,33 @@ http
       const page = Number(url.searchParams.get("page") || 1);
       const results = page === 1 ? FILMS.filter((f) => f.original_language === lang) : [];
       return json(res, { page, results, total_pages: 1, total_results: results.length });
+    }
+    const person = url.pathname.match(/^\/3\/person\/(\d+)$/);
+    if (person) {
+      const p = personResponse(Number(person[1]));
+      return p ? json(res, p) : json(res, { status_message: "Not found" }, 404);
+    }
+    if (url.pathname === "/3/search/person") {
+      const q = (url.searchParams.get("query") || "").toLowerCase();
+      const results = [700, 701, 702, 703, 704, 760, 780]
+        .map((id) => personResponse(id))
+        .filter((p) => p.name.toLowerCase().includes(q))
+        .map((p) => ({ id: p.id, name: p.name, known_for_department: p.known_for_department, known_for: [] }));
+      return json(res, { results });
+    }
+    const author = url.pathname.match(/^\/ol\/authors\/OL(\d+)A\.json$/);
+    if (author) {
+      const b = BOOKS.find((x) => x.author_key?.[0] === `OL${author[1]}A`);
+      return b ? json(res, { name: b.author_name[0] }) : json(res, { error: "notfound" }, 404);
+    }
+    if (url.pathname === "/ol/search/authors.json") {
+      const q = (url.searchParams.get("q") || "").toLowerCase();
+      const docs = BOOKS.filter((b) => b.author_name[0].toLowerCase().includes(q)).map((b) => ({
+        key: b.author_key[0],
+        name: b.author_name[0],
+        top_work: b.title,
+      }));
+      return json(res, { docs });
     }
     if (url.pathname === "/ol/search.json") {
       const docs = olSearch(url);
@@ -193,7 +258,7 @@ http
         genres: f.genre_ids.map((id) => ({ id, name: String(id) })),
         runtime: 118,
         tagline: null,
-        credits: { cast: [{ name: "A. Actor" }], crew: [{ name: "D. Director", job: "Director" }] },
+        credits: filmCredits(f),
         videos: { results: [] },
         "watch/providers": {
           results: {

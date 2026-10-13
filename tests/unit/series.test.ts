@@ -139,6 +139,7 @@ describe("series cards and reasons", () => {
     trailerKey: null,
     series: facts({ seasons: 2, episodes: 17, firstSeasonEpisodes: 9, ongoing: true }),
     book: null,
+    people: [{ source: "tmdb", id: 1, name: "Sudip Sharma", role: "creator" }],
   } satisfies DeckCard;
 
   it("shows seasons, episode length and whether it's still airing", () => {

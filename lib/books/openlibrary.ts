@@ -52,6 +52,7 @@ const FIELDS = [
   "key",
   "title",
   "author_name",
+  "author_key",
   "first_publish_year",
   "number_of_pages_median",
   "ratings_average",
@@ -68,6 +69,7 @@ type OlDoc = {
   key: string;
   title: string;
   author_name?: string[];
+  author_key?: string[];
   first_publish_year?: number;
   number_of_pages_median?: number;
   ratings_average?: number;
@@ -156,6 +158,10 @@ export function toBookCandidate(doc: OlDoc, nytWeeks = 0): BookCandidate | null 
     popularity: doc.already_read_count ?? 0,
     onMyServices: false,
     authors: authors.slice(0, 3),
+    authorIds: (doc.author_key ?? [])
+      .map((k, i) => ({ id: Number(k.match(/OL(\d+)A/)?.[1] ?? 0), name: doc.author_name?.[i] ?? "" }))
+      .filter((a) => a.id && a.name && latinName(a.name))
+      .slice(0, 3),
     pages: doc.number_of_pages_median ?? null,
     subjects,
     ratingsCount: doc.ratings_count ?? 0,
@@ -228,3 +234,35 @@ export async function bookDescription(id: number): Promise<string> {
   }
 }
 
+
+/* ---------------------------------------------------------------- authors */
+
+/** An author's name and best-known works (English, rated or read most first). */
+export async function authorWithBooks(id: number): Promise<{ name: string; books: BookCandidate[] } | null> {
+  const key = `OL${id}A`;
+  const [author, works] = await Promise.all([
+    ol<{ name?: string; personal_name?: string }>(`/authors/${key}.json`, {}, 7 * 24 * HOURS).catch(() => null),
+    ol<{ docs: OlDoc[] }>(
+      "/search.json",
+      { q: `author_key:${key} language:eng`, fields: FIELDS, sort: "readinglog", lang: "en", limit: 60 },
+      12 * HOURS,
+    ),
+  ]);
+  const name = author?.name ?? author?.personal_name;
+  if (!name) return null;
+  return { name, books: works.docs.flatMap((d) => toBookCandidate(d) ?? []) };
+}
+
+/** Authors matching a name, for "with someone in mind?". */
+export async function searchAuthors(query: string): Promise<{ id: number; name: string; detail: string }[]> {
+  const data = await ol<{ docs: { key: string; name: string; top_work?: string; work_count?: number }[] }>(
+    "/search/authors.json",
+    { q: query, limit: 8 },
+    HOURS,
+  );
+  return data.docs.flatMap((a) => {
+    const id = Number(a.key.match(/OL(\d+)A/)?.[1] ?? 0);
+    if (!id || !latinName(a.name)) return [];
+    return [{ id, name: a.name, detail: a.top_work ? `author of ${a.top_work}` : "author" }];
+  });
+}
