@@ -89,9 +89,11 @@ export function PickFlow({
     return key && name && parsePersonKey(key) ? { key, name } : null;
   });
 
-  const deal = useCallback(async (from: ChosenPerson | null = person) => {
+  const [adaptations, setAdaptations] = useState(false);
+
+  const deal = useCallback(async (from: ChosenPerson | null = person, onlyAdaptations = adaptations) => {
     setStep({ kind: "dealing" });
-    const result = await dealDeck(media, taps, from?.key ?? null).catch(() => null);
+    const result = await dealDeck(media, taps, from?.key ?? null, Boolean(onlyAdaptations && !from)).catch(() => null);
     if (!result || !result.ok) {
       setStep({ kind: "error", message: result?.error ?? "Couldn't deal a deck just now." });
       return;
@@ -109,7 +111,7 @@ export function PickFlow({
       exitAs: "skipped",
       returning: null,
     });
-  }, [media, taps, person]);
+  }, [media, taps, person, adaptations]);
 
   const reveal = useCallback(
     (sessionId: string, pick: DeckCard, saves: DeckCard[]) => {
@@ -205,6 +207,8 @@ export function PickFlow({
             onDeal={() => deal()}
             person={person}
             onPerson={setPerson}
+            adaptations={adaptations}
+            onAdaptations={setAdaptations}
           />
         </>
       )}
@@ -264,7 +268,21 @@ export function PickFlow({
           secondary={{ label: "Change the taps", onClick: toTaps }}
         />
       )}
-      {step.kind === "empty" && !person && (
+      {step.kind === "empty" && !person && adaptations && (
+        <Message
+          title="No adaptations left for this mood."
+          body="The films and series of books that fit are seen, saved or turned down. Deal without the switch, or try another mood."
+          primary={{
+            label: "Deal without the switch",
+            onClick: () => {
+              setAdaptations(false);
+              void deal(null, false);
+            },
+          }}
+          secondary={{ label: "Change the taps", onClick: toTaps }}
+        />
+      )}
+      {step.kind === "empty" && !person && !adaptations && (
         <Message
           title="Nothing grabbed you."
           body={`That's useful too: those won't come back for a while. Deal ${DECK_SIZE} more, or change the mood.`}

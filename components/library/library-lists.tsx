@@ -10,6 +10,7 @@ import { whereTo } from "@/lib/watch";
 import { buttonClasses } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 import { Poster } from "@/components/pick/poster";
+import { linkChip, linkLine } from "@/components/pick/title-link";
 import type { FollowUpAnswer, Media } from "@/lib/picks/server";
 import { CheckInAnswers, WatchAnswer } from "./watch-prompt";
 
@@ -81,6 +82,16 @@ export function SavedList({ movies }: { movies: LibraryMovie[] }) {
               {bestsellerLabel(m) && <span className="text-xs text-muted">{bestsellerLabel(m)}</span>}
             </p>
             {m.book && makersLabel(m) && <p className="-mt-1 text-sm font-semibold">{makersLabel(m)}</p>}
+            {m.link && (
+              <span
+                className={cn(
+                  "self-start rounded-md px-2 py-0.5 text-xs font-bold",
+                  m.link.known ? "bg-fg text-bg" : "shadow-[inset_0_0_0_1.5px_var(--fg)]",
+                )}
+              >
+                {linkChip(m.link)}
+              </span>
+            )}
             {m.overview && <p className="line-clamp-2 text-sm text-muted">{m.overview}</p>}
             <WatchLinks movie={m} />
             <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1 text-sm font-semibold">
@@ -136,6 +147,7 @@ export function HistoryList({ entries }: { entries: HistoryEntry[] }) {
               </p>
               <h2 className="text-xl leading-tight font-black sm:text-2xl">{e.movie.title}</h2>
               <p className="text-sm text-muted">{meta(e.movie)}</p>
+              {e.movie.link && <p className="text-sm font-semibold">{linkLine(e.movie.link)}</p>}
               {e.why && <p className="max-w-[60ch] leading-snug">{e.why}</p>}
               {e.seen ? (
                 <Stars media={e.movie.media} id={e.movie.id} stars={e.stars} title={e.movie.title} />

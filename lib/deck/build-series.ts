@@ -22,6 +22,14 @@ import {
   type SeriesMood,
 } from "@/lib/taste/series-rules";
 import { LANGUAGE_LABEL, type MovieCandidate, type Taps } from "@/lib/taste/types";
+import {
+  BASED_ON_BOOK,
+  MAX_FROM_READ,
+  NO_ADAPT,
+  capFromBooks,
+  keepAdaptations,
+  type AdaptFilter,
+} from "@/lib/adaptations/rules";
 
 export type SeriesTaps = Taps & { mood: SeriesMood };
 
@@ -67,6 +75,24 @@ export function seriesPoolQueries(language: SeriesLanguage, taps: SeriesTaps, pr
     { ...base, ...mine, sortBy: "vote_average.desc", page: 1 },
     { ...base, ...anywhere, sortBy: "vote_average.desc", page: 1 },
     ...minis,
+  ];
+}
+
+/** "Adaptations only": shows TMDb tags as based on a book, in the mood's genres, anywhere. */
+export function seriesAdaptationQueries(language: SeriesLanguage, taps: SeriesTaps): SeriesQuery[] {
+  const rule = SERIES_MOODS[taps.mood];
+  const base = {
+    language,
+    genres: language === "en" ? rule.genres : (rule.indianGenres ?? rule.genres),
+    keywords: [BASED_ON_BOOK],
+    withoutKeywords: rule.withoutKeywords,
+    exclude: rule.exclude,
+    minVotes: SERIES_LANGUAGES[language].minVotes,
+    providers: [] as number[],
+  };
+  return [
+    { ...base, sortBy: "vote_average.desc", page: 1 },
+    { ...base, sortBy: "popularity.desc", page: 1 },
   ];
 }
 
@@ -117,6 +143,8 @@ export async function buildSeriesDeck(
     providers,
     people = NO_PEOPLE,
     extra = [],
+    adapt = NO_ADAPT,
+    adaptExtra = [],
   }: {
     exclude: Set<number>;
     taste: TasteProfile;
@@ -125,10 +153,14 @@ export async function buildSeriesDeck(
     people?: PeopleFilter;
     /** Followed people's shows, added to the pool. */
     extra?: MovieCandidate[];
+    /** Links to books, and how much each show moves from its book. */
+    adapt?: AdaptFilter;
+    /** Shows of books you've read, added to the pool. */
+    adaptExtra?: MovieCandidate[];
   },
 ): Promise<DealResult> {
   const queries = SERIES_LANGUAGE_LIST.flatMap((language) =>
-    seriesPoolQueries(language, taps, providers)
+    [...seriesPoolQueries(language, taps, providers), ...(adapt.only ? seriesAdaptationQueries(language, taps) : [])]
       .filter((q, i, all) => all.findIndex((o) => JSON.stringify(o) === JSON.stringify(q)) === i)
       .map((q) => ({ language, q })),
   );
@@ -136,10 +168,12 @@ export async function buildSeriesDeck(
 
   const pool = new Map<number, MovieCandidate>();
   const succeeded = new Set<string>();
+  const taggedAsBook = new Set<number>();
   results.forEach((r, i) => {
     if (r.status !== "fulfilled") return;
     succeeded.add(queries[i].language);
     for (const show of r.value) {
+      if (queries[i].q.keywords?.includes(BASED_ON_BOOK)) taggedAsBook.add(show.id);
       const existing = pool.get(show.id);
       pool.set(show.id, existing ? { ...existing, onMyServices: existing.onMyServices || show.onMyServices } : show);
     }
@@ -148,15 +182,24 @@ export async function buildSeriesDeck(
     const firstError = results.find((r) => r.status === "rejected") as PromiseRejectedResult | undefined;
     throw firstError?.reason ?? new Error("TMDb returned nothing.");
   }
-  for (const show of extra) if (!pool.has(show.id)) pool.set(show.id, show);
+  for (const show of [...extra, ...adaptExtra]) if (!pool.has(show.id)) pool.set(show.id, show);
 
   // Rank on what Discover knows, then fetch details for the best of each
   // language: commitment (seasons, episodes) is only in the details.
   const extraIds = new Set(extra.map((s) => s.id));
-  // As for films: followed people's shows skip the "everyone has seen it" markdown.
-  const followBonus = (s: MovieCandidate) => (extraIds.has(s.id) ? FOLLOW_BOOST + seriesMainstreamPenalty(s) : 0);
-  const ranked = [...pool.values()]
-    .filter((s) => !exclude.has(s.id) && seriesEligible(s, taps))
+  // As for films: followed people's shows, and shows of books you've read,
+  // skip the "everyone has seen it" markdown.
+  const followBonus = (s: MovieCandidate) => {
+    const fromBook = adapt.bonus.get(s.id) ?? 0;
+    const wanted = extraIds.has(s.id) || fromBook > 0;
+    return (extraIds.has(s.id) ? FOLLOW_BOOST : 0) + fromBook + (wanted ? seriesMainstreamPenalty(s) : 0);
+  };
+  const ranked = keepAdaptations(
+    [...pool.values()].filter((s) => !exclude.has(s.id) && seriesEligible(s, taps)),
+    (s) => s.id,
+    adapt,
+    taggedAsBook,
+  )
     .map((show) => ({ show, score: scoreSeries(show, taps, taste) + followBonus(show) }))
     .sort((a, b) => b.score - a.score);
   const shortlist = SERIES_LANGUAGE_LIST.flatMap((l) => ranked.filter((r) => r.show.language === l).slice(0, DETAIL_POOL[l]));
@@ -171,9 +214,14 @@ export async function buildSeriesDeck(
   });
   // Avoided people's shows drop out; followed people's rank higher.
   const peopleOf = (id: number) => details.get(id)?.people ?? null;
-  const scored = capFollowed(
-    applyPeople(fitting, (s) => peopleOf(s.movie.id), people, (s) => extraIds.has(s.movie.id)).sort((a, b) => b.score - a.score),
-    (s) => followedIn(peopleOf(s.movie.id) ?? [], people),
+  // Shows of books you've read: only the best few, so they don't fill every deck.
+  const scored = capFromBooks(
+    capFollowed(
+      applyPeople(fitting, (s) => peopleOf(s.movie.id), people, (s) => extraIds.has(s.movie.id)).sort((a, b) => b.score - a.score),
+      (s) => followedIn(peopleOf(s.movie.id) ?? [], people),
+    ),
+    (s) => (adapt.bonus.get(s.movie.id) ?? 0) > 0,
+    adapt.only ? MAX_FROM_READ.only : MAX_FROM_READ.mixed,
   );
 
   const top = [...scored].sort((a, b) => b.score - a.score).slice(0, CURATE_TOP).map((s) => s.movie);

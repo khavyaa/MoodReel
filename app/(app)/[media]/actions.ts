@@ -7,6 +7,7 @@ import { buildSeriesDeck } from "@/lib/deck/build-series";
 import { buildBookDeck } from "@/lib/deck/build-books";
 import { TmdbError } from "@/lib/tmdb/client";
 import {
+  markSeenOutsideDeck,
   completePick,
   createDeckSession,
   handledIds,
@@ -23,6 +24,8 @@ import { peopleFilterFor } from "@/lib/people/server";
 import { buildPersonDeck, followedWork } from "@/lib/people/works";
 import type { BookCandidate } from "@/lib/books/rules";
 import { parsePersonKey, personKey } from "@/lib/people/types";
+import { adaptFilterFor, screenCandidates, withLinks } from "@/lib/adaptations/server";
+import { NO_ADAPT } from "@/lib/adaptations/rules";
 
 const level = z.union([z.literal(0), z.literal(1), z.literal(2)]);
 const movieTaps = z.object({ mood: z.enum(MEDIA.movies.moods), energy: level, time: level });
@@ -42,33 +45,53 @@ export type DealResponse =
   | { ok: true; sessionId: string; cards: DeckCard[]; missingLanguages: string[] }
   | { ok: false; error: string };
 
-/** Deals a deck of films, series or books for these taps; with a person, only from their work. */
-export async function deal(media: Media, input: unknown, withPerson?: string | null): Promise<DealResponse> {
+/**
+ * Deals a deck of films, series or books for these taps; with a person, only
+ * from their work; with "adaptations only", only films or series of books.
+ */
+export async function deal(
+  media: Media,
+  input: unknown,
+  withPerson?: string | null,
+  adaptationsOnly?: boolean,
+): Promise<DealResponse> {
   const owner = await requireOwner();
   mediaSchema.parse(media);
+  const only = z.boolean().optional().parse(adaptationsOnly) === true && media !== "book";
   const source = media === "book" ? "Open Library" : "TMDb";
   try {
-    const [exclude, taste, providers, people] = await Promise.all([
+    const [exclude, taste, providers, people, adapt] = await Promise.all([
       handledIds(owner.id, media),
       tasteFor(owner.id, media),
       providersFor(owner.id),
       peopleFilterFor(owner.id),
+      adaptFilterFor(owner.id, media, only).catch((error) => {
+        console.error("[moodreel] adaptation links unavailable", error);
+        return { filter: { ...NO_ADAPT, only }, extraIds: [] as number[] };
+      }),
     ]);
     const seed = Date.now() % 100_000;
-    const extra = await followedWork(media, people.follow).catch(() => []);
-    const options = { exclude, taste, seed, providers, people };
+    const [extra, adaptExtra] = await Promise.all([
+      followedWork(media, people.follow).catch(() => []),
+      media === "book"
+        ? []
+        : screenCandidates(media, adapt.extraIds.filter((id) => !exclude.has(id)), providers).catch(() => []),
+    ]);
+    const options = { exclude, taste, seed, providers, people, adapt: adapt.filter, adaptExtra };
     const taps = media === "movie" ? movieTaps.parse(input) : media === "series" ? seriesTaps.parse(input) : bookTaps.parse(input);
     const person = parsePersonKey(withPerson);
     if (withPerson && !person) throw new z.ZodError([]);
-    const { cards, missingLanguages, curatedByAi } = person
+    const dealt = person
       ? await buildPersonDeck(media, taps, person, { exclude, taste, providers, followed: people.follow.has(personKey(person)) })
       : media === "movie"
         ? await buildMovieDeck(movieTaps.parse(input), { ...options, extra })
         : media === "series"
           ? await buildSeriesDeck(seriesTaps.parse(input), { ...options, extra })
           : await buildBookDeck(bookTaps.parse(input), { ...options, extra: extra as BookCandidate[] });
+    const { missingLanguages, curatedByAi } = dealt;
+    const cards = await withLinks(owner.id, dealt.cards);
     console.info(
-      `[moodreel] dealt ${cards.length} ${media} cards${person ? ` from ${personKey(person)}` : ""} (${curatedByAi ? "AI-curated" : "rules only"})`,
+      `[moodreel] dealt ${cards.length} ${media} cards${person ? ` from ${personKey(person)}` : ""}${only ? " (adaptations only)" : ""}, ${cards.filter((c) => c.link).length} linked (${curatedByAi ? "AI-curated" : "rules only"})`,
     );
     const sessionId = await createDeckSession(owner.id, media, taps, cards.map((c) => c.id));
     return { ok: true, sessionId, cards, missingLanguages };
@@ -80,6 +103,12 @@ export async function deal(media: Media, input: unknown, withPerson?: string | n
     }
     return { ok: false, error: `Couldn't reach ${source} just now. Try again in a moment.` };
   }
+}
+
+/** "I've read it" for a film's book (or "I've seen it" for a book's film), from the pick screen. */
+export async function knowIt(media: Media, title: unknown) {
+  const owner = await requireOwner();
+  await markSeenOutsideDeck(owner.id, mediaSchema.parse(media), titleSchema.parse(title));
 }
 
 const swipeSchema = z.enum(["saved", "skipped", "seen", "disliked"]);

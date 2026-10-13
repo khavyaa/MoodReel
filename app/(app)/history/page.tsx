@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { HistoryList, type HistoryEntry } from "@/components/library/library-lists";
 import { LibrarySkeleton } from "@/components/library/library-skeleton";
 import { libraryKey, libraryTitles } from "@/lib/library";
+import { withLinksByKey } from "@/lib/adaptations/server";
 import { pickHistory, providersFor } from "@/lib/picks/server";
 import { requireOwner } from "@/lib/session";
 
@@ -39,7 +40,7 @@ async function History() {
     );
   }
 
-  const cards = await libraryTitles(picks, await providersFor(owner.id));
+  const cards = await withLinksByKey(owner.id, await libraryTitles(picks, await providersFor(owner.id)));
   const entries: HistoryEntry[] = picks.flatMap((p) => {
     const movie = cards.get(libraryKey(p.media, p.id));
     if (!movie) return [];

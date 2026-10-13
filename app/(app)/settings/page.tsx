@@ -10,6 +10,7 @@ import { requireOwner } from "@/lib/session";
 import { providersFor } from "@/lib/picks/server";
 import { regionProviders } from "@/lib/tmdb/providers";
 import { nytStatus } from "@/lib/books/nyt";
+import { adaptationsStatus } from "@/lib/adaptations/sync";
 import { ServicesPicker } from "@/components/settings/services-picker";
 
 export const metadata = { title: "Settings" };
@@ -45,6 +46,12 @@ export default function SettingsPage() {
         <Section title="Book bestsellers" note="New York Times lists, synced daily at 8:00 IST.">
           <Suspense fallback={<p className="text-muted">Checking the last sync…</p>}>
             <Bestsellers />
+          </Suspense>
+        </Section>
+
+        <Section title="Books on screen" note="Which films and series are based on which books, from Wikidata, synced weekly.">
+          <Suspense fallback={<p className="text-muted">Checking the last sync…</p>}>
+            <Adaptations />
           </Suspense>
         </Section>
 
@@ -112,6 +119,39 @@ async function Bestsellers() {
       <dd>
         {status.books.toLocaleString("en-IN")} {status.books === 1 ? "bestseller" : "bestsellers"},{" "}
         {status.matched.toLocaleString("en-IN")} matched to Open Library
+      </dd>
+      {run && run.report.errors.length > 0 && (
+        <>
+          <dt className="font-semibold">Problems</dt>
+          <dd className="font-semibold">{run.report.errors.join("; ")}</dd>
+        </>
+      )}
+    </dl>
+  );
+}
+
+/** How the weekly Wikidata sync of book ↔ film links is doing. */
+async function Adaptations() {
+  await requireOwner();
+  const status = await adaptationsStatus().catch(() => null);
+  if (!status) return <p className="text-muted">Couldn&apos;t read the sync status just now.</p>;
+  const run = status.lastRun;
+  return (
+    <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-2 text-sm">
+      <dt className="text-muted">Last sync</dt>
+      <dd>
+        {run
+          ? `${SYNC_TIME.format(run.at)} · ${
+              run.report.wikidata
+                ? `${run.report.added.toLocaleString("en-IN")} new ${run.report.added === 1 ? "link" : "links"} from Wikidata`
+                : `${run.report.checked.toLocaleString("en-IN")} books checked`
+            }`
+          : "Not yet: the first runs with the next daily sync at 8:00 IST"}
+      </dd>
+      <dt className="text-muted">Links</dt>
+      <dd>
+        {status.films.toLocaleString("en-IN")} films and {status.series.toLocaleString("en-IN")} series, from{" "}
+        {status.books.toLocaleString("en-IN")} books
       </dd>
       {run && run.report.errors.length > 0 && (
         <>

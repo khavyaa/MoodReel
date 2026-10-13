@@ -7,6 +7,7 @@ import { LibrarySkeleton } from "@/components/library/library-skeleton";
 import { SavedScreen } from "@/components/library/saved-screen";
 import { PeopleSection } from "@/components/people/people-section";
 import { libraryKey, libraryTitles } from "@/lib/library";
+import { withLinksByKey } from "@/lib/adaptations/server";
 import { inProgress, providersFor, savedTitles } from "@/lib/picks/server";
 import { requireOwner } from "@/lib/session";
 
@@ -61,7 +62,7 @@ async function Saved() {
       ...reading.map((r) => ({ media: "book" as const, id: r.id })),
     ],
     providers,
-  );
+  ).then((found) => withLinksByKey(owner.id, found));
   const items = saved.flatMap((s) => cards.get(libraryKey(s.media, s.id)) ?? []);
   const entries = (media: "series" | "book", list: { id: number; since: Date }[]) =>
     list.flatMap((w) => {

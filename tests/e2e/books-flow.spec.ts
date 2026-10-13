@@ -8,12 +8,17 @@ const SESSION = "playwright/.cache/books-flow-session.json";
 
 test.beforeAll(async ({ browser }) => {
   await resetDatabase();
-  await query("delete from book_signals; delete from nyt_sync; delete from sync_runs;");
+  await query("delete from book_signals; delete from nyt_sync; delete from sync_runs; delete from adaptations;");
   const context = await browser.newContext({ storageState: undefined });
   const page = await context.newPage();
   await claimAccount(page, E2E_SETUP_TOKEN);
   await context.storageState({ path: SESSION });
   await context.close();
+});
+
+// Links are shared reference data, not per user: leave none behind for other specs.
+test.afterAll(async () => {
+  await query("delete from adaptations");
 });
 
 test.use({ storageState: SESSION });
@@ -33,6 +38,22 @@ test("the NYT sync only runs for Vercel's cron, and stores adult-list bestseller
   );
   // The young-adult list was ignored; the hardcover-fiction bestseller was matched to its Open Library work.
   expect(signals).toEqual([{ isbn13: "9780000007100", work_id: 7100, weeks_on_list: 12 }]);
+
+  // The same cron syncs book ↔ film links from Wikidata, the first time and then weekly.
+  expect(report.adaptations).toMatchObject({ wikidata: true, films: 2, series: 1, added: 3, editions: 1, errors: [] });
+  const links = await query<{ book_id: number; media: string; screen_id: number }>(
+    "select book_id, media, screen_id from adaptations order by screen_id",
+  );
+  expect(links).toEqual([
+    { book_id: 7004, media: "movie", screen_id: 1011 },
+    { book_id: 7005, media: "movie", screen_id: 1012 }, // named by its edition
+    { book_id: 7006, media: "series", screen_id: 5003 },
+  ]);
+  // Not due again the next day: only the daily check of book ids runs.
+  const again = await (await request.get("/api/cron/nyt", { headers: { authorization: "Bearer e2e-cron-secret" } })).json();
+  expect(again.adaptations).toMatchObject({ wikidata: false, added: 0, checked: 3, moved: 0 });
+  // That second run fetched no new NYT weeks; drop its report so Settings shows the first one.
+  await query("delete from sync_runs where kind = 'nyt' and ran_at = (select max(ran_at) from sync_runs where kind = 'nyt')");
 });
 
 test("Settings shows how the last bestseller sync went", async ({ page }) => {
@@ -42,6 +63,10 @@ test("Settings shows how the last bestseller sync went", async ({ page }) => {
   await expect(section.getByText(/\d+ weeks? synced, latest 4 Oct 2026/)).toBeVisible();
   await expect(section.getByText("1 bestseller, 1 matched to Open Library")).toBeVisible();
   await expect(section.getByText("Problems")).toHaveCount(0);
+
+  const links = page.getByRole("heading", { name: "Books on screen" }).locator("xpath=../..");
+  await expect(links.getByText("2 films and 1 series, from 3 books")).toBeVisible();
+  await expect(links.getByText(/3 books checked/)).toBeVisible();
 });
 
 test("books: taps → deck → head-to-head → read next, on your Reading list", async ({ page }) => {

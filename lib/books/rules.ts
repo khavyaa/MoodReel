@@ -21,6 +21,8 @@ export type BookCandidate = MovieCandidate & {
   readCount: number;
   /** Weeks on the NYT lists, from the weekly sync, or estimated from Open Library's NYT subject tags. */
   nytWeeks: number;
+  /** Whether Open Library has an English edition (search with `lang=en` returns it first); unknown without edition data. */
+  englishEdition?: boolean;
 };
 
 /* ------------------------------------------------------------------ gates */

@@ -139,7 +139,8 @@ lib/deck/          deck composition, head-to-head, AI re-weighting, the movie an
 lib/tmdb/          TMDb client (retries flaky connections), movie, series and provider queries
 lib/books/         Open Library client, NYT bestseller sync, book rules
 lib/people/        follow / avoid / suggest rules, a person's work, decks from one person
-app/api/cron/      the daily NYT sync (Vercel cron, guarded by CRON_SECRET)
+lib/adaptations/   book ↔ film/series links: Wikidata sync, ranking rules, links on cards
+app/api/cron/      the daily NYT sync and weekly Wikidata sync (Vercel cron, guarded by CRON_SECRET)
 lib/ai/            AI Gateway calls, each with a rule-based fallback
 components/pick/   the flow: taps, deck, head-to-head, pick
 proxy.ts           sends signed-out requests to /sign-in
@@ -154,6 +155,16 @@ tappable on every card. Follow someone and their unseen work joins your decks (s
 someone and nothing of theirs is dealt. "Deal from …" (a person's page, the start screen's
 search, or People in Saved) makes a deck from their work only. People you keep loving (three
 titles, four for actors) are suggested. Rules: `lib/people/rules.ts`.
+
+**Books on screen.** Which films and series are based on which books comes from Wikidata (TMDb ids
+P4947/P4983, "based on" P144, Open Library id P648), synced weekly by the same cron; on other days
+the cron moves links off Open Library works that have since been merged. A film whose credits name
+the novel's author ("Novel" job) but has no link is matched on Open Library by title and author,
+and the link is kept. The pull is one way: a film or series of a book you've read ranks higher
+(more if you rated the book well, at most three per deck) with a "You've read the book" badge,
+while a book you know from the screen ranks well down. "Adaptations only" on the start screen
+deals only films or series based on a book. Cards, the pick screen ("I've read it"), Saved and
+History show the link. Rules: `lib/adaptations/rules.ts`.
 
 **Offline.** Offline, swipes, saves and check-ins wait and are sent when the connection returns
 (Next's `useOffline`), and a banner says so. A service worker (`public/sw.js`, production only) lets
