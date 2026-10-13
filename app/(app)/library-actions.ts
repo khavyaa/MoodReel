@@ -20,6 +20,7 @@ import {
 import type { DeckCard } from "@/lib/deck/build-movies";
 import { seriesCard } from "@/lib/deck/build-series";
 import { MAX_SAVES } from "@/lib/deck/finale";
+import { withLinks } from "@/lib/adaptations/server";
 import { bookCardsFor, detailsToCandidate, detailsToCard, movieDetailsFor, seriesDetailsFor } from "@/lib/library";
 import { withNytWeeks } from "@/lib/deck/build-books";
 import { booksByWork } from "@/lib/books/openlibrary";
@@ -124,6 +125,7 @@ export async function pickFromSaved(input: unknown): Promise<SavedPickResponse> 
       .slice(0, MAX_SAVES)
       .map(({ d }) => seriesCard(d, providers));
   }
+  best = await withLinks(owner.id, best);
   if (best.length === 0) {
     return {
       ok: false,

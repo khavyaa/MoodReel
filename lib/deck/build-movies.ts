@@ -8,6 +8,15 @@ import { servicesOn } from "@/lib/tmdb/providers";
 import type { SeriesFacts } from "@/lib/taste/series-rules";
 import type { Person } from "@/lib/people/types";
 import {
+  BASED_ON_BOOK,
+  MAX_FROM_READ,
+  NO_ADAPT,
+  capFromBooks,
+  keepAdaptations,
+  type AdaptFilter,
+  type TitleLink,
+} from "@/lib/adaptations/rules";
+import {
   GENRE,
   LANGUAGES,
   MAX_ANIMATED,
@@ -52,6 +61,8 @@ export type DeckCard = {
   followedName?: string | null;
   /** Authors, pages, NYT weeks: books only. Ratings are then Open Library's, out of 5. */
   book: BookFacts | null;
+  /** The book it's based on, or a book's film or series. */
+  link?: TitleLink | null;
 };
 
 export type BookFacts = {
@@ -96,6 +107,25 @@ export function poolQueries(language: Language, taps: Taps, providers: number[])
     { ...lesserSeen, ...anywhere, sortBy: "vote_average.desc", page: 1 },
     { ...base, ...mine, sortBy: "vote_average.desc", page: 1 },
     { ...base, ...mine, sortBy: "popularity.desc", page: 1 },
+  ];
+}
+
+/** "Adaptations only": films TMDb tags as based on a book, in the mood's genres, anywhere. */
+export function adaptationQueries(language: Language, taps: Taps): DiscoverQuery[] {
+  const rule = MOVIE_MOODS[taps.mood];
+  const base = {
+    language,
+    genres: language === "en" ? rule.genres : (rule.indianGenres ?? rule.genres),
+    keywords: [BASED_ON_BOOK],
+    excludeGenres: rule.exclude,
+    minVotes: LANGUAGES[language].minVotes,
+    runtimeMax: RUNTIME_LIMIT[taps.time],
+    providers: [] as number[],
+  };
+  return [
+    { ...base, sortBy: "vote_average.desc", page: 1 },
+    { ...base, sortBy: "vote_average.desc", page: 2 },
+    { ...base, sortBy: "popularity.desc", page: 1 },
   ];
 }
 
@@ -170,6 +200,8 @@ export async function buildMovieDeck(
     providers,
     people = NO_PEOPLE,
     extra = [],
+    adapt = NO_ADAPT,
+    adaptExtra = [],
   }: {
     exclude: Set<number>;
     taste: TasteProfile;
@@ -178,10 +210,14 @@ export async function buildMovieDeck(
     people?: PeopleFilter;
     /** Followed people's films, added to the pool. */
     extra?: MovieCandidate[];
+    /** Links to books, and how much each film moves from its book. */
+    adapt?: AdaptFilter;
+    /** Films of books you've read, added to the pool. */
+    adaptExtra?: MovieCandidate[];
   },
 ): Promise<DealResult> {
   const queries = MOVIE_LANGUAGES.flatMap((language) =>
-    poolQueries(language, taps, providers)
+    [...poolQueries(language, taps, providers), ...(adapt.only ? adaptationQueries(language, taps) : [])]
       // With no services ticked, the services-only pools repeat the open ones.
       .filter((q, i, all) => all.findIndex((o) => JSON.stringify(o) === JSON.stringify(q)) === i)
       .map((q) => ({ language, q })),
@@ -190,10 +226,12 @@ export async function buildMovieDeck(
 
   const pool = new Map<number, MovieCandidate>();
   const succeeded = new Set<string>();
+  const taggedAsBook = new Set<number>();
   results.forEach((r, i) => {
     if (r.status !== "fulfilled") return;
     succeeded.add(queries[i].language);
     for (const movie of r.value) {
+      if (queries[i].q.keywords?.includes(BASED_ON_BOOK)) taggedAsBook.add(movie.id);
       const existing = pool.get(movie.id);
       // A film found by any services-only query is streamable for you.
       pool.set(movie.id, existing ? { ...existing, onMyServices: existing.onMyServices || movie.onMyServices } : movie);
@@ -203,14 +241,23 @@ export async function buildMovieDeck(
     const firstError = results.find((r) => r.status === "rejected") as PromiseRejectedResult | undefined;
     throw firstError?.reason ?? new Error("TMDb returned nothing.");
   }
-  for (const movie of extra) if (!pool.has(movie.id)) pool.set(movie.id, movie);
+  for (const movie of [...extra, ...adaptExtra]) if (!pool.has(movie.id)) pool.set(movie.id, movie);
 
-  const candidates = [...pool.values()].filter((m) => !exclude.has(m.id) && eligible(m, taps));
-  // Followed people's films get their boost now, or famous ones would be cut
-  // before their details are fetched. They also skip the "everyone has seen it"
-  // markdown: for someone you follow, famous is fine.
+  const candidates = keepAdaptations(
+    [...pool.values()].filter((m) => !exclude.has(m.id) && eligible(m, taps)),
+    (m) => m.id,
+    adapt,
+    taggedAsBook,
+  );
+  // Followed people's films, and films of books you've read, get their boost
+  // now, or famous ones would be cut before their details are fetched. They
+  // also skip the "everyone has seen it" markdown: for those, famous is fine.
   const extraIds = new Set(extra.map((m) => m.id));
-  const followBonus = (m: MovieCandidate) => (extraIds.has(m.id) ? FOLLOW_BOOST + mainstreamPenalty(m) : 0);
+  const followBonus = (m: MovieCandidate) => {
+    const fromBook = adapt.bonus.get(m.id) ?? 0;
+    const wanted = extraIds.has(m.id) || fromBook > 0;
+    return (extraIds.has(m.id) ? FOLLOW_BOOST : 0) + fromBook + (wanted ? mainstreamPenalty(m) : 0);
+  };
   const ranked = capAnimated(
     candidates.map((movie) => ({ movie, score: scoreMovie(movie, taps, taste) + followBonus(movie) })),
   ).sort((a, b) => b.score - a.score);
@@ -224,9 +271,14 @@ export async function buildMovieDeck(
   ];
   const details = await detailsById(shortlist.map((s) => s.movie.id));
   const peopleOf = (id: number) => details.get(id)?.people ?? null;
-  const scored = capFollowed(
-    applyPeople(shortlist, (s) => peopleOf(s.movie.id), people, (s) => extraIds.has(s.movie.id)).sort((a, b) => b.score - a.score),
-    (s) => followedIn(peopleOf(s.movie.id) ?? [], people),
+  // Films of books you've read: only the best few, so they don't fill every deck.
+  const scored = capFromBooks(
+    capFollowed(
+      applyPeople(shortlist, (s) => peopleOf(s.movie.id), people, (s) => extraIds.has(s.movie.id)).sort((a, b) => b.score - a.score),
+      (s) => followedIn(peopleOf(s.movie.id) ?? [], people),
+    ),
+    (s) => (adapt.bonus.get(s.movie.id) ?? 0) > 0,
+    adapt.only ? MAX_FROM_READ.only : MAX_FROM_READ.mixed,
   );
 
   // AI gets a say on the strongest candidates; the rules still compose the deck.

@@ -20,6 +20,7 @@ import type { TasteProfile } from "@/lib/taste/rules";
 import { NO_PEOPLE, applyPeople, capFollowed, followedIn, type PeopleFilter } from "@/lib/people/rules";
 import type { Person } from "@/lib/people/types";
 import type { Taps } from "@/lib/taste/types";
+import { NO_ADAPT, keepAdaptations, type AdaptFilter } from "@/lib/adaptations/rules";
 
 export type BookTaps = Taps & { mood: BookMood };
 
@@ -97,6 +98,7 @@ export async function buildBookDeck(
     seed,
     people = NO_PEOPLE,
     extra = [],
+    adapt = NO_ADAPT,
   }: {
     exclude: Set<number>;
     taste: TasteProfile;
@@ -104,6 +106,8 @@ export async function buildBookDeck(
     people?: PeopleFilter;
     /** Followed authors' books, added to the pool. */
     extra?: BookCandidate[];
+    /** Links to films and series, and how much each book moves from them. */
+    adapt?: AdaptFilter;
   },
 ): Promise<DealResult> {
   const results = await Promise.allSettled(bookPoolQueries(taps).map((q) => searchBooks(q)));
@@ -123,9 +127,14 @@ export async function buildBookDeck(
     for (const b of found.values()) pool.set(b.id, b);
   }
 
-  const candidates = (await withNytWeeks([...pool.values()])).filter((b) => !exclude.has(b.id) && bookEligible(b, taps));
+  const candidates = keepAdaptations(
+    (await withNytWeeks([...pool.values()])).filter((b) => !exclude.has(b.id) && bookEligible(b, taps)),
+    (b) => b.id,
+    adapt,
+  );
+  // A book you know from the screen ranks well down: you rarely go back for it.
   const ranked = candidates
-    .map((movie) => ({ movie, score: scoreBook(movie, taps, taste) }))
+    .map((movie) => ({ movie, score: scoreBook(movie, taps, taste) + (adapt.bonus.get(movie.id) ?? 0) }))
     .sort((a, b) => b.score - a.score);
   // Avoided authors drop out, followed ones rank higher; then one book per author.
   const scored = capFollowed(

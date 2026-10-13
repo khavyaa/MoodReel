@@ -167,6 +167,7 @@ export function toBookCandidate(doc: OlDoc, nytWeeks = 0): BookCandidate | null 
     ratingsCount: doc.ratings_count ?? 0,
     readCount: doc.already_read_count ?? 0,
     nytWeeks: Math.max(nytWeeks, nytWeeksFromSubjects(subjects)),
+    englishEdition: doc.editions?.docs?.length ? doc.editions.docs.some((e) => e.language?.includes("eng")) : undefined,
   };
 }
 
@@ -219,6 +220,53 @@ export async function booksByWork(ids: number[]): Promise<Map<number, BookCandid
 export async function bookByIsbn(isbn: string): Promise<BookCandidate | null> {
   const data = await ol<{ docs: OlDoc[] }>("/search.json", { q: `isbn:${isbn}`, fields: FIELDS, lang: "en", limit: 1 }, 7 * 24 * HOURS);
   return data.docs[0] ? toBookCandidate(data.docs[0]) : null;
+}
+
+/** An edition (OL…M) to its work number, for Wikidata links that name an edition. */
+export async function workOfEdition(edition: string): Promise<number | null> {
+  const data = await ol<{ works?: { key: string }[] }>(`/books/${edition}.json`, {}, 30 * 24 * HOURS).catch(() => null);
+  const key = data?.works?.[0]?.key;
+  return key ? workNumber(key) : null;
+}
+
+/** A book by title and author, for a film whose credits say "Novel by …". Null unless Open Library finds it. */
+export async function findWork(title: string, author: string): Promise<BookCandidate | null> {
+  const clean = (s: string) => s.replace(/["\\]/g, "").trim();
+  const data = await ol<{ docs: OlDoc[] }>(
+    "/search.json",
+    { q: `title:"${clean(title)}" author:"${clean(author)}"`, fields: FIELDS, sort: "readinglog", lang: "en", limit: 3 },
+    7 * 24 * HOURS,
+  );
+  for (const d of data.docs) {
+    const book = toBookCandidate(d);
+    if (book) return book;
+  }
+  return null;
+}
+
+/** Which of these work numbers Open Library's search knows; a merged (old) work number isn't among them. */
+export async function existingWorks(ids: number[]): Promise<Set<number>> {
+  const found = new Set<number>();
+  const chunks = Array.from({ length: Math.ceil(ids.length / 40) }, (_, i) => ids.slice(i * 40, i * 40 + 40));
+  for (let i = 0; i < chunks.length; i += 4) {
+    const results = await Promise.all(
+      chunks.slice(i, i + 4).map((chunk) =>
+        ol<{ docs: { key: string }[] }>(
+          "/search.json",
+          { q: chunk.map((id) => `key:"/works/${workKey(id)}"`).join(" OR "), fields: "key", limit: chunk.length },
+          24 * HOURS,
+        ),
+      ),
+    );
+    for (const r of results) for (const d of r.docs) found.add(workNumber(d.key) ?? 0);
+  }
+  return found;
+}
+
+/** Where a merged work now lives: its new number, or null when it isn't a redirect. */
+export async function redirectOf(id: number): Promise<number | null> {
+  const work = await ol<{ type?: { key?: string }; location?: string }>(`/works/${workKey(id)}.json`, {}, 30 * 24 * HOURS).catch(() => null);
+  return work?.type?.key === "/type/redirect" && work.location ? workNumber(work.location) : null;
 }
 
 /** The work's description, which search results don't carry. */

@@ -91,6 +91,9 @@ export async function discoverMovies(q: DiscoverQuery): Promise<MovieCandidate[]
 
 /* ---------------------------------------------------------------- details */
 
+/** Credit jobs that name the author of the book a film is based on. */
+const SOURCE_JOBS = new Set(["Novel", "Book"]);
+
 export type MovieDetails = {
   id: number;
   title: string;
@@ -107,6 +110,8 @@ export type MovieDetails = {
   cast: string[];
   /** Directors, up to two writers and three lead actors, with TMDb person ids. */
   people: Person[];
+  /** The author credited for the book it's based on ("Novel" or "Book" in the credits), if any. */
+  basedOn: string | null;
   trailerKey: string | null;
   /** Every flat-rate service streaming it in your region; filter with servicesOn(). */
   providers: { id: number; name: string }[];
@@ -152,6 +157,7 @@ export async function getMovieDetails(id: number): Promise<MovieDetails> {
     directors: (d.credits?.crew ?? []).filter((c) => c.job === "Director").map((c) => c.name),
     cast: (d.credits?.cast ?? []).slice(0, 4).map((c) => c.name),
     people: moviePeople(d.credits),
+    basedOn: (d.credits?.crew ?? []).find((c) => SOURCE_JOBS.has(c.job))?.name ?? null,
     trailerKey: trailer?.key ?? null,
     providers: (region?.flatrate ?? []).map((p) => ({ id: p.provider_id, name: p.provider_name })),
     votes: base.voteCount,

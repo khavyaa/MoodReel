@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, animate, motion, useMotionValue, useReducedMotion, useTransform } from "framer-motion";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, Heart, Star, Undo2 } from "lucide-react";
 import { PeopleLine } from "@/components/people/people-line";
+import { LinkStrip, knownLabel } from "./title-link";
 import type { DeckCard } from "@/lib/deck/build-movies";
 import { MAX_SAVES } from "@/lib/deck/finale";
 import { airingLabel, bestsellerLabel, cardMeta, makersLabel, ratingCountLabel } from "@/lib/card-meta";
@@ -304,7 +305,9 @@ function CardInfo({ card }: { card: DeckCard }) {
             <Heart className="size-3.5 fill-current" aria-hidden /> You follow {card.followedName}
           </Badge>
         )}
+        {knownLabel(card.link) && <Badge strong>{knownLabel(card.link)}</Badge>}
       </div>
+      {card.link && <LinkStrip link={card.link} />}
 
       {card.genres.length > 0 && <p className="hidden text-sm text-muted sm:block">{card.genres.slice(0, 4).join(" · ")}</p>}
       <Overview text={card.overview} />

@@ -209,3 +209,29 @@ export const peoplePrefs = pgTable(
   },
   (t) => [primaryKey({ columns: [t.userId, t.source, t.personId] })],
 );
+
+/**
+ * Books and the films or series made from them: book (Open Library work) ↔
+ * screen (TMDb movie or TV id). Shared reference data, synced weekly from
+ * Wikidata, plus links found from a film's credits ("Novel by …") when
+ * Wikidata has none.
+ */
+export const adaptations = pgTable(
+  "adaptations",
+  {
+    bookId: integer("book_id").notNull(),
+    /** "movie" or "series". */
+    media: mediaType("media").notNull(),
+    screenId: integer("screen_id").notNull(),
+    /** Where the link came from: "wikidata" or "credits". */
+    via: text("via").notNull(),
+    /** Whether the book id has been checked against Open Library's merged works (Wikidata can name an old one). */
+    checked: boolean("checked").notNull().default(false),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.bookId, t.media, t.screenId] }),
+    index("adaptations_screen_idx").on(t.media, t.screenId),
+    index("adaptations_unchecked_idx").on(t.bookId).where(sql`not ${t.checked}`),
+  ],
+);

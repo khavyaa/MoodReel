@@ -33,6 +33,11 @@ const FILMS = [
   film(4999, "Hindi Ordinary Romance", "hi", { genre_ids: [10749, 18], vote_average: 6.4 }),
 ];
 
+// TMDb's "based on novel or book" keyword (818): these films come back for it.
+const BASED_ON_BOOK = new Set([1015, 1016, 1017, 1018, 1019, 2004]);
+// A film whose credits name the novel's author ("Novel" job), for the credits fallback.
+const NOVEL_BY = { 1018: "Author 9" };
+
 // Series: crime dramas in English and Hindi, plus two that must never be dealt.
 function show(id, name, language, extra = {}) {
   return {
@@ -115,6 +120,9 @@ const BOOKS = [
 
 function olSearch(url) {
   const q = url.searchParams.get("q") || "";
+  // A film's book by title and author (the credits fallback): matched on the author here.
+  const byName = q.match(/author:"([^"]+)"/);
+  if (byName) return BOOKS.filter((b) => b.author_name[0] === byName[1]);
   const byAuthor = q.match(/author_key:(OL\d+A)/);
   if (byAuthor) return BOOKS.filter((b) => b.author_key?.includes(byAuthor[1]));
   const keys = [...q.matchAll(/key:"\/works\/(OL\d+W)"/g)].map((m) => `/works/${m[1]}`);
@@ -156,6 +164,7 @@ function filmCredits(f) {
     crew: [
       { id: d.id, name: d.name, job: "Director", department: "Directing" },
       { id: 760, name: "Wren Writer", job: "Screenplay", department: "Writing" },
+      ...(NOVEL_BY[f.id] ? [{ id: 790, name: NOVEL_BY[f.id], job: "Novel", department: "Writing" }] : []),
     ],
     cast: [
       { id: 780, name: "Lead Actor", order: 0 },
@@ -193,7 +202,9 @@ http
     if (url.pathname === "/3/discover/movie") {
       const lang = url.searchParams.get("with_original_language");
       const page = Number(url.searchParams.get("page") || 1);
-      const results = page === 1 ? FILMS.filter((f) => f.original_language === lang) : [];
+      const bookOnly = url.searchParams.get("with_keywords") === "818";
+      const results =
+        page === 1 ? FILMS.filter((f) => f.original_language === lang && (!bookOnly || BASED_ON_BOOK.has(f.id))) : [];
       return json(res, { page, results, total_pages: 1, total_results: results.length });
     }
     const person = url.pathname.match(/^\/3\/person\/(\d+)$/);
@@ -233,6 +244,14 @@ http
       if (!b) return json(res, { error: "notfound" }, 404);
       return json(res, { description: `${b.title} is a tense book used by the MoodReel end-to-end tests. The detective and the killer play a long game in the city.` });
     }
+    // Wikidata's query service: films (P4947) and series (P4983) based on books, as CSV.
+    if (url.pathname === "/wikidata/sparql") {
+      const q = url.searchParams.get("query") || "";
+      res.writeHead(200, { "content-type": "text/csv" });
+      return res.end(q.includes("P4947") ? "tmdb,ol\r\n1011,OL7004W\r\n1012,OL5000M\r\n" : "tmdb,ol\r\n5003,OL7006W\r\n");
+    }
+    // An edition, for Wikidata links that name one instead of the work.
+    if (url.pathname === "/ol/books/OL5000M.json") return json(res, { works: [{ key: "/works/OL7005W" }] });
     if (url.pathname === "/nyt/lists/full-overview.json") {
       if (!url.searchParams.get("api-key")) return json(res, { fault: "no key" }, 401);
       return json(res, NYT_OVERVIEW);

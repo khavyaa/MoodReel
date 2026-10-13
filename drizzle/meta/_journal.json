@@ -50,6 +50,13 @@
       "when": 1791908095514,
       "tag": "0006_people_prefs",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791912886696,
+      "tag": "0007_adaptations",
+      "breakpoints": true
     }
   ]
 }

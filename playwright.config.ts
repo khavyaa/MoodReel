@@ -20,6 +20,7 @@ const env = {
   OPEN_LIBRARY_BASE_URL: `http://localhost:${MOCK_TMDB_PORT}/ol`,
   NYT_BASE_URL: `http://localhost:${MOCK_TMDB_PORT}/nyt`,
   NYT_API_KEY: "e2e-fake-nyt-key",
+  WIKIDATA_SPARQL_URL: `http://localhost:${MOCK_TMDB_PORT}/wikidata/sparql`,
   CRON_SECRET: "e2e-cron-secret",
   DATABASE_URL:
     process.env.DATABASE_URL_TEST ?? "postgres://moodreel:moodreel@localhost:5433/moodreel_test",

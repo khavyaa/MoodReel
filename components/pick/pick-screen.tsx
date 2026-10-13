@@ -7,6 +7,7 @@ import { bestsellerLabel, cardMeta, makersLabel, readLine, startLine } from "@/l
 import { whereTo } from "@/lib/watch";
 import { buttonClasses } from "@/components/ui/button";
 import { Poster } from "./poster";
+import { LinkStrip, PickBookPanel } from "./title-link";
 
 export function PickScreen({
   pick,
@@ -71,6 +72,8 @@ export function PickScreen({
             </span>
           ))}
         </div>
+
+        {pick.link && (pick.link.media === "book" ? <PickBookPanel link={pick.link} /> : <LinkStrip link={pick.link} />)}
 
         <div className="flex flex-wrap gap-3 pt-2">
           <a href={where.href} target="_blank" rel="noreferrer noopener" className={buttonClasses("solid", "lg")}>

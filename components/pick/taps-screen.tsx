@@ -67,6 +67,8 @@ export function TapsScreen({
   onDeal,
   person = null,
   onPerson,
+  adaptations = false,
+  onAdaptations,
 }: {
   media: "movie" | "series" | "book";
   value: TapsValue;
@@ -74,6 +76,9 @@ export function TapsScreen({
   onDeal: () => void;
   person?: ChosenPerson | null;
   onPerson?: (next: ChosenPerson | null) => void;
+  /** "Adaptations only": films and series only. */
+  adaptations?: boolean;
+  onAdaptations?: (next: boolean) => void;
 }) {
   const media = MEDIA[kind === "movie" ? "movies" : kind === "series" ? "series" : "books"];
   const series = kind === "series";
@@ -128,12 +133,20 @@ export function TapsScreen({
           </div>
         </fieldset>
 
+        {onAdaptations && !book && !person && (
+          <AdaptationsSwitch on={adaptations} onChange={onAdaptations} noun={series ? "Series" : "Films"} />
+        )}
+
         <button
           type="button"
           onClick={onDeal}
           className="mt-2 inline-flex h-14 w-full items-center justify-center gap-3 rounded-full bg-accent px-8 text-lg font-bold text-on-accent transition-opacity hover:opacity-90 sm:w-auto sm:self-start"
         >
-          {person ? `Deal from ${person.name}` : `Deal ${DECK_SIZE} ${series ? "series" : book ? "books" : "films"}`}
+          {person
+            ? `Deal from ${person.name}`
+            : adaptations && !book
+              ? `Deal ${DECK_SIZE} adaptations`
+              : `Deal ${DECK_SIZE} ${series ? "series" : book ? "books" : "films"}`}
           <ArrowRight className="size-5" aria-hidden />
         </button>
       </div>
@@ -174,5 +187,35 @@ export function TapsScreen({
         </dl>
       </aside>
     </div>
+  );
+}
+
+/** "Adaptations only": a deck of films or series based on books, the ones from books you've read first. */
+function AdaptationsSwitch({ on, onChange, noun }: { on: boolean; onChange: (next: boolean) => void; noun: string }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      onClick={() => onChange(!on)}
+      className={cn(
+        "flex items-center gap-4 rounded-2xl border-2 px-4 py-3 text-left transition-colors sm:max-w-md",
+        on ? "border-fg" : "border-line hover:bg-soft",
+      )}
+    >
+      <span className="flex flex-1 flex-col gap-0.5">
+        <span className="font-bold">Adaptations only</span>
+        <span className="text-sm text-muted">{noun} based on a book. Ones you&apos;ve read come first.</span>
+      </span>
+      <span
+        aria-hidden
+        className={cn(
+          "relative h-7 w-12 shrink-0 rounded-full transition-colors",
+          on ? "bg-fg" : "shadow-[inset_0_0_0_2px_var(--line)]",
+        )}
+      >
+        <span className={cn("absolute top-1 size-5 rounded-full transition-[left]", on ? "left-6 bg-bg" : "left-1 bg-muted")} />
+      </span>
+    </button>
   );
 }
