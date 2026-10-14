@@ -23,48 +23,67 @@ export default function SettingsPage() {
         <h1 className="display text-[clamp(3rem,7vw,6rem)]">Settings</h1>
       </div>
 
-      <div className="grid gap-x-16 gap-y-12 lg:grid-cols-2">
-        <Section title="Look" note="This device only. Your other devices keep their own setting.">
-          <LookPicker />
-        </Section>
+      <div className="flex flex-col gap-14">
+        <Group title="Picking">
+          <Section title="Look" note="This device only. Your other devices keep their own setting.">
+            <LookPicker />
+          </Section>
 
-        <Section title="Streaming services" note="What you subscribe to in India. Decks favour films on these.">
-          <Suspense fallback={<p className="text-muted">Loading services…</p>}>
-            <Services />
-          </Suspense>
-        </Section>
+          <Section title="Streaming services" note="What you subscribe to in India. Decks favour films on these.">
+            <Suspense fallback={<p className="text-muted">Loading services…</p>}>
+              <Services />
+            </Suspense>
+          </Section>
+        </Group>
 
-        <Section
-          title="Passkeys"
-          note="Passkeys on iPhone and Mac sync through iCloud Keychain. Add one here for a device outside that, like a security key."
-        >
-          <Suspense fallback={<p className="text-muted">Loading your passkeys…</p>}>
-            <PasskeyList />
-          </Suspense>
-        </Section>
+        <Group title="Background syncs" note="Run every day at 8:00 IST. Decks only read what they store, so a failed run never blocks a deal.">
+          <Section title="Book bestsellers" note="New York Times lists, every day.">
+            <Suspense fallback={<p className="text-muted">Checking the last sync…</p>}>
+              <Bestsellers />
+            </Suspense>
+          </Section>
 
-        <Section title="Book bestsellers" note="New York Times lists, synced daily at 8:00 IST.">
-          <Suspense fallback={<p className="text-muted">Checking the last sync…</p>}>
-            <Bestsellers />
-          </Suspense>
-        </Section>
+          <Section title="Books on screen" note="Which films and series are based on which books, from Wikidata, every week; links are checked on the other days.">
+            <Suspense fallback={<p className="text-muted">Checking the last sync…</p>}>
+              <Adaptations />
+            </Suspense>
+          </Section>
+        </Group>
 
-        <Section title="Books on screen" note="Which films and series are based on which books, from Wikidata, synced weekly.">
-          <Suspense fallback={<p className="text-muted">Checking the last sync…</p>}>
-            <Adaptations />
-          </Suspense>
-        </Section>
+        <Group title="Account">
+          <Section
+            title="Passkeys"
+            note="Passkeys on iPhone and Mac sync through iCloud Keychain. Add one here for a device outside that, like a security key."
+          >
+            <Suspense fallback={<p className="text-muted">Loading your passkeys…</p>}>
+              <PasskeyList />
+            </Suspense>
+          </Section>
 
-        <Section title="Account">
-          <div className="flex flex-wrap items-center gap-3">
-            <SignOutButton />
-            <Link href="/about" className="text-sm font-semibold underline underline-offset-4">
-              About &amp; credits
-            </Link>
-          </div>
-        </Section>
+          <Section title="Sign out">
+            <div className="flex flex-wrap items-center gap-3">
+              <SignOutButton />
+              <Link href="/about" className="text-sm font-semibold underline underline-offset-4">
+                About &amp; credits
+              </Link>
+            </div>
+          </Section>
+        </Group>
       </div>
     </AppFrame>
+  );
+}
+
+/** A labelled pair of sections: side by side on a laptop, stacked on a phone. */
+function Group({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
+  return (
+    <section aria-label={title} className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1">
+        <h2 className="label text-muted">{title}</h2>
+        {note && <p className="max-w-[72ch] text-sm text-muted">{note}</p>}
+      </div>
+      <div className="grid gap-x-16 gap-y-10 lg:grid-cols-2">{children}</div>
+    </section>
   );
 }
 
@@ -72,7 +91,7 @@ function Section({ title, note, children }: { title: string; note?: string; chil
   return (
     <section className="flex flex-col gap-4 border-t border-line pt-6">
       <div className="flex flex-col gap-1">
-        <h2 className="text-lg font-bold">{title}</h2>
+        <h3 className="text-lg font-bold">{title}</h3>
         {note && <p className="max-w-[56ch] text-sm text-muted">{note}</p>}
       </div>
       {children}
@@ -130,6 +149,8 @@ async function Bestsellers() {
   );
 }
 
+const count = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString("en-IN")} ${n === 1 ? one : many}`;
+
 /** How the weekly Wikidata sync of book ↔ film links is doing. */
 async function Adaptations() {
   await requireOwner();
@@ -150,8 +171,7 @@ async function Adaptations() {
       </dd>
       <dt className="text-muted">Links</dt>
       <dd>
-        {status.films.toLocaleString("en-IN")} films and {status.series.toLocaleString("en-IN")} series, from{" "}
-        {status.books.toLocaleString("en-IN")} books
+        {count(status.films, "film")} and {count(status.series, "series", "series")}, from {count(status.books, "book")}
       </dd>
       {run && run.report.errors.length > 0 && (
         <>
