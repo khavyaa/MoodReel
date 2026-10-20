@@ -6,14 +6,14 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { LibrarySkeleton } from "@/components/library/library-skeleton";
 import { SavedScreen } from "@/components/library/saved-screen";
 import { PeopleSection } from "@/components/people/people-section";
-import { libraryKey, libraryTitles } from "@/lib/library";
+import { libraryKey, libraryTitles, shownFrom } from "@/lib/library";
 import { withLinksByKey } from "@/lib/adaptations/server";
-import { inProgress, providersFor, savedTitles } from "@/lib/picks/server";
+import { LIST_PAGE, inProgress, providersFor, savedCounts, savedTitles } from "@/lib/picks/server";
 import { requireOwner } from "@/lib/session";
 
 export const metadata = { title: "Saved" };
 
-export default function SavedPage() {
+export default function SavedPage({ searchParams }: PageProps<"/saved">) {
   return (
     <Suspense
       fallback={
@@ -22,15 +22,17 @@ export default function SavedPage() {
         </AppFrame>
       }
     >
-      <Saved />
+      <Saved searchParams={searchParams} />
     </Suspense>
   );
 }
 
-async function Saved() {
+async function Saved({ searchParams }: { searchParams: PageProps<"/saved">["searchParams"] }) {
   const owner = await requireOwner();
-  const [saved, watching, reading, providers] = await Promise.all([
-    savedTitles(owner.id),
+  const limit = shownFrom((await searchParams).show, LIST_PAGE);
+  const [saved, counts, watching, reading, providers] = await Promise.all([
+    savedTitles(owner.id, limit),
+    savedCounts(owner.id),
     inProgress(owner.id, "series"),
     inProgress(owner.id, "book"),
     providersFor(owner.id),
@@ -69,6 +71,13 @@ async function Saved() {
       const show = cards.get(libraryKey(media, w.id));
       return show ? [{ since: w.since.toISOString(), show }] : [];
     });
+  // Titles whose details couldn't be fetched just now stay listed, as placeholders.
+  const unavailable = [
+    ...saved.filter((s) => !cards.has(libraryKey(s.media, s.id))).map((s) => ({ media: s.media, id: s.id, list: "saved" as const })),
+    ...watching.filter((w) => !cards.has(libraryKey("series", w.id))).map((w) => ({ media: "series" as const, id: w.id, list: "watching" as const })),
+    ...reading.filter((r) => !cards.has(libraryKey("book", r.id))).map((r) => ({ media: "book" as const, id: r.id, list: "reading" as const })),
+  ];
+  const total = counts.movie + counts.series + counts.book;
   return (
     <SavedScreen
       items={items}
@@ -79,8 +88,9 @@ async function Saved() {
           <PeopleSection />
         </Suspense>
       }
-      total={saved.length}
-      missing={saved.length - items.length}
+      counts={counts}
+      unavailable={unavailable}
+      moreHref={total > saved.length ? `/saved?show=${limit + LIST_PAGE}` : null}
     />
   );
 }

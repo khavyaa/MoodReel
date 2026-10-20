@@ -1,7 +1,8 @@
 "use client";
 
 import { useOptimistic, useTransition } from "react";
-import { Check, ExternalLink, Play, Star, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Check, ExternalLink, Play, RotateCcw, Star, X } from "lucide-react";
 import { markSeen, rateTitle, removeSaved } from "@/app/(app)/library-actions";
 import type { LibraryMovie } from "@/lib/library";
 import { MOODS, type MoodId } from "@/lib/moods";
@@ -166,8 +167,10 @@ export function HistoryList({ entries }: { entries: HistoryEntry[] }) {
                       : `Off your ${e.movie.media === "book" ? "Reading" : "Watching"} list.`}
                   </p>
                 )
+              ) : e.followUp === "later" ? (
+                <WatchedNow movie={e.movie} />
               ) : e.followUp ? (
-                <p className="text-sm text-muted">{e.followUp === "later" ? "Not watched yet: it's in Saved." : "You skipped this one."}</p>
+                <p className="text-sm text-muted">You skipped this one.</p>
               ) : (
                 <div className="flex flex-col gap-2">
                   <p className="text-sm font-semibold">Did you watch it?</p>
@@ -180,6 +183,24 @@ export function HistoryList({ entries }: { entries: HistoryEntry[] }) {
         );
       })}
     </ol>
+  );
+}
+
+/** "Not watched yet": once you have, mark it here instead of hunting for it in Saved. */
+function WatchedNow({ movie }: { movie: LibraryMovie }) {
+  const [pending, startTransition] = useTransition();
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <p className="text-sm text-muted">Not watched yet: it&apos;s in Saved.</p>
+      <button
+        type="button"
+        disabled={pending}
+        onClick={() => startTransition(() => markSeen(movie.media, movie.id))}
+        className={buttonClasses("outline", "sm")}
+      >
+        <Check className="size-3.5" aria-hidden /> Watched it
+      </button>
+    </div>
   );
 }
 
@@ -248,6 +269,14 @@ export function WatchingList({ entries, media = "series" }: { entries: WatchingE
                     .join(" · ")}
                 </p>
               </div>
+              <a
+                href={whereTo(show).href}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="inline-flex items-center gap-1 self-start text-sm font-bold underline underline-offset-4"
+              >
+                {whereTo(show).label} <ExternalLink className="size-3.5" aria-hidden />
+              </a>
               <CheckInAnswers media={media} seriesId={show.id} showStillWatching={false} />
             </div>
           </li>
@@ -258,5 +287,102 @@ export function WatchingList({ entries, media = "series" }: { entries: WatchingE
         me&rdquo;.
       </p>
     </section>
+  );
+}
+
+/* ------------------------------------------------------------ seen & read */
+
+export type SeenEntry = { at: string; stars: number | null; movie: LibraryMovie };
+
+/** Everything you've watched or read, newest first, each with your stars. */
+export function SeenList({ entries }: { entries: SeenEntry[] }) {
+  return (
+    <ul aria-label="Seen and read" className="grid gap-x-10 gap-y-6 md:grid-cols-2">
+      {entries.map((e) => (
+        <li key={keyOf(e.movie)} className="grid grid-cols-[64px_minmax(0,1fr)] gap-4">
+          <Poster title={e.movie.title} path={e.movie.posterPath} size="sm" sizes="64px" className="rounded-lg shadow-none" />
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <p className="label text-muted">
+              {e.movie.media === "book" ? "Read" : "Seen"} · {DATE.format(new Date(e.at))}
+            </p>
+            <h2 className="truncate text-lg leading-tight font-black">{e.movie.title}</h2>
+            <p className="text-sm text-muted">{meta(e.movie)}</p>
+            <Stars media={e.movie.media} id={e.movie.id} stars={e.stars} title={e.movie.title} />
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/* ------------------------------------------------------------ unavailable */
+
+/** A title in your lists whose details couldn't be fetched just now. Only ids are stored, so there's no name to show. */
+export type Unavailable = { media: Media; id: number; list: "saved" | "watching" | "reading" | "picked" | "seen"; at?: string };
+
+const SOURCE: Record<Media, string> = { movie: "TMDb", series: "TMDb", book: "Open Library" };
+const KIND: Record<Media, string> = { movie: "film", series: "series", book: "book" };
+const LIST_WORD: Record<Unavailable["list"], string> = {
+  saved: "A saved",
+  watching: "A",
+  reading: "A",
+  picked: "A",
+  seen: "A",
+};
+const AFTER: Record<Unavailable["list"], string> = {
+  saved: "",
+  watching: " you're watching",
+  reading: " you're reading",
+  picked: " you picked",
+  seen: "",
+};
+
+/**
+ * Titles whose details didn't load stay in the list as placeholders, so your
+ * record never seems to vanish: say where it comes from and offer to try again.
+ */
+export function UnavailableList({ items }: { items: Unavailable[] }) {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
+  const [gone, hide] = useOptimistic<string[], string>([], (keys, key) => [...keys, key]);
+  const shown = items.filter((u) => !gone.includes(keyOf(u)));
+  if (!shown.length) return null;
+  return (
+    <ul aria-label="Couldn't load" className="flex flex-col gap-3">
+      {shown.map((u) => (
+        <li
+          key={`${u.list}:${keyOf(u)}`}
+          className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl px-4 py-3 shadow-[inset_0_0_0_1.5px_var(--line)]"
+        >
+          <p className="min-w-0 flex-1 text-sm">
+            <span className="font-bold">
+              {LIST_WORD[u.list]} {KIND[u.media]}
+              {AFTER[u.list]}
+              {u.at ? ` (${DATE.format(new Date(u.at))})` : ""}
+            </span>{" "}
+            <span className="text-muted">didn&apos;t load from {SOURCE[u.media]} just now. It&apos;s still in your lists.</span>
+          </p>
+          <div className="flex gap-3 text-sm font-semibold">
+            <button type="button" onClick={() => router.refresh()} className="inline-flex items-center gap-1 underline-offset-4 hover:underline">
+              <RotateCcw className="size-4" aria-hidden /> Try again
+            </button>
+            {u.list === "saved" && (
+              <button
+                type="button"
+                onClick={() =>
+                  startTransition(async () => {
+                    hide(keyOf(u));
+                    await removeSaved(u.media, u.id);
+                  })
+                }
+                className="inline-flex items-center gap-1 text-muted underline-offset-4 hover:underline"
+              >
+                <X className="size-4" aria-hidden /> Remove
+              </button>
+            )}
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }
