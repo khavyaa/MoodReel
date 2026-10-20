@@ -23,7 +23,9 @@ Setup and architecture: README.md.
 - Neon's free plan allows 10 branches. When it's full, a new branch's preview fails in about a
   second with "Resource provisioning failed" and no build log; delete `preview/…` branches of
   merged PRs (keep `main`). Neon also deletes a preview branch once its Vercel deployments are
-  removed (Vercel's deployment retention).
+  removed, and the project keeps pre-production, errored and canceled deployments for 1 day
+  (production: 30 days), so old branches clear themselves. A PR open longer than a day loses
+  its preview link; pushing a commit builds a fresh one.
 - Previews can't be signed into (passkeys are bound to the production domain), so review is
   the diff, CI, and the screenshots shared in the chat.
 
