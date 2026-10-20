@@ -52,13 +52,15 @@ unit, database and browser tests) runs on every PR.
 ## Deploy (Vercel + Neon, free tiers)
 
 1. In the Vercel project, **Storage → Create → Neon** and connect it. This sets `DATABASE_URL`.
-   Turn on a database branch per preview deployment if offered, so previews never migrate
-   production.
+   With a database branch per preview deployment (the integration's Preview setting), each
+   preview gets its own copy of production and never touches live data.
 2. Add `BETTER_AUTH_SECRET`, `OWNER_SETUP_TOKEN` and `TMDB_ACCESS_TOKEN` (Production and
    Preview). For book bestsellers, also `NYT_API_KEY` and `CRON_SECRET` (optional). AI needs nothing: on Vercel the AI Gateway authenticates itself. Locally, set
    `AI_GATEWAY_API_KEY` to try it, or leave it unset and the rules do everything.
-3. Deploy. Migrations run during production builds only; pull-request previews share the
-   production database, so they never migrate it.
+3. Deploy. Migrations run during production builds only; pull-request previews run on their own
+   Neon branch, which is never migrated. Neon's free plan allows 10 branches: when a new
+   branch's preview fails at once with "Resource provisioning failed", delete the `preview/…`
+   branches of merged PRs in the Neon console.
 4. Open `/setup` on the production domain and save your passkey.
 
 Passkeys are bound to the domain they were created on. One made on production won't sign in on

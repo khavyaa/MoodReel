@@ -16,9 +16,14 @@ Setup and architecture: README.md.
   reviewer must do (env vars, migrations). No images or image-hosting branches; screenshots of
   anything visible go to the owner in the chat instead.
 - CI must be green before asking for review. Never merge your own PR.
-- Database migrations run only in production builds (`scripts/migrate.mjs`), because previews
-  share the production database. A PR with a migration applies it when it's merged, not before:
-  keep migrations additive so the code on `main` still works against the new schema.
+- Database migrations run only in production builds (`scripts/migrate.mjs`). Each preview runs
+  on its own Neon branch (`preview/<git branch>`, a copy of production taken when that branch
+  first deploys), which is never migrated, so a PR with a migration applies it when it's merged,
+  not before: keep migrations additive so the code on `main` still works against the new schema.
+- Neon's free plan allows 10 branches. When it's full, a new branch's preview fails in about a
+  second with "Resource provisioning failed" and no build log; delete `preview/…` branches of
+  merged PRs (keep `main`). Neon also deletes a preview branch once its Vercel deployments are
+  removed (Vercel's deployment retention).
 - Previews can't be signed into (passkeys are bound to the production domain), so review is
   the diff, CI, and the screenshots shared in the chat.
 
