@@ -23,3 +23,12 @@ export function parsePersonKey(value: string | null | undefined): { source: Pers
 
 /** Writing credits worth naming on a card. */
 export const WRITING_JOBS = new Set(["Screenplay", "Writer", "Story", "Novel", "Teleplay"]);
+
+/**
+ * Where a person's photo comes from: TMDb ("tmdb:/abc.jpg", a profile path) or
+ * Open Library ("ol:123", an author number, whose photo may not exist).
+ */
+export type PhotoRef = string | null;
+
+export const tmdbPhoto = (path: string | null | undefined): PhotoRef => (path ? `tmdb:${path}` : null);
+export const authorPhoto = (id: number): PhotoRef => `ol:${id}`;

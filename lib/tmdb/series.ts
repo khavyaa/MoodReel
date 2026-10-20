@@ -91,6 +91,32 @@ export async function discoverSeries(q: SeriesQuery): Promise<MovieCandidate[]> 
 
 /* ---------------------------------------------------------------- details */
 
+/** TMDb's all-time top-rated series, one page of 20. */
+export async function topRatedShows(page: number): Promise<MovieCandidate[]> {
+  const data = await tmdb<{ results: TmdbShow[] }>(
+    "/discover/tv",
+    { include_adult: false, language: "en-US", sort_by: "vote_average.desc", "vote_count.gte": 1500, page },
+    60 * 60 * 24,
+  );
+  return data.results.map((s) => toCandidate(s, false));
+}
+
+/** Series by title, for adding what you've already watched. */
+export async function searchShows(query: string): Promise<MovieCandidate[]> {
+  const data = await tmdb<{ results: TmdbShow[] }>("/search/tv", { query, language: "en-US", include_adult: false }, 60 * 60);
+  return data.results.slice(0, 12).map((s) => toCandidate(s, false));
+}
+
+/** The most-watched series in a language (most TMDb votes), for "Have you seen these?". */
+export async function mostVotedShows(language: string, page: number): Promise<MovieCandidate[]> {
+  const data = await tmdb<{ results: TmdbShow[] }>(
+    "/discover/tv",
+    { language: "en-US", with_original_language: language, sort_by: "vote_count.desc", page },
+    60 * 60 * 24,
+  );
+  return data.results.map((s) => toCandidate(s, false));
+}
+
 export type SeriesDetails = {
   id: number;
   title: string;

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, animate, motion, useMotionValue, useReducedMotion, useTransform } from "framer-motion";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, Heart, Star, Undo2 } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Award, Check, Heart, Star, Undo2 } from "lucide-react";
 import { PeopleLine } from "@/components/people/people-line";
 import { DECK_SIZE } from "@/lib/deck/compose";
 import { LinkStrip, knownLabel } from "./title-link";
@@ -315,6 +315,11 @@ function CardInfo({ card }: { card: DeckCard }) {
           </Badge>
         )}
         {knownLabel(card.link) && <Badge strong>{knownLabel(card.link)}</Badge>}
+        {card.listName && (
+          <Badge strong>
+            <Award className="size-3.5" aria-hidden /> On {card.listName}
+          </Badge>
+        )}
       </div>
       {card.link && <LinkStrip link={card.link} />}
 

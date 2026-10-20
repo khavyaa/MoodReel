@@ -1,5 +1,5 @@
 import "server-only";
-import { nytWeeksFromSubjects, type BookCandidate } from "./rules";
+import { NEVER_QUERY, hasNeverSubject, nytWeeksFromSubjects, type BookCandidate } from "./rules";
 
 /*
  * Open Library: free, no key. It asks API users to send a User-Agent naming the
@@ -217,6 +217,39 @@ export async function booksByWork(ids: number[]): Promise<Map<number, BookCandid
     }
   }
   return found;
+}
+
+/** Summaries, study guides and workbooks of a book: never the book itself. */
+const KNOCK_OFF = /^(summary|study guide|workbook|analysis|sparknotes|cliffsnotes)\b|\bsummary (of|and review)\b/i;
+
+/** Books by title or author, for adding what you've already read. */
+export async function searchBookTitles(query: string): Promise<BookCandidate[]> {
+  const clean = query.replace(/["\\:]/g, " ").trim();
+  const data = await ol<{ docs: OlDoc[] }>("/search.json", { q: clean, fields: FIELDS, lang: "en", limit: 20 }, 12 * HOURS);
+  return data.docs
+    .flatMap((d) => toBookCandidate(d) ?? [])
+    .filter((b) => !KNOCK_OFF.test(b.title) && !KNOCK_OFF.test(b.originalTitle))
+    .slice(0, 12);
+}
+
+/** The kinds of book your decks deal: fiction, and the non-fiction you read (lives, history, science). */
+const READ_SUBJECTS = '(subject:fiction OR subject:biography OR subject:history OR subject:"popular works" OR subject:science)';
+
+/** The most-read English books of the kinds you read (Open Library reading logs), for "Have you read these?". */
+export async function mostReadBooks(page: number): Promise<BookCandidate[]> {
+  const data = await ol<{ docs: OlDoc[] }>(
+    "/search.json",
+    {
+      q: `language:eng ratings_count:[30 TO *] ${READ_SUBJECTS} ${NEVER_QUERY}`,
+      fields: FIELDS,
+      sort: "readinglog",
+      lang: "en",
+      limit: 30,
+      page,
+    },
+    24 * HOURS,
+  );
+  return data.docs.flatMap((d) => toBookCandidate(d) ?? []).filter((b) => !hasNeverSubject(b.subjects) && !KNOCK_OFF.test(b.title));
 }
 
 /** An ISBN to its work, for matching NYT bestsellers. Null when Open Library doesn't know it. */

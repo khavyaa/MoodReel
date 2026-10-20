@@ -183,8 +183,9 @@ export const MOVIE_MOODS: Record<MoodId, MovieMoodRule> = {
   },
   funny: {
     genres: [GENRE.comedy],
-    // Family comedies swamped this deck (8 of 15 were animated kids' films).
-    exclude: [GENRE.family, GENRE.horror, GENRE.war, GENRE.documentary, GENRE.tvMovie],
+    // Family comedies swamped this deck (8 of 15 were animated kids' films). No crime or
+    // thrillers either: TMDb files dark crime films like Aaranya Kaandam as comedies too.
+    exclude: [GENRE.family, GENRE.horror, GENRE.war, GENRE.documentary, GENRE.tvMovie, GENRE.crime, GENRE.thriller],
     minRating: 6.9,
   },
   feelgood: {
@@ -213,9 +214,14 @@ export const EXCLUDED_KEYWORDS: readonly number[] = [
 ];
 
 /** How strongly a film fits the mood: the share of its genres the mood asked for, plus a little for any match. */
+/** A genre the mood never deals (Funny: no crime or thrillers), whatever else fits. */
+export function moodExcludes(movie: MovieCandidate, mood: MoodId): boolean {
+  return movie.genreIds.some((g) => MOVIE_MOODS[mood].exclude.includes(g));
+}
+
 export function moodFit(movie: MovieCandidate, mood: MoodId): number {
   const rule = MOVIE_MOODS[mood];
-  if (movie.genreIds.some((g) => rule.exclude.includes(g))) return 0;
+  if (moodExcludes(movie, mood)) return 0;
   const hits = movie.genreIds.filter((g) => rule.genres.includes(g)).length;
   if (hits === 0) return 0;
   return Math.min(1, 0.5 + hits / Math.max(2, movie.genreIds.length));

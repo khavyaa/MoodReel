@@ -14,6 +14,7 @@ type Credit = { order?: number; job?: string; department?: string };
 type PersonResponse = {
   id: number;
   name: string;
+  profile_path?: string | null;
   known_for_department?: string;
   movie_credits?: { cast: (TmdbMovie & Credit)[]; crew: (TmdbMovie & Credit)[] };
   tv_credits?: { cast: (TmdbShow & Credit)[]; crew: (TmdbShow & Credit)[] };
@@ -24,6 +25,8 @@ export type PersonWork = { candidate: MovieCandidate; role: PersonRole };
 export type TmdbPerson = {
   id: number;
   name: string;
+  /** Their TMDb profile photo ("/abc.jpg"), if TMDb has one. */
+  photo: string | null;
   role: PersonRole;
   movies: PersonWork[];
   series: PersonWork[];
@@ -70,20 +73,33 @@ export async function getTmdbPerson(id: number): Promise<TmdbPerson> {
   return {
     id: p.id,
     name: p.name,
+    photo: p.profile_path ?? null,
     role: roleFromDepartment(p.known_for_department),
     movies: collect(p.movie_credits?.cast ?? [], p.movie_credits?.crew ?? [], (m) => movieCandidate(m, false), new Set()),
     series: collect(p.tv_credits?.cast ?? [], p.tv_credits?.crew ?? [], (s) => showCandidate(s, false), new Set(["Creator"])),
   };
 }
 
-/** People matching a name, for "with someone in mind?". */
-export async function searchTmdbPeople(query: string): Promise<{ id: number; name: string; detail: string }[]> {
+/** People matching a name, for "with someone in mind?" and the People page's search. */
+export async function searchTmdbPeople(query: string): Promise<{ id: number; name: string; detail: string; photo: string | null }[]> {
   const data = await tmdb<{
-    results: { id: number; name: string; known_for_department?: string; known_for?: { title?: string; name?: string }[] }[];
+    results: {
+      id: number;
+      name: string;
+      profile_path?: string | null;
+      known_for_department?: string;
+      known_for?: { title?: string; name?: string }[];
+    }[];
   }>("/search/person", { query, language: "en-US", include_adult: false }, 60 * 60);
   return data.results.slice(0, 8).map((p) => {
     const known = p.known_for?.map((k) => k.title ?? k.name).filter(Boolean)[0];
     const dept = p.known_for_department === "Directing" ? "director" : p.known_for_department === "Writing" ? "writer" : "actor";
-    return { id: p.id, name: p.name, detail: known ? `${dept} · ${known}` : dept };
+    return { id: p.id, name: p.name, detail: known ? `${dept} · ${known}` : dept, photo: p.profile_path ?? null };
   });
+}
+
+/** Just a person's photo, for lists of people (cached for a week). Null when TMDb has none or can't say. */
+export async function tmdbPersonPhoto(id: number): Promise<string | null> {
+  const p = await tmdb<{ profile_path?: string | null }>(`/person/${id}`, { language: "en-US" }, 60 * 60 * 24 * 7).catch(() => null);
+  return p?.profile_path ?? null;
 }

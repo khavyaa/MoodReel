@@ -28,32 +28,32 @@ export function SavedScreen({
   watching,
   reading,
   counts,
+  filter,
   unavailable,
-  moreHref,
-  people,
+  pager,
 }: {
   items: LibraryMovie[];
   watching: WatchingEntry[];
   reading: WatchingEntry[];
-  /** The People section, rendered on the server. */
-  people?: React.ReactNode;
   /** Everything saved, by kind: not only what this page shows. */
   counts: Record<Kind, number>;
+  /** Which kind the list shows: everything, or one kind (from `?type=`). */
+  filter: Filter;
   /** Saved, watching or reading titles whose details couldn't load just now. */
   unavailable: Unavailable[];
-  /** "Show more", when more is saved than shown. */
-  moreHref: string | null;
+  /** Page numbers under the list. */
+  pager: React.ReactNode;
 }) {
   const [start, setStart] = useState<(FlowStart & { media: Kind }) | null>(null);
-  const [filter, setFilter] = useState<Filter>("all");
   if (start) return <PickFlow media={start.media} start={start} onExit={() => setStart(null)} />;
 
   const films = counts.movie;
   const shows = counts.series;
   const books = counts.book;
   const total = films + shows + books;
-  const shown = filter === "all" ? items : items.filter((i) => i.media === filter);
-  const shownUnavailable = filter === "all" ? unavailable : unavailable.filter((u) => u.media === filter);
+  // The server already loaded this page of the kind chosen; in-progress placeholders follow the filter.
+  const shown = items;
+  const shownUnavailable = filter === "all" ? unavailable : unavailable.filter((u) => u.media === filter || u.list === "saved");
   const kinds: Kind[] = (
     [
       ["movie", films],
@@ -100,21 +100,24 @@ export function SavedScreen({
                 ...(books ? ([["book", `Books · ${books}`]] as const) : []),
               ] as const
             ).map(([value, label]) => (
-              <Chip key={value} pressed={filter === value} onClick={() => setFilter(value)}>
+              <Link
+                key={value}
+                href={value === "all" ? "/saved" : `/saved?type=${value}`}
+                aria-current={filter === value ? "page" : undefined}
+                className={cn(
+                  "inline-flex h-11 items-center gap-2 rounded-full border-2 px-4 text-[15px] font-semibold transition-colors sm:px-5",
+                  filter === value ? "border-accent bg-accent text-on-accent" : "border-line hover:bg-soft",
+                )}
+              >
                 {label}
-              </Chip>
+              </Link>
             ))}
           </div>
         )}
 
         {items.length > 0 && <SavedList movies={shown} />}
         {shownUnavailable.length > 0 && <UnavailableList items={shownUnavailable} />}
-        {moreHref && (
-          <Link href={moreHref} scroll={false} className="self-start text-sm font-bold underline underline-offset-4">
-            Show more · {total - items.length - unavailable.filter((u) => u.list === "saved").length} older
-          </Link>
-        )}
-        {people}
+        {pager}
       </div>
     </AppFrame>
   );

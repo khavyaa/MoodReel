@@ -1,7 +1,7 @@
 "use client";
 
-import { useOptimistic, useTransition } from "react";
-import { setPerson, saveFromPage } from "@/app/(app)/people-actions";
+import { useOptimistic, useState, useTransition } from "react";
+import { saveFromPage, seenFromPage, setPerson } from "@/app/(app)/people-actions";
 import type { Person } from "@/lib/people/types";
 import { cn } from "@/lib/cn";
 
@@ -43,30 +43,44 @@ export function FollowAvoid({ person, initial }: { person: Person; initial: "fol
   );
 }
 
-/** Save one title straight from a person's page. */
-export function SaveButton({
-  media,
-  title,
-}: {
-  media: "movie" | "series" | "book";
-  title: { id: number; language: string; genreIds: number[]; tags?: string[] };
-}) {
+type TitleRef = { id: number; language: string; genreIds: number[]; tags?: string[] };
+
+/**
+ * Save it or mark it seen / read, straight from a person's or a list's page.
+ * The buttons hold the result themselves (no page refresh, so you keep your place).
+ */
+export function TitleButtons({ media, title }: { media: "movie" | "series" | "book"; title: TitleRef }) {
+  const [state, setState] = useState<"saved" | "seen" | null>(null);
   const [pending, startTransition] = useTransition();
-  const [saved, setSaved] = useOptimistic(false);
-  if (saved) return <span className="rounded-md bg-accent px-2 py-1 text-xs font-bold text-on-accent">Saved</span>;
-  return (
-    <button
-      type="button"
-      disabled={pending}
-      onClick={() =>
-        startTransition(async () => {
-          setSaved(true);
-          await saveFromPage(media, title);
-        })
+  const seenLabel = media === "book" ? "Read it" : "Seen it";
+
+  function act(next: "saved" | "seen") {
+    setState(next);
+    startTransition(async () => {
+      try {
+        await (next === "saved" ? saveFromPage(media, title) : seenFromPage(media, title));
+      } catch {
+        setState(null);
       }
-      className="h-9 rounded-full border-2 border-line px-4 text-sm font-bold hover:bg-soft"
-    >
-      Save
-    </button>
+    });
+  }
+
+  if (state) {
+    return (
+      <span className="rounded-md bg-accent px-2 py-1 text-xs font-bold text-on-accent">
+        {state === "saved" ? "Saved" : media === "book" ? "Read" : "Seen"}
+      </span>
+    );
+  }
+  const button = "h-9 rounded-full border-2 border-line px-3 text-sm font-bold hover:bg-soft disabled:opacity-60 sm:px-4";
+  return (
+    <div className="flex gap-1.5">
+      <button type="button" disabled={pending} onClick={() => act("seen")} className={button}>
+        {seenLabel}
+      </button>
+      <button type="button" disabled={pending} onClick={() => act("saved")} className={button}>
+        Save
+      </button>
+    </div>
   );
 }

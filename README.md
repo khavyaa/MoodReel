@@ -27,9 +27,14 @@ Built for one person on an iPhone and a Mac. Sign-in is a passkey; there is no s
 
 - **Films, series and books**, each with its own rules (no soaps, no kids' or self-help books).
 - **A deck that learns** from saves, skips, "not for me" and your star ratings.
-- **People**: follow or avoid directors, actors and authors, or deal a deck from one of them.
+- **People**: a page of the directors, actors and authors you follow, with photos; follow or
+  avoid anyone, mark their work seen or read, or deal a deck from one of them.
+- **Lists**: Oscar, Palme d'Or, National Film Award, Booker, Pulitzer and Hugo winners, TMDb's
+  top rated, and any film collection, with your progress; follow one to badge its titles in your
+  decks, or deal straight from it.
 - **Books on screen**: films of books you've read come first, with the book on the card.
-- **Your library**: Saved, Watching and Reading, History, and a Details sheet for any title.
+- **Your library**: Saved and History a page at a time, Watching and Reading, a Details sheet for
+  any title, and a way to add what you'd already seen or read: search, or rate a quick stack.
 
 ## The moods
 
@@ -87,4 +92,4 @@ Architecture, scripts, deployment notes and how every deck is built:
 
 This product uses the TMDb API but is not endorsed or certified by TMDb. Where-to-watch data is
 provided by JustWatch via TMDb. Book data comes from Open Library. Bestseller data: The New York
-Times Books API. Book ↔ film and series links come from Wikidata (CC0).
+Times Books API. Book ↔ film and series links and award winners come from Wikidata (CC0).

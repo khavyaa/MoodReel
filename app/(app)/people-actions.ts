@@ -6,7 +6,8 @@ import { requireOwner } from "@/lib/session";
 import { setPersonPref } from "@/lib/people/server";
 import { searchTmdbPeople } from "@/lib/tmdb/people";
 import { searchAuthors } from "@/lib/books/openlibrary";
-import { saveOutsideDeck } from "@/lib/picks/server";
+import { authorPhoto, tmdbPhoto, type PhotoRef } from "@/lib/people/types";
+import { markSeenOutsideDeck, saveOutsideDeck } from "@/lib/picks/server";
 
 const personSchema = z.object({
   source: z.enum(["tmdb", "openlibrary"]),
@@ -22,7 +23,7 @@ export async function setPerson(person: unknown, kind: "follow" | "avoid" | "dis
   refresh();
 }
 
-export type PersonMatch = { key: string; name: string; detail: string };
+export type PersonMatch = { key: string; name: string; detail: string; photo: PhotoRef };
 
 /** People by name, for "with someone in mind?": TMDb for films and series, Open Library authors for books. */
 export async function searchPeople(media: "movie" | "series" | "book", query: unknown): Promise<PersonMatch[]> {
@@ -30,9 +31,9 @@ export async function searchPeople(media: "movie" | "series" | "book", query: un
   const q = z.string().trim().min(2).max(80).parse(query);
   try {
     if (media === "book") {
-      return (await searchAuthors(q)).map((a) => ({ key: `openlibrary:${a.id}`, name: a.name, detail: a.detail }));
+      return (await searchAuthors(q)).map((a) => ({ key: `openlibrary:${a.id}`, name: a.name, detail: a.detail, photo: authorPhoto(a.id) }));
     }
-    return (await searchTmdbPeople(q)).map((p) => ({ key: `tmdb:${p.id}`, name: p.name, detail: p.detail }));
+    return (await searchTmdbPeople(q)).map((p) => ({ key: `tmdb:${p.id}`, name: p.name, detail: p.detail, photo: tmdbPhoto(p.photo) }));
   } catch {
     return [];
   }
@@ -45,9 +46,17 @@ const titleSchema = z.object({
   tags: z.array(z.string().max(60)).max(12).optional(),
 });
 
-/** Save something from a person's page, outside any deck. */
+/**
+ * Save something from a person's (or a list's) page, outside any deck. No page
+ * refresh: the button shows the change, and a refresh would lose your place.
+ */
 export async function saveFromPage(media: "movie" | "series" | "book", title: unknown) {
   const owner = await requireOwner();
   await saveOutsideDeck(owner.id, z.enum(["movie", "series", "book"]).parse(media), titleSchema.parse(title));
-  refresh();
+}
+
+/** "Seen it" / "Read it" from a person's (or a list's) page: the same as that swipe. */
+export async function seenFromPage(media: "movie" | "series" | "book", title: unknown) {
+  const owner = await requireOwner();
+  await markSeenOutsideDeck(owner.id, z.enum(["movie", "series", "book"]).parse(media), titleSchema.parse(title));
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useOptimistic, useTransition } from "react";
+import { useOptimistic, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Check, ExternalLink, Play, RotateCcw, Star, X } from "lucide-react";
 import { markSeen, rateTitle, removeSaved } from "@/app/(app)/library-actions";
@@ -211,15 +211,21 @@ function WatchedNow({ movie }: { movie: LibraryMovie }) {
 }
 
 function Stars({ media, id, stars, title }: { media: Media; id: number; stars: number | null; title: string }) {
+  // Held here, not refreshed from the server, so rating never re-renders the list (and loses your place).
+  const [shown, setShown] = useState(stars);
   const [, startTransition] = useTransition();
-  const [shown, setShown] = useOptimistic(stars);
 
   function rate(value: number) {
     // Tapping the current rating clears it.
+    const previous = shown;
     const next = value === shown ? null : value;
+    setShown(next);
     startTransition(async () => {
-      setShown(next);
-      await rateTitle(media, id, next);
+      try {
+        await rateTitle(media, id, next);
+      } catch {
+        setShown(previous);
+      }
     });
   }
 

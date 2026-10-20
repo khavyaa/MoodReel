@@ -3,15 +3,15 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
-import { PICK, PLACES, mediaFromPath } from "./nav-items";
+import { PICK, PLACES, SETTINGS_HREF, mediaFromPath } from "./nav-items";
 
-/** Phone only: the four places, in thumb reach. Laptops use the header. */
+/** Phone only: picking and the places, in thumb reach (Settings is in the top bar). Laptops use the header. */
 export function BottomNav() {
   const pathname = usePathname();
   const media = mediaFromPath(pathname);
   const items = [
     { href: `/${media ?? "movies"}`, label: PICK.label, icon: PICK.icon, active: media !== null },
-    ...PLACES.map((p) => ({ ...p, active: pathname.startsWith(p.href) })),
+    ...PLACES.filter((p) => p.href !== SETTINGS_HREF).map((p) => ({ ...p, active: pathname.startsWith(p.href) })),
   ];
 
   return (

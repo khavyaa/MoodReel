@@ -155,10 +155,16 @@ export function isBookMood(mood: string): mood is BookMood {
   return mood in BOOK_MOODS;
 }
 
+/** A subject the mood never deals (no horror when Cosy), whatever else fits. */
+export function bookMoodExcludes(book: BookCandidate, mood: BookMood): boolean {
+  const exclude = BOOK_MOODS[mood].exclude;
+  return book.subjects.some((s) => exclude.some((x) => s.toLowerCase().includes(x)));
+}
+
 export function bookMoodFit(book: BookCandidate, mood: BookMood): number {
   const rule = BOOK_MOODS[mood];
   const lower = book.subjects.map((s) => s.toLowerCase());
-  if (lower.some((s) => rule.exclude.some((x) => s.includes(x)))) return 0;
+  if (bookMoodExcludes(book, mood)) return 0;
   const hits = rule.fits.filter((f) => lower.some((s) => s.includes(f))).length;
   if (hits === 0) return 0;
   return Math.min(1, 0.5 + hits / 4);

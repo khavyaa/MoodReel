@@ -105,9 +105,3 @@ export async function bookCardsFor(ids: number[]): Promise<Map<number, LibraryMo
   const descriptions = await Promise.all(books.map((b) => bookDescription(b.id)));
   return new Map(books.map((b, i) => [b.id, bookCard(b, descriptions[i])]));
 }
-
-/** How many titles a list shows: the first page, or more after "Show more" (`?show=`), up to 20 pages. */
-export function shownFrom(show: string | string[] | undefined, page = 60): number {
-  const n = Number(Array.isArray(show) ? show[0] : show);
-  return Number.isInteger(n) && n > page ? Math.min(n, 20 * page) : page;
-}

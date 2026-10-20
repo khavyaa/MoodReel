@@ -68,7 +68,8 @@ export async function rateTitle(media: Media, id: number, stars: number | null) 
     rating: value === null ? null : value * 2,
     ...(value === null ? {} : { seen: true }),
   });
-  refresh();
+  // No page refresh: the stars already show the new rating, and re-rendering Saved or
+  // History would drop you back at the top of a long list.
 }
 
 /* ---------------------------------------------------------- pick from saved */

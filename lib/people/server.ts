@@ -3,7 +3,8 @@ import { and, desc, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { peoplePrefs } from "@/lib/db/schema";
 import { NO_PEOPLE, type PeopleFilter } from "./rules";
-import { personKey, type Person, type PersonSource } from "./types";
+import { authorPhoto, personKey, tmdbPhoto, type Person, type PersonSource, type PhotoRef } from "./types";
+import { tmdbPersonPhoto } from "@/lib/tmdb/people";
 
 export type PersonPref = "follow" | "avoid" | "dismissed";
 
@@ -48,4 +49,12 @@ export async function setPersonPref(userId: string, person: Person, kind: Person
       target: [peoplePrefs.userId, peoplePrefs.source, peoplePrefs.personId],
       set: { kind, name: person.name, role: person.role, updatedAt: new Date() },
     });
+}
+
+/** Photos for a list of people: TMDb profiles (looked up, cached for a week) or Open Library author photos. */
+export async function photosFor(people: Person[]): Promise<Map<string, PhotoRef>> {
+  const found = await Promise.all(
+    people.slice(0, 60).map(async (p) => [personKey(p), p.source === "tmdb" ? tmdbPhoto(await tmdbPersonPhoto(p.id)) : authorPhoto(p.id)] as const),
+  );
+  return new Map(found);
 }

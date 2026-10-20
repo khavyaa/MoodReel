@@ -89,6 +89,61 @@ export async function discoverMovies(q: DiscoverQuery): Promise<MovieCandidate[]
   return data.results.map((m) => toCandidate(m, q.providers.length > 0));
 }
 
+/** Films by title, for adding what you've already watched. */
+export async function searchMovies(query: string): Promise<MovieCandidate[]> {
+  const data = await tmdb<{ results: TmdbMovie[] }>("/search/movie", { query, language: "en-US", include_adult: false }, 60 * 60);
+  return data.results.slice(0, 12).map((m) => toCandidate(m, false));
+}
+
+/** The most-watched films in a language (most TMDb votes), for "Have you seen these?". */
+export async function mostVotedMovies(language: string, page: number): Promise<MovieCandidate[]> {
+  const data = await tmdb<{ results: TmdbMovie[] }>(
+    "/discover/movie",
+    { include_adult: false, language: "en-US", with_original_language: language, sort_by: "vote_count.desc", page },
+    60 * 60 * 24,
+  );
+  return data.results.map((m) => toCandidate(m, false));
+}
+
+/**
+ * TMDb's all-time top-rated films, one page of 20. Discover with a vote floor rather than
+ * /movie/top_rated, which lets in barely-voted and unreleased titles.
+ */
+export async function topRatedMovies(page: number): Promise<MovieCandidate[]> {
+  const data = await tmdb<{ results: TmdbMovie[] }>(
+    "/discover/movie",
+    { include_adult: false, language: "en-US", sort_by: "vote_average.desc", "vote_count.gte": 5000, page },
+    60 * 60 * 24,
+  );
+  return data.results.map((m) => toCandidate(m, false));
+}
+
+export type CollectionSummary = { id: number; name: string; posterPath: string | null };
+
+/** Film collections (franchises) by name. */
+export async function searchCollections(query: string): Promise<CollectionSummary[]> {
+  const data = await tmdb<{ results: { id: number; name: string; poster_path: string | null }[] }>(
+    "/search/collection",
+    { query, language: "en-US" },
+    60 * 60,
+  );
+  return data.results.slice(0, 10).map((c) => ({ id: c.id, name: c.name, posterPath: c.poster_path }));
+}
+
+/** A collection and its films, in release order (unreleased ones left out). */
+export async function getCollection(id: number): Promise<{ id: number; name: string; overview: string; films: MovieCandidate[] }> {
+  const data = await tmdb<{ id: number; name: string; overview?: string; parts: TmdbMovie[] }>(
+    `/collection/${id}`,
+    { language: "en-US" },
+    60 * 60 * 24,
+  );
+  const films = data.parts
+    .map((m) => toCandidate(m, false))
+    .filter((m) => m.releaseDate)
+    .sort((a, b) => (a.releaseDate ?? "").localeCompare(b.releaseDate ?? ""));
+  return { id: data.id, name: data.name, overview: data.overview ?? "", films };
+}
+
 /* ---------------------------------------------------------------- details */
 
 /** Credit jobs that name the author of the book a film is based on. */
@@ -112,6 +167,8 @@ export type MovieDetails = {
   people: Person[];
   /** The author credited for the book it's based on ("Novel" or "Book" in the credits), if any. */
   basedOn: string | null;
+  /** The TMDb collection (franchise) it belongs to, if any. */
+  collection: { id: number; name: string } | null;
   trailerKey: string | null;
   /** Every flat-rate service streaming it in your region; filter with servicesOn(). */
   providers: { id: number; name: string }[];
@@ -122,6 +179,7 @@ export type MovieDetails = {
 
 type TmdbDetails = TmdbMovie & {
   runtime: number | null;
+  belongs_to_collection?: { id: number; name: string } | null;
   tagline: string | null;
   credits?: { cast: { id: number; name: string }[]; crew: { id: number; name: string; job: string }[] };
   videos?: { results: { key: string; site: string; type: string; official: boolean }[] };
@@ -158,6 +216,7 @@ export async function getMovieDetails(id: number): Promise<MovieDetails> {
     cast: (d.credits?.cast ?? []).slice(0, 4).map((c) => c.name),
     people: moviePeople(d.credits),
     basedOn: (d.credits?.crew ?? []).find((c) => SOURCE_JOBS.has(c.job))?.name ?? null,
+    collection: d.belongs_to_collection ? { id: d.belongs_to_collection.id, name: d.belongs_to_collection.name } : null,
     trailerKey: trailer?.key ?? null,
     providers: (region?.flatrate ?? []).map((p) => ({ id: p.provider_id, name: p.provider_name })),
     votes: base.voteCount,

@@ -111,13 +111,26 @@ export function PickFlow({
     return key && name && parsePersonKey(key) ? { key, name } : null;
   });
 
+  // A list from the URL (a list page's "Deal from this list").
+  const [list, setList] = useState<{ slug: string; name: string } | null>(() => {
+    const slug = params.get("list");
+    const name = params.get("name");
+    return slug && name && !params.get("with") ? { slug, name } : null;
+  });
+
   const [adaptations, setAdaptations] = useState(false);
 
-  const deal = useCallback(async (from: ChosenPerson | null = person, onlyAdaptations = adaptations) => {
+  const deal = useCallback(async (from: ChosenPerson | null = person, onlyAdaptations = adaptations, fromList = list) => {
     setStep({ kind: "dealing" });
     // Earlier swipes first, so the new deck can't deal what you just turned down.
     await Promise.race([settled(), new Promise((r) => setTimeout(r, DEAL_WAITS_FOR_SAVES_MS))]);
-    const result = await dealDeck(media, taps, from?.key ?? null, Boolean(onlyAdaptations && !from)).catch(() => null);
+    const result = await dealDeck(
+      media,
+      taps,
+      from?.key ?? null,
+      Boolean(onlyAdaptations && !from && !fromList),
+      from ? null : (fromList?.slug ?? null),
+    ).catch(() => null);
     if (!result || !result.ok) {
       setStep({ kind: "error", message: result?.error ?? "Couldn't deal a deck just now." });
       return;
@@ -135,7 +148,7 @@ export function PickFlow({
       exitAs: "skipped",
       returning: null,
     });
-  }, [media, taps, person, adaptations, settled]);
+  }, [media, taps, person, adaptations, list, settled]);
 
   const reveal = useCallback(
     (sessionId: string, pick: DeckCard, saves: DeckCard[]) => {
@@ -298,6 +311,8 @@ export function PickFlow({
             onPerson={setPerson}
             adaptations={adaptations}
             onAdaptations={setAdaptations}
+            listName={person ? null : (list?.name ?? null)}
+            onClearList={() => setList(null)}
           />
         </>
       )}
@@ -317,7 +332,7 @@ export function PickFlow({
           exitAs={step.exitAs}
           returning={step.returning}
           missingLanguages={step.missing}
-          fromName={person?.name ?? null}
+          fromName={person?.name ?? list?.name ?? null}
           onSwipe={onSwipe}
           onUndo={step.actions.length > 0 ? () => undo(step) : null}
         />
@@ -359,7 +374,21 @@ export function PickFlow({
           secondary={{ label: "Change the taps", onClick: toTaps }}
         />
       )}
-      {step.kind === "empty" && !person && adaptations && (
+      {step.kind === "empty" && !person && list && (
+        <Message
+          title={`Nothing left from ${list.name}.`}
+          body="Nothing on it fits this mood and slot that you haven't seen, saved or turned down. Try another mood, a longer slot, or deal without the list."
+          primary={{
+            label: "Deal without the list",
+            onClick: () => {
+              setList(null);
+              void deal(null, adaptations, null);
+            },
+          }}
+          secondary={{ label: "Change the taps", onClick: toTaps }}
+        />
+      )}
+      {step.kind === "empty" && !person && !list && adaptations && (
         <Message
           title="No adaptations left for this mood."
           body="The films and series of books that fit are seen, saved or turned down. Deal without the switch, or try another mood."
@@ -373,7 +402,7 @@ export function PickFlow({
           secondary={{ label: "Change the taps", onClick: toTaps }}
         />
       )}
-      {step.kind === "empty" && step.reason === "none" && !person && !adaptations && (
+      {step.kind === "empty" && step.reason === "none" && !person && !list && !adaptations && (
         <Message
           title="Nothing fits right now."
           body={`Every one of the ${noun} that fit this mood and time is already seen, saved or turned down. Try another mood or a longer slot.`}
@@ -381,7 +410,7 @@ export function PickFlow({
           secondary={{ label: "Try again", onClick: () => deal() }}
         />
       )}
-      {step.kind === "empty" && step.reason === "passed" && !person && !adaptations && (
+      {step.kind === "empty" && step.reason === "passed" && !person && !list && !adaptations && (
         <Message
           title="Nothing grabbed you."
           body={`That's useful too: those won't come back for a while. Deal ${DECK_SIZE} more, or change the mood.`}

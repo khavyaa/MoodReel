@@ -48,8 +48,8 @@ test("Seen & read lists everything you've watched, not only picks, and you can r
   await expect.poll(async () => (await query<{ rating: number }>("select rating from title_states where seen"))[0].rating).toBe(8);
 });
 
-test("Saved shows real totals, pages with Show more, and keeps titles whose details didn't load", async ({ page }) => {
-  // 30 real films and 60 ids the catalogue can't return: 90 saves, beyond the first page of 60.
+test("Saved shows real totals, pages by number, and keeps titles whose details didn't load", async ({ page }) => {
+  // 30 real films and 60 ids the catalogue can't return: 90 saves, 24 to a page.
   const real = [
     ...Array.from({ length: 20 }, (_, i) => 1000 + i),
     ...Array.from({ length: 5 }, (_, i) => 2000 + i),
@@ -60,13 +60,17 @@ test("Saved shows real totals, pages with Show more, and keeps titles whose deta
 
   await page.goto("/saved");
   await expect(page.getByText(/Saved · 90 films/)).toBeVisible();
-  // The newest 60 are the ones that can't load: kept as placeholders, with the right source.
+  // The newest are the ones that can't load: kept as placeholders, with the right source.
   const unavailable = page.getByRole("list", { name: "Couldn't load" });
-  await expect(unavailable.getByRole("listitem")).toHaveCount(60);
+  await expect(unavailable.getByRole("listitem")).toHaveCount(24);
   await expect(unavailable.getByText(/didn't load from TMDb just now/).first()).toBeVisible();
-  await page.getByRole("link", { name: /Show more · 30 older/ }).click();
-  await expect(page.getByRole("list", { name: "Saved titles" }).getByRole("listitem")).toHaveCount(30);
-  await expect(page.getByRole("link", { name: /Show more/ })).toHaveCount(0);
+  const pager = page.getByRole("navigation", { name: "Saved pages" });
+  await expect(pager.getByRole("link", { name: "Page 1" })).toHaveAttribute("aria-current", "page");
+  // The oldest page: the last 18 of the real films (90 = 3 × 24 + 18).
+  await pager.getByRole("link", { name: "Page 4" }).click();
+  await expect(page).toHaveURL(/page=4/);
+  await expect(page.getByRole("list", { name: "Saved titles" }).getByRole("listitem")).toHaveCount(18);
+  await expect(page.getByRole("navigation", { name: "Saved pages" }).getByRole("link", { name: "Next page" })).toHaveCount(0);
 });
 
 test("Pick from my saved looks at all your saves of that kind, however many newer ones there are", async ({ page }) => {
@@ -108,4 +112,21 @@ test("History: a pick you postponed can be marked watched right there, and in-pr
   await page.goto("/saved");
   const watching = page.getByRole("region", { name: /Watching/ });
   await expect(watching.getByRole("link", { name: /Where to watch/ })).toHaveAttribute("href", /English%20Series%202|English\+Series\+2/);
+});
+
+test("rating a title keeps your place in the list: no reload, no jump to the top", async ({ page }) => {
+  for (let i = 0; i < 20; i++) await state("movie", 1000 + i, "seen", 10 + i);
+  await page.goto("/history?tab=seen");
+  const list = page.getByRole("list", { name: "Seen and read" });
+  const target = list.getByRole("group", { name: "Your rating for English Thriller 18" });
+  await target.scrollIntoViewIfNeeded();
+  const before = await page.evaluate(() => window.scrollY);
+  expect(before).toBeGreaterThan(200);
+  await target.getByRole("button", { name: "4 stars" }).click();
+  await expect(target.getByRole("button", { name: "4 stars" })).toHaveAttribute("aria-pressed", "true");
+  await expect
+    .poll(async () => (await query<{ rating: number }>("select rating from title_states where external_id = '1017'"))[0]?.rating)
+    .toBe(8);
+  await page.waitForTimeout(1000);
+  expect(Math.abs((await page.evaluate(() => window.scrollY)) - before)).toBeLessThan(5);
 });

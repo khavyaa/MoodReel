@@ -12,7 +12,7 @@ import { fitsRuntime, isLanguage, passesGate, scoreMovie, type TasteProfile } fr
 import { fitsCommitment, scoreSeries, seriesGate, shortEnoughForHindi, type SeriesMood } from "@/lib/taste/series-rules";
 import type { Taps } from "@/lib/taste/types";
 import type { BookCandidate } from "@/lib/books/rules";
-import type { Person, PersonSource } from "./types";
+import { authorPhoto, tmdbPhoto, type Person, type PersonSource, type PhotoRef } from "./types";
 
 /*
  * One person's work, for their page and for "Deal from …". Your rules still
@@ -27,6 +27,8 @@ import type { Person, PersonSource } from "./types";
  */
 export type PersonPageData = {
   person: Person;
+  /** Their photo: a TMDb profile, or an Open Library author photo (which may not exist). */
+  photo: PhotoRef;
   films: PersonWork[];
   series: PersonWork[];
   books: BookCandidate[];
@@ -44,6 +46,7 @@ export async function personWorks(source: PersonSource, id: number): Promise<Per
     const books = (await withNytWeeks(author.books)).filter((b) => !hasNeverSubject(b.subjects));
     return {
       person: { source, id, name: author.name, role: "author" },
+      photo: authorPhoto(id),
       films: [],
       series: [],
       books,
@@ -69,6 +72,7 @@ export async function personWorks(source: PersonSource, id: number): Promise<Per
   });
   return {
     person: { source, id, name: p.name, role: p.role },
+    photo: tmdbPhoto(p.photo),
     films,
     series,
     books: [],
