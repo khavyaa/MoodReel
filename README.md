@@ -60,7 +60,9 @@ unit, database and browser tests) runs on every PR.
 3. Deploy. Migrations run during production builds only; pull-request previews run on their own
    Neon branch, which is never migrated. Neon's free plan allows 10 branches: when a new
    branch's preview fails at once with "Resource provisioning failed", delete the `preview/…`
-   branches of merged PRs in the Neon console.
+   branches of merged PRs in the Neon console. To keep it from filling, set the project's
+   Deployment Retention Policy short for previews (here: pre-production, errored and canceled
+   deployments 1 day, production 30 days); Neon deletes a preview's branch with its deployments.
 4. Open `/setup` on the production domain and save your passkey.
 
 Passkeys are bound to the domain they were created on. One made on production won't sign in on
