@@ -70,7 +70,32 @@ export async function tasteFor(userId: string, media: Media): Promise<TasteProfi
     .where(and(eq(titleActions.userId, userId), eq(titleActions.media, media)))
     .orderBy(desc(titleActions.createdAt))
     .limit(500);
-  return buildTasteProfile(rows as { action: ActionKind; tags: string[] }[]);
+  return buildTasteProfile(rows as { action: ActionKind; tags: string[] }[], await ratedTags(userId, media));
+}
+
+/** Your current rating of each rated title, with the tags it was first logged with. */
+async function ratedTags(userId: string, media: Media) {
+  const db = getDb();
+  const rated = await db
+    .select({ id: titleStates.externalId, rating: titleStates.rating })
+    .from(titleStates)
+    .where(and(eq(titleStates.userId, userId), eq(titleStates.media, media), isNotNull(titleStates.rating)))
+    .orderBy(desc(titleStates.updatedAt))
+    .limit(300);
+  if (!rated.length) return [];
+  const tags = await db
+    .selectDistinctOn([titleActions.externalId], { id: titleActions.externalId, tags: titleActions.tags })
+    .from(titleActions)
+    .where(
+      and(
+        eq(titleActions.userId, userId),
+        eq(titleActions.media, media),
+        inArray(titleActions.externalId, rated.map((r) => r.id)),
+      ),
+    )
+    .orderBy(titleActions.externalId, titleActions.createdAt);
+  const tagsOf = new Map(tags.map((t) => [t.id, t.tags]));
+  return rated.flatMap((r) => (r.rating !== null && tagsOf.get(r.id)?.length ? [{ rating: r.rating, tags: tagsOf.get(r.id)! }] : []));
 }
 
 export async function createDeckSession(
