@@ -183,8 +183,9 @@ export const MOVIE_MOODS: Record<MoodId, MovieMoodRule> = {
   },
   funny: {
     genres: [GENRE.comedy],
-    // Family comedies swamped this deck (8 of 15 were animated kids' films).
-    exclude: [GENRE.family, GENRE.horror, GENRE.war, GENRE.documentary, GENRE.tvMovie],
+    // Family comedies swamped this deck (8 of 15 were animated kids' films). No crime or
+    // thrillers either: TMDb files dark crime films like Aaranya Kaandam as comedies too.
+    exclude: [GENRE.family, GENRE.horror, GENRE.war, GENRE.documentary, GENRE.tvMovie, GENRE.crime, GENRE.thriller],
     minRating: 6.9,
   },
   feelgood: {

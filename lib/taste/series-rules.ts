@@ -162,7 +162,8 @@ export const SERIES_MOODS: Record<Exclude<MoodId, "romantic">, SeriesMoodRule> =
   },
   funny: {
     genres: [G.comedy],
-    exclude: [G.documentary, G.warPolitics, G.family],
+    // Proper comedies: no crime or mystery shows filed as comedy too.
+    exclude: [G.documentary, G.warPolitics, G.family, G.crime, G.mystery],
     minRating: 7.2,
   },
   feelgood: {
