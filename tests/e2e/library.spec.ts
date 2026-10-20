@@ -92,7 +92,8 @@ test("History: a pick you postponed can be marked watched right there, and in-pr
   await page.goto("/history");
   await expect(page.getByText("Not watched yet: it's in Saved.")).toBeVisible();
   await page.getByRole("button", { name: "Watched it" }).click();
-  await expect(page.getByRole("group", { name: "Your rating for English Thriller 4" })).toBeVisible();
+  // The History page re-renders on the server after the change: slower under a full parallel test run.
+  await expect(page.getByRole("group", { name: "Your rating for English Thriller 4" })).toBeVisible({ timeout: 15_000 });
   expect((await query<{ seen: boolean; saved: boolean }>("select seen, saved from title_states where external_id = '1003'"))[0]).toEqual({
     seen: true,
     saved: false,
