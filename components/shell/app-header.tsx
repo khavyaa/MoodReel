@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
-import { MEDIA_LINKS, PLACES, mediaFromPath } from "./nav-items";
+import { Settings } from "lucide-react";
+import { MEDIA_LINKS, PLACES, SETTINGS_HREF, mediaFromPath } from "./nav-items";
 import { OfflineBanner } from "./offline-banner";
 
 export function AppHeader() {
@@ -12,8 +13,8 @@ export function AppHeader() {
 
   return (
     <header className="border-b border-line pt-[env(safe-area-inset-top)]">
-      <div className="mx-auto flex h-16 w-full max-w-[1440px] items-center gap-4 px-5 sm:px-8 lg:gap-8 lg:px-12">
-        <Link href={`/${media ?? "movies"}`} className="display text-[26px] leading-none">
+      <div className="mx-auto flex h-16 w-full max-w-[1440px] items-center gap-2 px-5 sm:gap-4 sm:px-8 lg:gap-8 lg:px-12">
+        <Link href={`/${media ?? "movies"}`} className="display text-[22px] leading-none sm:text-[26px]">
           MoodReel
         </Link>
 
@@ -26,7 +27,7 @@ export function AppHeader() {
                 href={m.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "rounded-full px-3 py-1.5 text-[13px] font-semibold transition-colors sm:px-4 sm:text-sm",
+                  "rounded-full px-2.5 py-1.5 text-[13px] font-semibold transition-colors sm:px-4 sm:text-sm",
                   active ? "bg-soft shadow-[inset_0_0_0_1.5px_var(--line)]" : "opacity-70 hover:opacity-100",
                 )}
               >
@@ -35,6 +36,19 @@ export function AppHeader() {
             );
           })}
         </nav>
+
+        {/* Phone: Settings sits here, so the bottom bar has room for the places. */}
+        <Link
+          href={SETTINGS_HREF}
+          aria-label="Settings"
+          aria-current={pathname.startsWith(SETTINGS_HREF) ? "page" : undefined}
+          className={cn(
+            "flex size-9 shrink-0 items-center justify-center rounded-full lg:hidden",
+            pathname.startsWith(SETTINGS_HREF) ? "bg-soft" : "opacity-70 hover:opacity-100",
+          )}
+        >
+          <Settings className="size-5" aria-hidden />
+        </Link>
 
         <nav aria-label="Main" className="ml-auto hidden items-center gap-1 lg:flex">
           {PLACES.map(({ href, label, icon: Icon }) => {

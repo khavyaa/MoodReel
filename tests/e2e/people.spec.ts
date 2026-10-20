@@ -92,13 +92,13 @@ test("deal from a person: from their page, and from the start screen's search", 
   expect(fromSearch.every((id) => directedBy(id, 702))).toBe(true);
 });
 
-test("People in Saved: following with Deal, suggestions from what you love, and undo an avoid", async ({ page }) => {
+test("the People page: following with Deal, suggestions from what you love, and undo an avoid", async ({ page }) => {
   // Love three films by Eli Director (saved from his page).
   await page.goto("/people/tmdb/704");
   for (let i = 0; i < 3; i++) await page.getByRole("button", { name: "Save", exact: true }).first().click();
   await expect.poll(async () => (await query<{ n: string }>("select count(*) as n from title_states where saved"))[0].n).toBe("3");
 
-  await page.goto("/saved");
+  await page.goto("/people");
   const people = page.locator("#people");
   await expect(people.getByText("Following · 1")).toBeVisible();
   await expect(people.getByRole("link", { name: /Ben Director/ })).toBeVisible();
@@ -123,4 +123,26 @@ test("books by author: search an author and deal only their books", async ({ pag
   await page.getByRole("button", { name: "Deal from Author 3" }).click();
   await expect(page.getByText("From Author 3", { exact: true }).first()).toBeVisible();
   expect(await lastDeck()).toEqual([7002]);
+});
+
+test("People is in the navigation, and its search finds directors, actors and authors together", async ({ page, isMobile }) => {
+  await page.goto("/movies");
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "People" }).first().click();
+  await expect(page.getByRole("heading", { name: "Who you watch for" })).toBeVisible();
+  if (isMobile) await expect(page.getByRole("link", { name: "Settings" })).toBeVisible();
+  await page.getByRole("searchbox").fill("author");
+  await expect(page.getByRole("region", { name: "Authors" }).getByRole("link", { name: /Author 1\b/ }).first()).toBeVisible();
+  await page.getByRole("searchbox").fill("director");
+  await page.getByRole("region", { name: "Films & series" }).getByRole("link", { name: /Cara Director/ }).click();
+  await expect(page.getByRole("heading", { name: "Cara Director" })).toBeVisible();
+});
+
+test("a person's page marks a title seen, right there, without leaving your place", async ({ page }) => {
+  await page.goto("/people/tmdb/702");
+  const row = page.getByRole("listitem").filter({ hasText: "English Thriller 3" }).first();
+  await row.getByRole("button", { name: "Seen it" }).click();
+  await expect(row.getByText("Seen", { exact: true })).toBeVisible();
+  await expect
+    .poll(async () => (await query<{ seen: boolean }>("select seen from title_states where external_id = '1002' and media = 'movie'"))[0]?.seen)
+    .toBe(true);
 });

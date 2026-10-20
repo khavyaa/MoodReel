@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { AppFrame } from "@/components/shell/app-frame";
 import { Poster } from "@/components/pick/poster";
-import { FollowAvoid, SaveButton } from "@/components/people/person-controls";
+import { FollowAvoid, TitleButtons } from "@/components/people/person-controls";
+import { Avatar } from "@/components/people/avatar";
 import { DetailsButton } from "@/components/library/title-details";
 import { buttonClasses } from "@/components/ui/button";
 import { PAGE_LIMIT, personWorks } from "@/lib/people/works";
@@ -100,13 +101,16 @@ async function Person({ source, id, as }: { source: PersonSource; id: number; as
   return (
     <div className="grid gap-10 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)] lg:gap-16">
       <div className="flex flex-col gap-5">
-        <Link href="/saved#people" className="text-sm font-bold text-muted hover:text-fg">
+        <Link href="/people" className="text-sm font-bold text-muted hover:text-fg">
           ← People
         </Link>
         <span className="label text-muted">
           {ROLE[as ?? person.role] ?? "Person"}{as && as !== person.role && ROLE[person.role] ? ` · also ${ROLE[person.role].toLowerCase()}` : ""} · {count} {person.role === "author" ? (count === 1 ? "book" : "books") : count === 1 ? "title" : "titles"} for you
         </span>
-        <h1 className="display text-[clamp(3rem,7vw,6rem)]">{person.name}</h1>
+        <div className="flex items-center gap-5">
+          <Avatar name={person.name} photo={works.photo} size="lg" />
+          <h1 className="display min-w-0 text-[clamp(2.75rem,7vw,6rem)]">{person.name}</h1>
+        </div>
         <FollowAvoid person={person} initial={pref === "follow" || pref === "avoid" ? pref : null} />
         <div className="flex flex-wrap gap-2">
           {sections.map((s) => (
@@ -175,7 +179,7 @@ async function Person({ source, id, as }: { source: PersonSource; id: number; as
                     {status ? (
                       <span className="rounded-md bg-soft px-2 py-1 text-xs font-bold shadow-[inset_0_0_0_1.5px_var(--line)]">{status}</span>
                     ) : (
-                      <SaveButton
+                      <TitleButtons
                         media={s.media}
                         title={{ id: r.candidate.id, language: r.candidate.language, genreIds: r.candidate.genreIds, tags: r.tags }}
                       />

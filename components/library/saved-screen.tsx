@@ -31,13 +31,10 @@ export function SavedScreen({
   filter,
   unavailable,
   pager,
-  people,
 }: {
   items: LibraryMovie[];
   watching: WatchingEntry[];
   reading: WatchingEntry[];
-  /** The People section, rendered on the server. */
-  people?: React.ReactNode;
   /** Everything saved, by kind: not only what this page shows. */
   counts: Record<Kind, number>;
   /** Which kind the list shows: everything, or one kind (from `?type=`). */
@@ -121,7 +118,6 @@ export function SavedScreen({
         {items.length > 0 && <SavedList movies={shown} />}
         {shownUnavailable.length > 0 && <UnavailableList items={shownUnavailable} />}
         {pager}
-        {people}
       </div>
     </AppFrame>
   );
