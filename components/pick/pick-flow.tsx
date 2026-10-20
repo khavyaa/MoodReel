@@ -5,10 +5,20 @@ import { useOffline } from "next/offline";
 import { useRouter, useSearchParams } from "next/navigation";
 import { parsePersonKey } from "@/lib/people/types";
 import type { ChosenPerson } from "@/components/people/someone-in-mind";
-import { deal as dealDeck, noSavesThisTime, pick as pickTitle, swipe, undo as undoSwipe } from "@/app/(app)/[media]/actions";
+import {
+  abandon,
+  deal as dealDeck,
+  noSavesThisTime,
+  pick as pickTitle,
+  resumeDeck,
+  resumeOffer,
+  swipe,
+  undo as undoSwipe,
+  type ResumeOffer,
+} from "@/app/(app)/[media]/actions";
 import type { DeckCard } from "@/lib/deck/build-movies";
 import { DECK_SIZE } from "@/lib/deck/compose";
-import { MEDIA } from "@/lib/moods";
+import { MEDIA, MOODS, type MoodId } from "@/lib/moods";
 import { choose, deckIsDone, startFinale, type Finale } from "@/lib/deck/finale";
 import { buttonClasses } from "@/components/ui/button";
 import { DeckScreen, type ExitAs, type SwipeAction } from "./deck-screen";
@@ -196,6 +206,48 @@ export function PickFlow({
     [enqueue],
   );
 
+  // An unfinished deck from the last day (the app was closed or reloaded mid-deck) is offered on the start screen.
+  const [offer, setOffer] = useState<ResumeOffer | null>(null);
+  const onStartScreen = step.kind === "taps" && !start;
+  useEffect(() => {
+    if (!onStartScreen) return;
+    let live = true;
+    resumeOffer(media)
+      .then((found) => live && setOffer(found))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [onStartScreen, media]);
+
+  const resume = useCallback(async () => {
+    setStep({ kind: "dealing" });
+    const result = await resumeDeck(media).catch(() => null);
+    setOffer(null);
+    if (!result || !result.ok) {
+      setStep({ kind: "error", message: result?.error ?? "Couldn't load that deck just now." });
+      return;
+    }
+    setTaps(result.taps as TapsValue);
+    const deck: DeckStep = {
+      kind: "deck",
+      sessionId: result.sessionId,
+      cards: result.cards,
+      actions: result.actions,
+      missing: [],
+      exitAs: "skipped",
+      returning: null,
+    };
+    if (deckIsDone(deck.actions.length, deck.cards.length, savesOf(deck).length)) finishDeck(deck);
+    else setStep(deck);
+  }, [media, finishDeck]);
+
+  const startAgain = useCallback(() => {
+    if (!offer) return;
+    enqueue(() => abandon(offer.sessionId));
+    setOffer(null);
+  }, [enqueue, offer]);
+
   const onChoose = useCallback(
     (side: "champion" | "challenger") => {
       if (step.kind !== "finale") return;
@@ -235,6 +287,7 @@ export function PickFlow({
       {step.kind === "taps" && (
         <>
           {notice}
+          {offer && <ResumeCard offer={offer} noun={noun} onResume={() => void resume()} onStartAgain={startAgain} />}
           <TapsScreen
             media={media}
             value={taps}
@@ -337,6 +390,43 @@ export function PickFlow({
         />
       )}
     </FlowFrame>
+  );
+}
+
+/** "Pick up where you left off": the unfinished deck, how far you got, Resume or Start again. */
+function ResumeCard({
+  offer,
+  noun,
+  onResume,
+  onStartAgain,
+}: {
+  offer: ResumeOffer;
+  noun: string;
+  onResume: () => void;
+  onStartAgain: () => void;
+}) {
+  const mood = MOODS[offer.mood as MoodId]?.label ?? offer.mood;
+  return (
+    <section
+      aria-label="Unfinished deck"
+      className="mb-6 flex flex-wrap items-center gap-x-6 gap-y-3 rounded-2xl bg-soft px-5 py-4 shadow-[inset_0_0_0_1.5px_var(--line)]"
+    >
+      <div className="flex min-w-0 grow basis-60 flex-col gap-0.5">
+        <p className="font-bold">Pick up where you left off</p>
+        <p className="text-sm text-muted">
+          {mood} {noun} · card {Math.min(offer.dealt + 1, offer.total)} of {offer.total}
+          {offer.saves > 0 ? ` · ${offer.saves} saved` : ""}
+        </p>
+      </div>
+      <div className="flex gap-2">
+        <button type="button" onClick={onResume} className={buttonClasses("solid", "md")}>
+          Resume
+        </button>
+        <button type="button" onClick={onStartAgain} className={buttonClasses("ghost", "md")}>
+          Start again
+        </button>
+      </div>
+    </section>
   );
 }
 
