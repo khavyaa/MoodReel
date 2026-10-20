@@ -11,8 +11,9 @@ export type Person = { source: PersonSource; id: number; name: string; role: Per
 export const personKey = (p: { source: PersonSource; id: number }) => `${p.source}:${p.id}`;
 
 /** URL path for a person's page. */
-export const personHref = (p: { source: PersonSource; id: number }) =>
-  `/people/${p.source === "tmdb" ? "tmdb" : "ol"}/${p.id}`;
+/** A person's page; `as` keeps the role you came from (a director who's also an actor opens as Director). */
+export const personHref = (p: { source: PersonSource; id: number }, as?: PersonRole) =>
+  `/people/${p.source === "tmdb" ? "tmdb" : "ol"}/${p.id}${as ? `?as=${as}` : ""}`;
 
 /** A person in a URL or form value: "tmdb:525" or "openlibrary:1234". */
 export function parsePersonKey(value: string | null | undefined): { source: PersonSource; id: number } | null {

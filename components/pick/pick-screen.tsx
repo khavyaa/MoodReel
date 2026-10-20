@@ -3,7 +3,7 @@
 import { Check, ExternalLink, Play, Star } from "lucide-react";
 import type { DeckCard } from "@/lib/deck/build-movies";
 import { MOODS, type MoodId } from "@/lib/moods";
-import { bestsellerLabel, cardMeta, makersLabel, readLine, startLine } from "@/lib/card-meta";
+import { bestsellerLabel, cardMeta, makersLabel, ratingScale, readLine, startLine } from "@/lib/card-meta";
 import { whereTo } from "@/lib/watch";
 import { buttonClasses } from "@/components/ui/button";
 import { Poster } from "./poster";
@@ -67,7 +67,7 @@ export function PickScreen({
         <div className="flex flex-wrap gap-2 text-[13px] font-semibold">
           <span className="inline-flex items-center gap-1.5 rounded-lg bg-soft px-2.5 py-1 shadow-[inset_0_0_0_1.5px_var(--line)]">
             <Star className="size-3.5 fill-current" aria-hidden /> {pick.rating.toFixed(1)}
-            {pick.book && <span className="font-normal opacity-70">/ 5</span>}
+            <span className="font-normal opacity-70">{ratingScale(pick)}</span>
           </span>
           {bestseller && (
             <span className="inline-flex items-center rounded-lg bg-accent px-2.5 py-1 text-on-accent">{bestseller}</span>

@@ -4,10 +4,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, animate, motion, useMotionValue, useReducedMotion, useTransform } from "framer-motion";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, Heart, Star, Undo2 } from "lucide-react";
 import { PeopleLine } from "@/components/people/people-line";
+import { DECK_SIZE } from "@/lib/deck/compose";
 import { LinkStrip, knownLabel } from "./title-link";
 import type { DeckCard } from "@/lib/deck/build-movies";
 import { MAX_SAVES } from "@/lib/deck/finale";
-import { airingLabel, bestsellerLabel, cardMeta, makersLabel, ratingCountLabel } from "@/lib/card-meta";
+import { airingLabel, bestsellerLabel, cardMeta, makersLabel, ratingCountLabel, ratingScale } from "@/lib/card-meta";
 import { cn } from "@/lib/cn";
 import { Poster } from "./poster";
 
@@ -101,6 +102,12 @@ export function DeckScreen({
     <div className="flex flex-1 flex-col gap-4 lg:gap-8">
       {fromName && <p className="label -mb-2 text-muted">From {fromName}</p>}
       <Progress total={cards.length} index={index} saves={saves} />
+      {index === 0 && cards.length < DECK_SIZE && (
+        <p role="status" className="text-sm text-muted">
+          {cards.length === 1 ? "Only one fits" : `Only ${cards.length} fit`} {fromName ? `from ${fromName}` : "tonight"}: everything else
+          that matches is seen, saved or turned down, or outside your rules.
+        </p>
+      )}
       {missingLanguages.length > 0 && (
         <p role="status" className="rounded-2xl bg-soft px-4 py-2 text-sm">
           Couldn&apos;t load {missingLanguages.join(", ")} films this time, so they&apos;re missing from this deck.
@@ -290,7 +297,9 @@ function CardInfo({ card }: { card: DeckCard }) {
         <Badge>
           <Star className="size-3.5 fill-current" aria-hidden />
           {card.rating.toFixed(1)}
-          <span className="font-normal opacity-70">· {ratingCountLabel(card)}</span>
+          <span className="font-normal opacity-70">
+            {ratingScale(card)} · {ratingCountLabel(card)}
+          </span>
         </Badge>
         {bestseller && <Badge strong>{bestseller}</Badge>}
         {card.streamingOn.map((s) => (

@@ -5,7 +5,7 @@ import { Check, ExternalLink, Play, Star, X } from "lucide-react";
 import { markSeen, rateTitle, removeSaved } from "@/app/(app)/library-actions";
 import type { LibraryMovie } from "@/lib/library";
 import { MOODS, type MoodId } from "@/lib/moods";
-import { airingLabel, bestsellerLabel, cardMeta, makersLabel } from "@/lib/card-meta";
+import { airingLabel, bestsellerLabel, cardMeta, makersLabel, ratingScale } from "@/lib/card-meta";
 import { whereTo } from "@/lib/watch";
 import { buttonClasses } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
@@ -72,6 +72,7 @@ export function SavedList({ movies }: { movies: LibraryMovie[] }) {
             <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
               <span className="inline-flex items-center gap-1 font-semibold">
                 <Star className="size-3.5 fill-current" aria-hidden /> {m.rating.toFixed(1)}
+                <span className="font-normal opacity-70">{ratingScale(m)}</span>
               </span>
               {m.streamingOn.map((s) => (
                 <span key={s} className="rounded-md bg-accent px-1.5 py-0.5 text-xs font-bold text-on-accent">

@@ -31,14 +31,16 @@ async function SetupHeadingFromDb() {
 function SetupHeading({ isNew }: { isNew: boolean | null }) {
   return (
     <div className="flex flex-col gap-2">
-      <span className="label text-muted">{isNew === false ? "New device" : "One-time setup"}</span>
+      <span className="label text-muted">{isNew === false ? "New device" : isNew ? "One-time setup" : "Setup"}</span>
       <h2 className="display text-5xl sm:text-6xl">
-        {isNew === false ? "Add a passkey" : "Create your account"}
+        {isNew === false ? "Add a passkey" : isNew ? "Create your account" : "Passkey setup"}
       </h2>
       <p className="text-muted">
         {isNew === false
           ? "Enter your setup token, then save a passkey on this device. Your saved lists come with it."
-          : "Enter your setup token, then save a passkey. On iPhone and Mac it syncs through iCloud Keychain, so you only do this once."}
+          : isNew
+            ? "Enter your setup token, then save a passkey. On iPhone and Mac it syncs through iCloud Keychain, so you only do this once."
+            : "Enter your setup token, then save a passkey on this device."}
       </p>
     </div>
   );

@@ -38,7 +38,8 @@ type Step =
   | { kind: "taps" }
   | { kind: "dealing" }
   | { kind: "error"; message: string }
-  | { kind: "empty" }
+  /** "none": nothing fit at all; "passed": you went through the deck and saved nothing. */
+  | { kind: "empty"; reason: "none" | "passed" }
   | DeckStep
   | {
       kind: "finale";
@@ -122,7 +123,7 @@ export function PickFlow({
       return;
     }
     if (result.cards.length === 0) {
-      setStep({ kind: "empty" });
+      setStep({ kind: "empty", reason: "none" });
       return;
     }
     setStep({
@@ -170,7 +171,7 @@ export function PickFlow({
       const saves = savesOf(deck);
       if (saves.length === 0) {
         enqueue(() => noSavesThisTime(deck.sessionId));
-        setStep({ kind: "empty" });
+        setStep({ kind: "empty", reason: "passed" });
         return;
       }
       const finale = startFinale(saves);
@@ -372,7 +373,15 @@ export function PickFlow({
           secondary={{ label: "Change the taps", onClick: toTaps }}
         />
       )}
-      {step.kind === "empty" && !person && !adaptations && (
+      {step.kind === "empty" && step.reason === "none" && !person && !adaptations && (
+        <Message
+          title="Nothing fits right now."
+          body={`Every one of the ${noun} that fit this mood and time is already seen, saved or turned down. Try another mood or a longer slot.`}
+          primary={{ label: "Change the taps", onClick: toTaps }}
+          secondary={{ label: "Try again", onClick: () => deal() }}
+        />
+      )}
+      {step.kind === "empty" && step.reason === "passed" && !person && !adaptations && (
         <Message
           title="Nothing grabbed you."
           body={`That's useful too: those won't come back for a while. Deal ${DECK_SIZE} more, or change the mood.`}
@@ -457,12 +466,12 @@ function Message({
   );
 }
 
-/** "Dealing 15 films…", or, offline, that it's waiting: the deal is sent when the connection returns. */
+/** "Dealing up to 15 films…" (a narrow mood or a person's work can deal fewer), or, offline, that it's waiting: the deal is sent when the connection returns. */
 function DealingLabel({ noun }: { noun: string }) {
   const offline = useOffline();
   return (
     <p className="label">
-      {offline ? `Offline: dealing as soon as you're back` : `Dealing ${DECK_SIZE} ${noun}…`}
+      {offline ? `Offline: dealing as soon as you're back` : `Dealing up to ${DECK_SIZE} ${noun}…`}
     </p>
   );
 }
