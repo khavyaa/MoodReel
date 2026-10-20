@@ -15,6 +15,8 @@ export function PickScreen({
   why,
   resultLabel = "Tonight's pick",
   savedForLater,
+  recorded = true,
+  saveFailed = false,
   onAgain,
 }: {
   pick: DeckCard;
@@ -22,6 +24,10 @@ export function PickScreen({
   why: string | null;
   resultLabel?: string;
   savedForLater: DeckCard[];
+  /** The pick is saved: on your History, off your Saved list. */
+  recorded?: boolean;
+  /** Saving it failed; the bar at the top offers Retry. */
+  saveFailed?: boolean;
   onAgain: () => void;
 }) {
   const start = startLine(pick);
@@ -42,7 +48,7 @@ export function PickScreen({
         <h1 className="display text-[clamp(3rem,8vw,7.5rem)]">{pick.title}</h1>
         {by && <p className="-mt-1 text-lg font-bold">{by}</p>}
         <p className="max-w-[40ch] text-xl leading-snug lg:text-2xl" aria-live="polite">
-          {why ?? "Working out why…"}
+          {why ?? (saveFailed ? "Not saved yet. Retry at the top, and the reason comes with it." : "Working out why…")}
         </p>
         <p className="label text-muted">{cardMeta(pick)}</p>
         {read && (
@@ -106,10 +112,21 @@ export function PickScreen({
             </ul>
           </div>
         )}
-        {pick.media === "series" && (
+        <p role="status" className="inline-flex items-center gap-1.5 text-sm font-semibold">
+          {recorded ? (
+            <>
+              <Check className="size-4" aria-hidden /> Saved to your History
+            </>
+          ) : saveFailed ? (
+            "Not saved yet"
+          ) : (
+            "Saving your pick…"
+          )}
+        </p>
+        {recorded && pick.media === "series" && (
           <p className="text-sm">It&apos;s on your Watching list. Every few days MoodReel asks how it&apos;s going.</p>
         )}
-        {pick.media === "book" && (
+        {recorded && pick.media === "book" && (
           <p className="text-sm">It&apos;s on your Reading list. About once a week MoodReel asks how it&apos;s going.</p>
         )}
         <p className="text-xs text-muted">
