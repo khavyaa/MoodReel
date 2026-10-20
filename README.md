@@ -80,7 +80,10 @@ a preview deployment's own URL; previews are for checking builds.
    popularity.
 4. **AI pass (optional).** The top 30 go to a fast model through Vercel's AI Gateway, which flags
    which genuinely fit the mood. It only re-weights; if it's slow or unavailable, the rules decide.
-5. **Deck.** 15 films, about two-thirds English, the rest spread through. Swipe right to save,
+5. **Deck.** Every film is checked against your time once its details are in (TMDb's own
+   runtime filter lets long films through, and followed people's or read books' films skip it).
+   15 films, about two-thirds English, the rest spread through, with Hindi, Tamil and Malayalam
+   taking turns for those slots when films in more than one fit. Swipe right to save,
    left to skip, up for seen it, down for not for me; Undo steps back as far as you like. Four
    saves start the head-to-head.
 
@@ -165,7 +168,8 @@ override is stored per device in the browser and applied before the first paint.
 tappable on every card. Follow someone and their unseen work joins your decks (skipping the
 "everyone has seen it" markdown, at most two per person and four per deck) with a badge; avoid
 someone and nothing of theirs is dealt. "Deal from …" (a person's page, the start screen's
-search, or People in Saved) makes a deck from their work only. People you keep loving (three
+search, or People in Saved) makes a deck from all of their work, not only the best-known titles
+their page lists. People you keep loving (three
 titles, four for actors) are suggested. Rules: `lib/people/rules.ts`.
 
 **Books on screen.** Which films and series are based on which books comes from Wikidata (TMDb ids

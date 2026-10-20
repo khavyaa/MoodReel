@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { DECK_SIZE, composeDeck, type Scored } from "@/lib/deck/compose";
+import { DECK_SIZE, composeDeck, spreadLanguages, type Scored } from "@/lib/deck/compose";
+import { fitsRuntime } from "@/lib/taste/rules";
 import { MAX_SAVES, choose, deckIsDone, startFinale } from "@/lib/deck/finale";
 import type { MovieCandidate } from "@/lib/taste/types";
 
@@ -50,6 +51,20 @@ describe("composeDeck", () => {
     const mostlyTamil = composeDeck([...pool("en", 3, 1), ...pool("ta", 30, 100)]);
     expect(mostlyTamil).toHaveLength(DECK_SIZE);
     expect(mostlyTamil.filter((m) => m.language === "en")).toHaveLength(3);
+  });
+
+  it("shares the non-English slots between languages when several fit, instead of all going to the best-rated one", () => {
+    // Hindi scores higher throughout, but Tamil and Malayalam films fit too.
+    const hi = Array.from({ length: 10 }, (_, i) => scored(100 + i, "hi", 0.9 - i / 1000));
+    const ta = Array.from({ length: 3 }, (_, i) => scored(200 + i, "ta", 0.5 - i / 1000));
+    const ml = Array.from({ length: 3 }, (_, i) => scored(300 + i, "ml", 0.4 - i / 1000));
+    const others = composeDeck([...pool("en", 30, 1), ...hi, ...ta, ...ml]).filter((m) => m.language !== "en");
+    expect(others).toHaveLength(5);
+    expect(new Set(others.map((m) => m.language))).toEqual(new Set(["hi", "ta", "ml"]));
+    // Best first within each language, languages in the order of their best film.
+    expect(spreadLanguages([...hi.slice(0, 3), ...ta.slice(0, 2)]).map((s) => s.movie.id)).toEqual([100, 200, 101, 201, 102]);
+    // One language only: unchanged.
+    expect(spreadLanguages(hi).map((s) => s.movie.id)).toEqual(hi.map((s) => s.movie.id));
   });
 
   it("deals what exists when there isn't a full deck", () => {
@@ -138,5 +153,17 @@ describe("pool query parameters", () => {
     const { poolQueries } = await import("@/lib/deck/build-movies");
     const genres = poolQueries("ml", { mood: "mind", energy: 1, time: 2 }, MINE)[0].genres;
     expect(genres).not.toContain(18); // drama
+  });
+});
+
+describe("fitsRuntime", () => {
+  it("keeps films within the time you chose, any length when long is fine, and unknown runtimes", () => {
+    expect(fitsRuntime(95, 0)).toBe(true);
+    expect(fitsRuntime(180, 0)).toBe(false);
+    expect(fitsRuntime(140, 1)).toBe(true);
+    expect(fitsRuntime(141, 1)).toBe(false);
+    expect(fitsRuntime(240, 2)).toBe(true);
+    expect(fitsRuntime(null, 0)).toBe(true);
+    expect(fitsRuntime(undefined, 1)).toBe(true);
   });
 });
