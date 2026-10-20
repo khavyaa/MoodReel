@@ -122,7 +122,8 @@ function englishTitle(doc: OlDoc): string {
 }
 
 /** Box sets, omnibuses and "complete works" aren't one book to read next. */
-const OMNIBUS = /^works$|\bbox(ed)?\s*set\b|\bomnibus\b|\bebundle\b|\bcollection set\b|\bbooks?\s+\d+\s*[-–&]\s*\d+\b/i;
+const OMNIBUS =
+  /^works$|\bbox(ed)?\s*set\b|\bomnibus\b|\bebundle\b|\bcollection set\b|\btitle set\b|\b\d+\s+(?:book|title|novel|volume)s?\s+set\b|\bbooks?\s+\d+\s*[-–&]\s*\d+\b/i;
 export const isOmnibus = (title: string, pages: number | null) => OMNIBUS.test(title) || (pages ?? 0) > 1100;
 
 /** Descriptions come in whatever language a librarian wrote them in; keep English ones only. */
@@ -287,11 +288,54 @@ export async function bookDescription(id: number): Promise<string> {
 
 /* ---------------------------------------------------------------- authors */
 
-/** An author's name and best-known works (English, rated or read most first). */
+/* ---------------------------------------------------------- bibliography */
+
+/** Sets, adapted or abridged versions, and numbered textbook editions: not a book of theirs to read next. */
+const NOT_A_BOOK =
+  /\btitle set\b|\b\d+\s+(?:title|book|novel|volume)s?\s+set\b|\[adaptation\]|\babridged\b|\b(?:\d+(?:st|nd|rd|th)|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth|thirteenth|fourteenth|fifteenth|sixteenth)\s+edition\b/i;
+/** Classroom readers and anthologies they only contributed to. */
+const TEXTBOOK_SUBJECTS = ["study and teaching", "textbooks", "college readers", "collections"];
+
+const titleKey = (title: string) =>
+  title
+    .toLowerCase()
+    .replace(/^(the|a|an)\s+/, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+/**
+ * An author's page from Open Library's raw list: drops sets, adaptations,
+ * textbook editions, anthologies (three or more authors) and entries nobody
+ * has read, rated or paged; keeps one of each title (the most read); and
+ * blanks a first-published year from before the author was 12, which Open
+ * Library sometimes gets from a stray old edition. Input most-read first.
+ */
+export function tidyBibliography(books: BookCandidate[], birthYear: number | null): BookCandidate[] {
+  const seen = new Set<string>();
+  return books.flatMap((b) => {
+    if (NOT_A_BOOK.test(b.title) || NOT_A_BOOK.test(b.originalTitle)) return [];
+    if (b.subjects.some((s) => TEXTBOOK_SUBJECTS.some((t) => s.toLowerCase().includes(t)))) return [];
+    if (b.authors.length >= 3) return [];
+    if (!b.readCount && !b.ratingsCount && !b.pages) return [];
+    const key = titleKey(b.title);
+    if (seen.has(key)) return [];
+    seen.add(key);
+    const tooEarly = birthYear !== null && b.year !== null && b.year < birthYear + 12;
+    return [tooEarly ? { ...b, year: null, releaseDate: null } : b];
+  });
+}
+
+/** "23 May 1958", "1958", "May 1958" → 1958. */
+export function birthYearOf(date: string | undefined): number | null {
+  const m = date?.match(/\b(1[5-9]\d\d|20\d\d)\b/);
+  return m ? Number(m[1]) : null;
+}
+
+/** An author's name and best-known works (English, rated or read most first), tidied for their page. */
 export async function authorWithBooks(id: number): Promise<{ name: string; books: BookCandidate[] } | null> {
   const key = `OL${id}A`;
   const [author, works] = await Promise.all([
-    ol<{ name?: string; personal_name?: string }>(`/authors/${key}.json`, {}, 7 * 24 * HOURS).catch(() => null),
+    ol<{ name?: string; personal_name?: string; birth_date?: string }>(`/authors/${key}.json`, {}, 7 * 24 * HOURS).catch(() => null),
     ol<{ docs: OlDoc[] }>(
       "/search.json",
       { q: `author_key:${key} language:eng`, fields: FIELDS, sort: "readinglog", lang: "en", limit: 60 },
@@ -300,19 +344,33 @@ export async function authorWithBooks(id: number): Promise<{ name: string; books
   ]);
   const name = author?.name ?? author?.personal_name;
   if (!name) return null;
-  return { name, books: works.docs.flatMap((d) => toBookCandidate(d) ?? []) };
+  return { name, books: tidyBibliography(works.docs.flatMap((d) => toBookCandidate(d) ?? []), birthYearOf(author?.birth_date)) };
+}
+
+type OlAuthor = { key: string; name: string; top_work?: string; work_count?: number };
+
+/**
+ * Open Library often has the same author under several records (a stub with a
+ * handful of works beside the real one): keep the one with the most works per name.
+ */
+export function dedupeAuthors(docs: OlAuthor[]): OlAuthor[] {
+  const best = new Map<string, OlAuthor>();
+  for (const a of docs) {
+    const name = a.name.toLowerCase().replace(/\s+/g, " ").trim();
+    const held = best.get(name);
+    if (!held || (a.work_count ?? 0) > (held.work_count ?? 0)) best.set(name, a);
+  }
+  return docs.filter((a) => best.get(a.name.toLowerCase().replace(/\s+/g, " ").trim()) === a);
 }
 
 /** Authors matching a name, for "with someone in mind?". */
 export async function searchAuthors(query: string): Promise<{ id: number; name: string; detail: string }[]> {
-  const data = await ol<{ docs: { key: string; name: string; top_work?: string; work_count?: number }[] }>(
-    "/search/authors.json",
-    { q: query, limit: 8 },
-    HOURS,
-  );
-  return data.docs.flatMap((a) => {
-    const id = Number(a.key.match(/OL(\d+)A/)?.[1] ?? 0);
-    if (!id || !latinName(a.name)) return [];
-    return [{ id, name: a.name, detail: a.top_work ? `author of ${a.top_work}` : "author" }];
-  });
+  const data = await ol<{ docs: OlAuthor[] }>("/search/authors.json", { q: query, limit: 12 }, HOURS);
+  return dedupeAuthors(data.docs)
+    .slice(0, 8)
+    .flatMap((a) => {
+      const id = Number(a.key.match(/OL(\d+)A/)?.[1] ?? 0);
+      if (!id || !latinName(a.name)) return [];
+      return [{ id, name: a.name, detail: a.top_work ? `author of ${a.top_work}` : "author" }];
+    });
 }

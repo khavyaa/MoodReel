@@ -118,6 +118,9 @@ const BOOKS = [
   ...Array.from({ length: 12 }, (_, i) => book(7000 + i, `Thriller Book ${i + 1}`, `Author ${i + 1}`)),
   // Only gets in through the NYT lists: too few Open Library ratings on its own.
   book(7100, "Bestseller Only", "Nyt Author", { ratings_count: 2, ratings_average: 4.0, isbn: ["9780000007100"] }),
+  // A second Open Library record of Author 3's book (Open Library has many): their page and
+  // "Deal from Author 3" must show it once.
+  book(7060, "thriller book 3", "Author 3", { author_key: ["OL16002A"], ratings_count: 40, already_read_count: 90 }),
   // Never dealt: young adult, romance, a graphic novel filed by its comics class code, children's.
   book(7900, "Teen Thriller", "Ya Author", { subject: ["Thriller", "Young adult fiction"] }),
   book(7901, "Romantic Suspense", "Ro Author", { subject: ["Suspense", "Romance", "Fiction"] }),
