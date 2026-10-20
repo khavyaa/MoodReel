@@ -8,6 +8,7 @@ import { whereTo } from "@/lib/watch";
 import { buttonClasses } from "@/components/ui/button";
 import { Poster } from "./poster";
 import { LinkStrip, PickBookPanel } from "./title-link";
+import { DetailsButton } from "@/components/library/title-details";
 
 export function PickScreen({
   pick,
@@ -95,6 +96,9 @@ export function PickScreen({
               <Play className="size-4 fill-current" aria-hidden /> Trailer
             </a>
           )}
+          <DetailsButton card={pick} media={pick.media} id={pick.id} title={pick.title} className={buttonClasses("outline", "lg")}>
+            More details
+          </DetailsButton>
           <button type="button" onClick={onAgain} className={buttonClasses("ghost", "lg")}>
             Start again
           </button>

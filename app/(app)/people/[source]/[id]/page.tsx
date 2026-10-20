@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { AppFrame } from "@/components/shell/app-frame";
 import { Poster } from "@/components/pick/poster";
 import { FollowAvoid, SaveButton } from "@/components/people/person-controls";
+import { DetailsButton } from "@/components/library/title-details";
 import { buttonClasses } from "@/components/ui/button";
 import { PAGE_LIMIT, personWorks } from "@/lib/people/works";
 import { peoplePrefsFor } from "@/lib/people/server";
@@ -153,7 +154,14 @@ async function Person({ source, id, as }: { source: PersonSource; id: number; as
                       className="rounded-lg shadow-none"
                     />
                     <div className="min-w-0">
-                      <p className="truncate font-black">{r.candidate.title}</p>
+                      <DetailsButton
+                        media={s.media}
+                        id={r.candidate.id}
+                        title={r.candidate.title}
+                        className="block max-w-full truncate text-left font-black"
+                      >
+                        {r.candidate.title}
+                      </DetailsButton>
                       <p className="text-sm text-muted">
                         {[
                           r.candidate.year,

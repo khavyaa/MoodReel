@@ -14,6 +14,7 @@ import { Poster } from "@/components/pick/poster";
 import { linkChip, linkLine } from "@/components/pick/title-link";
 import type { FollowUpAnswer, Media } from "@/lib/picks/server";
 import { CheckInAnswers, WatchAnswer } from "./watch-prompt";
+import { DetailsButton } from "./title-details";
 
 // You're in India; dates read the same on the server (UTC) and in the browser.
 const DATE = new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Kolkata" });
@@ -103,6 +104,7 @@ export function SavedList({ movies }: { movies: LibraryMovie[] }) {
               <button type="button" onClick={() => act(m, removeSaved)} className="inline-flex items-center gap-1 text-muted underline-offset-4 hover:underline">
                 <X className="size-4" aria-hidden /> Remove
               </button>
+              <DetailsButton card={m} media={m.media} id={m.id} title={m.title} />
             </div>
           </div>
         </li>
@@ -178,7 +180,10 @@ export function HistoryList({ entries }: { entries: HistoryEntry[] }) {
                   <WatchAnswer sessionId={e.sessionId} />
                 </div>
               )}
-              <WatchLinks movie={e.movie} />
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                <WatchLinks movie={e.movie} />
+                <DetailsButton card={e.movie} media={e.movie.media} id={e.movie.id} title={e.movie.title} className="text-sm font-semibold" />
+              </div>
             </div>
           </li>
         );
@@ -278,6 +283,7 @@ export function WatchingList({ entries, media = "series" }: { entries: WatchingE
               >
                 {whereTo(show).label} <ExternalLink className="size-3.5" aria-hidden />
               </a>
+              <DetailsButton card={show} media={show.media} id={show.id} title={show.title} className="self-start text-sm font-semibold" />
               <CheckInAnswers media={media} seriesId={show.id} showStillWatching={false} />
             </div>
           </li>
@@ -309,6 +315,7 @@ export function SeenList({ entries }: { entries: SeenEntry[] }) {
             <h2 className="truncate text-lg leading-tight font-black">{e.movie.title}</h2>
             <p className="text-sm text-muted">{meta(e.movie)}</p>
             <Stars media={e.movie.media} id={e.movie.id} stars={e.stars} title={e.movie.title} />
+            <DetailsButton card={e.movie} media={e.movie.media} id={e.movie.id} title={e.movie.title} className="self-start text-sm font-semibold" />
           </div>
         </li>
       ))}

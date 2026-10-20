@@ -185,6 +185,10 @@ deals only films or series based on a book. Cards, the pick screen ("I've read i
 History show the link, and Settings → Background syncs shows the last sync. Rules:
 `lib/adaptations/rules.ts`.
 
+**Details.** Any title in Saved, History (Picks and Seen & read), Watching/Reading, the pick screen
+or a person's page opens a Details sheet: the full synopsis, length, rating and its scale (/10
+TMDb, /5 Open Library), people, the linked book or film, and where to watch or get it.
+
 **Offline.** Offline, swipes, saves and check-ins wait and are sent when the connection returns
 (Next's `useOffline`), and a banner says so. A service worker (`public/sw.js`, production only) lets
 the home-screen app open with no connection: Saved, History and the start screens open from your
