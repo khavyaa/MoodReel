@@ -2,9 +2,9 @@
 //   node scripts/migrate.mjs             always (local, CI)
 //   node scripts/migrate.mjs --if-vercel only inside a Vercel *production* build; a no-op
 //                                        elsewhere. A laptop build never touches a database, and
-//                                        neither does a pull request's preview build: previews
-//                                        share production's DATABASE_URL, so migrating there would
-//                                        change live data before the PR is reviewed and merged.
+//                                        neither does a pull request's preview build: a preview runs
+//                                        on its own Neon branch (a copy of production), and a PR's
+//                                        migration should reach production only once it's merged.
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import pg from "pg";
