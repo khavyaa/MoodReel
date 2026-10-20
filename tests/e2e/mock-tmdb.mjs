@@ -24,8 +24,15 @@ function film(id, title, language, extra = {}) {
   };
 }
 
+// A three-hour film by Eli Director (704), rated best of his: it only reaches a
+// deck through following him, and must still respect the time you chose.
+const LONG_FILM = 1004;
+const runtimeOf = (id) => (id === LONG_FILM ? 182 : 118);
+
 const FILMS = [
-  ...Array.from({ length: 20 }, (_, i) => film(1000 + i, `English Thriller ${i + 1}`, "en")),
+  ...Array.from({ length: 20 }, (_, i) =>
+    film(1000 + i, `English Thriller ${i + 1}`, "en", 1000 + i === LONG_FILM ? { vote_average: 8.4 } : {}),
+  ),
   ...Array.from({ length: 5 }, (_, i) => film(2000 + i, `Tamil Crime ${i + 1}`, "ta")),
   ...Array.from({ length: 5 }, (_, i) => film(3000 + i, `Malayalam Mystery ${i + 1}`, "ml", { genre_ids: [9648, 18] })),
   ...Array.from({ length: 5 }, (_, i) => film(4000 + i, `Hindi Thriller ${i + 1}`, "hi")),
@@ -203,8 +210,14 @@ http
       const lang = url.searchParams.get("with_original_language");
       const page = Number(url.searchParams.get("page") || 1);
       const bookOnly = url.searchParams.get("with_keywords") === "818";
+      const maxRuntime = Number(url.searchParams.get("with_runtime.lte") || Infinity);
       const results =
-        page === 1 ? FILMS.filter((f) => f.original_language === lang && (!bookOnly || BASED_ON_BOOK.has(f.id))) : [];
+        page === 1
+          ? FILMS.filter(
+              (f) =>
+                f.original_language === lang && (!bookOnly || BASED_ON_BOOK.has(f.id)) && runtimeOf(f.id) <= maxRuntime,
+            )
+          : [];
       return json(res, { page, results, total_pages: 1, total_results: results.length });
     }
     const person = url.pathname.match(/^\/3\/person\/(\d+)$/);
@@ -275,7 +288,7 @@ http
       return json(res, {
         ...f,
         genres: f.genre_ids.map((id) => ({ id, name: String(id) })),
-        runtime: 118,
+        runtime: runtimeOf(f.id),
         tagline: null,
         credits: filmCredits(f),
         videos: { results: [] },
