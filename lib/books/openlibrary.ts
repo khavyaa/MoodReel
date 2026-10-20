@@ -10,6 +10,8 @@ import { nytWeeksFromSubjects, type BookCandidate } from "./rules";
 const OL_BASE = process.env.OPEN_LIBRARY_BASE_URL || "https://openlibrary.org";
 const HEADERS = { "User-Agent": "MoodReel/1.0 (personal book picker)", Accept: "application/json" };
 const MAX_ATTEMPTS = 3;
+/** One request may take this long before it's abandoned (and retried), so a stalled call never holds up a deck. */
+const REQUEST_TIMEOUT_MS = 8000;
 const HOURS = 60 * 60;
 
 export class OpenLibraryError extends Error {
@@ -25,7 +27,7 @@ async function ol<T>(path: string, params: Record<string, string | number | unde
   let lastError: unknown;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
-      const res = await fetch(url, { headers: HEADERS, next: { revalidate } });
+      const res = await fetch(url, { headers: HEADERS, next: { revalidate }, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
       if (res.ok) return (await res.json()) as T;
       if (res.status < 500 && res.status !== 429) throw new OpenLibraryError(`Open Library ${res.status}`, res.status);
       lastError = new OpenLibraryError(`Open Library ${res.status}`, res.status);
