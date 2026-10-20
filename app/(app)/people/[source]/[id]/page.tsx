@@ -23,25 +23,33 @@ const ROLE: Record<string, string> = {
   author: "Author",
 };
 
-export default function PersonPage({ params }: PageProps<"/people/[source]/[id]">) {
+export default function PersonPage({ params, searchParams }: PageProps<"/people/[source]/[id]">) {
   // Every person is a different URL, known only per request (the header reads
   // it too), so the whole page renders inside the boundary.
   return (
     <Suspense fallback={<div className="min-h-dvh bg-bg" />}>
-      <PersonFromParams params={params} />
+      <PersonFromParams params={params} searchParams={searchParams} />
     </Suspense>
   );
 }
 
-async function PersonFromParams({ params }: { params: PageProps<"/people/[source]/[id]">["params"] }) {
-  const { source, id } = await params;
+async function PersonFromParams({
+  params,
+  searchParams,
+}: {
+  params: PageProps<"/people/[source]/[id]">["params"];
+  searchParams: PageProps<"/people/[source]/[id]">["searchParams"];
+}) {
+  const [{ source, id }, query] = await Promise.all([params, searchParams]);
+  // The role you came from ("Directed by …"), if it's a known one.
+  const as = typeof query.as === "string" && query.as in ROLE ? query.as : null;
   const src: PersonSource | null = source === "tmdb" ? "tmdb" : source === "ol" ? "openlibrary" : null;
   const num = Number(id);
   if (!src || !Number.isInteger(num) || num <= 0) notFound();
   return (
     <AppFrame>
       <Suspense fallback={<p className="text-muted">Loading their work…</p>}>
-        <Person source={src} id={num} />
+        <Person source={src} id={num} as={as} />
       </Suspense>
     </AppFrame>
   );
@@ -49,7 +57,7 @@ async function PersonFromParams({ params }: { params: PageProps<"/people/[source
 
 type Row = { media: Media; candidate: MovieCandidate; pages?: number | null; tags?: string[] };
 
-async function Person({ source, id }: { source: PersonSource; id: number }) {
+async function Person({ source, id, as }: { source: PersonSource; id: number; as: string | null }) {
   const owner = await requireOwner();
   const [works, prefs] = await Promise.all([personWorks(source, id).catch(() => null), peoplePrefsFor(owner.id)]);
   if (!works) notFound();
@@ -95,7 +103,7 @@ async function Person({ source, id }: { source: PersonSource; id: number }) {
           ← People
         </Link>
         <span className="label text-muted">
-          {ROLE[person.role] ?? "Person"} · {count} {person.role === "author" ? (count === 1 ? "book" : "books") : count === 1 ? "title" : "titles"} for you
+          {ROLE[as ?? person.role] ?? "Person"}{as && as !== person.role && ROLE[person.role] ? ` · also ${ROLE[person.role].toLowerCase()}` : ""} · {count} {person.role === "author" ? (count === 1 ? "book" : "books") : count === 1 ? "title" : "titles"} for you
         </span>
         <h1 className="display text-[clamp(3rem,7vw,6rem)]">{person.name}</h1>
         <FollowAvoid person={person} initial={pref === "follow" || pref === "avoid" ? pref : null} />

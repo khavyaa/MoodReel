@@ -10,6 +10,8 @@ import "server-only";
 /** Overridable only so end-to-end tests can point at a fixed fake TMDb. */
 const TMDB_BASE = process.env.TMDB_BASE_URL || "https://api.themoviedb.org/3";
 const MAX_ATTEMPTS = 3;
+/** One TMDb request may take this long before it's abandoned (and retried): a stalled call never holds up a deck. */
+const REQUEST_TIMEOUT_MS = 8000;
 
 export class TmdbError extends Error {
   constructor(
@@ -55,6 +57,7 @@ export async function tmdb<T>(path: string, params: Params = {}, revalidate = 60
       const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}`, accept: "application/json" },
         next: { revalidate },
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
       if (res.ok) return (await res.json()) as T;
       const retryable = res.status === 429 || res.status >= 500;

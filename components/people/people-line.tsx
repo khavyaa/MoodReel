@@ -126,7 +126,7 @@ function PersonSheet({ person, following, onClose }: { person: Person; following
               ? "Their work won't come up again. Undo any time from People in Saved."
               : "Follow to see more of their work; avoid to never see it."}
         </p>
-        <Link href={personHref(person)} className="self-start text-sm font-bold underline underline-offset-4">
+        <Link href={personHref(person, person.role)} className="self-start text-sm font-bold underline underline-offset-4">
           See all their work →
         </Link>
       </div>

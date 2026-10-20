@@ -138,7 +138,8 @@ body {
     background: var(--bg);
     color: var(--fg);
     --accent: var(--m);
-    --on-accent: #0f0e12;
+    /* The mood's own ink: light on Dark and Mind-bending, dark on the rest. */
+    --on-accent: var(--mi);
     --line: #2e2c36;
     --soft: #1a1920;
     --muted: #9c98ab;
@@ -149,7 +150,7 @@ body {
   background: var(--bg);
   color: var(--fg);
   --accent: var(--m);
-  --on-accent: #0f0e12;
+  --on-accent: var(--mi);
   --line: #2e2c36;
   --soft: #1a1920;
   --muted: #9c98ab;

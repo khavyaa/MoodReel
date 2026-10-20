@@ -50,6 +50,9 @@ export function bestsellerLabel(card: DeckCard): string | null {
 }
 
 /** Ratings line: TMDb votes out of 10, or Open Library ratings out of 5. */
+/** Films and series are rated out of 10 (TMDb), books out of 5 (Open Library). */
+export const ratingScale = (card: Pick<DeckCard, "book">) => (card.book ? "/5" : "/10");
+
 export const ratingCountLabel = (card: DeckCard) => `${card.votes.toLocaleString("en-IN")} ${card.book ? "ratings" : "votes"}`;
 
 /** Where to start a book tonight: its length. */
