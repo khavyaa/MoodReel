@@ -89,11 +89,12 @@ test("History: a pick you postponed can be marked watched right there, and in-pr
     [owner],
   );
   await state("movie", 1003, "saved");
+  // The first test may have swiped this film "Seen it" (deck order varies): it's back to unwatched here.
+  await query("update title_states set seen = false, rating = null where external_id = '1003' and media = 'movie'");
   await page.goto("/history");
   await expect(page.getByText("Not watched yet: it's in Saved.")).toBeVisible();
   await page.getByRole("button", { name: "Watched it" }).click();
-  // The History page re-renders on the server after the change: slower under a full parallel test run.
-  await expect(page.getByRole("group", { name: "Your rating for English Thriller 4" })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("group", { name: "Your rating for English Thriller 4" })).toBeVisible();
   expect((await query<{ seen: boolean; saved: boolean }>("select seen, saved from title_states where external_id = '1003'"))[0]).toEqual({
     seen: true,
     saved: false,
