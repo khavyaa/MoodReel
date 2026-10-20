@@ -21,7 +21,15 @@ import type { DeckCard } from "@/lib/deck/build-movies";
 import { seriesCard } from "@/lib/deck/build-series";
 import { MAX_SAVES } from "@/lib/deck/finale";
 import { withLinks } from "@/lib/adaptations/server";
-import { bookCardsFor, detailsToCandidate, detailsToCard, movieDetailsFor, seriesDetailsFor } from "@/lib/library";
+import {
+  bookCardsFor,
+  detailsToCandidate,
+  detailsToCard,
+  libraryKey,
+  libraryTitles,
+  movieDetailsFor,
+  seriesDetailsFor,
+} from "@/lib/library";
 import { withNytWeeks } from "@/lib/deck/build-books";
 import { booksByWork } from "@/lib/books/openlibrary";
 import { fitsLength, scoreBook, type BookCandidate } from "@/lib/books/rules";
@@ -205,4 +213,15 @@ export async function saveServices(providers: number[]) {
   const owner = await requireOwner();
   await saveProviders(owner.id, z.array(z.number().int().positive()).max(60).parse([...new Set(providers)]));
   refresh();
+}
+
+/** Everything about one title, for its details sheet (person pages only know titles by id). Null if the catalogue can't return it just now. */
+export async function titleDetails(media: Media, id: number): Promise<DeckCard | null> {
+  const owner = await requireOwner();
+  const kind = mediaSchema.parse(media);
+  const cards = await libraryTitles([{ media: kind, id: titleId.parse(id) }], await providersFor(owner.id));
+  const card = cards.get(libraryKey(kind, id));
+  if (!card) return null;
+  const [linked] = await withLinks(owner.id, [card]);
+  return linked;
 }
