@@ -40,8 +40,9 @@ Setup and architecture: README.md.
 - **Passkeys on iOS** must start directly from a tap; never trigger WebAuthn after an `await`.
 - **Titles** are always identified by `(media, source, external_id)`. Store ids and actions only;
   fetch metadata fresh (TMDb terms).
-- **Ratings** update `title_states` without appending to `title_actions`, so re-rating never
-  adds taste signal.
+- **Ratings** update `title_states` without appending to `title_actions`. Taste reads each
+  title's current rating once (`ratedTags` → `buildTasteProfile`), so re-rating replaces its
+  signal instead of adding to it.
 - **Looks:** style through tokens in `app/globals.css` (`bg-bg`, `text-muted`, `border-line`,
   `bg-accent`…). Inside `.mood` surfaces the tokens re-point to the mood colour. No literal
   colours in components except mood data in `lib/moods.ts`.

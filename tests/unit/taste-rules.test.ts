@@ -162,3 +162,19 @@ describe("scoring", () => {
     expect(buildTasteProfile(many).tags["35"]).toBeLessThanOrEqual(1);
   });
 });
+
+describe("ratings in taste", () => {
+  it("count once per title: five stars pulls a genre up, one star cancels having picked it", async () => {
+    const { buildTasteProfile, ratingWeight } = await import("@/lib/taste/profile");
+    const picked = [{ action: "picked" as const, tags: ["53"] }];
+    const plain = buildTasteProfile(picked).tags["53"];
+    const loved = buildTasteProfile(picked, [{ rating: 10, tags: ["53"] }]).tags["53"];
+    const hated = buildTasteProfile(picked, [{ rating: 2, tags: ["53"] }]).tags["53"];
+    expect(loved).toBeGreaterThan(plain);
+    expect(hated).toBeLessThan(plain);
+    expect(hated).toBeLessThanOrEqual(0); // a one-star pick no longer teaches "more of this"
+    expect(ratingWeight(6)).toBe(0);
+    expect(ratingWeight(10)).toBe(2);
+    expect(ratingWeight(2)).toBe(-2);
+  });
+});
