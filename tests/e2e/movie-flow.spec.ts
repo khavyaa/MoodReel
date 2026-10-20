@@ -229,8 +229,23 @@ test("pick from saved: the best-fitting saves go straight to the head-to-head", 
 });
 
 test("a few hours after a pick, the start screen asks if you watched it", async ({ page }) => {
-  await query("update pick_sessions set completed_at = now() - interval '4 hours' where status = 'picked' and follow_up is null");
+  // The pick is fresh: nothing to ask yet.
   await page.goto("/movies");
+  await expect(page.getByRole("heading", { name: "What kind of night is it?" })).toBeVisible();
+  await expect(page.getByText(/Did you watch/)).toHaveCount(0);
+
+  // Hours later you come back to the app, which resumes instead of reloading: it still asks.
+  await query("update pick_sessions set completed_at = now() - interval '4 hours' where status = 'picked' and follow_up is null");
+  await page.evaluate(() => {
+    const set = (state: string) => {
+      Object.defineProperty(document, "visibilityState", { configurable: true, get: () => state });
+      document.dispatchEvent(new Event("visibilitychange"));
+    };
+    set("hidden");
+    const now = Date.now;
+    Date.now = () => now() + 2 * 60_000;
+    set("visible");
+  });
   await expect(page.getByText(/Did you watch/)).toBeVisible();
   await page.getByRole("button", { name: "Not yet" }).click();
   await expect(page.getByText(/is back in Saved/)).toBeVisible();

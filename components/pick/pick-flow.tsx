@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useOffline } from "next/offline";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { parsePersonKey } from "@/lib/people/types";
 import type { ChosenPerson } from "@/components/people/someone-in-mind";
 import { deal as dealDeck, noSavesThisTime, pick as pickTitle, swipe, undo as undoSwipe } from "@/app/(app)/[media]/actions";
@@ -16,6 +16,9 @@ import { FinaleScreen } from "./finale-screen";
 import { FlowFrame } from "./flow-frame";
 import { PickScreen } from "./pick-screen";
 import { TapsScreen, type TapsValue } from "./taps-screen";
+
+/** Back in the app after this long, the start screen checks for a due "Did you watch it?" card. */
+const RECHECK_AFTER_MS = 60_000;
 
 type Step =
   | { kind: "taps" }
@@ -193,7 +196,28 @@ export function PickFlow({
     [reveal, step],
   );
 
-  const toTaps = useCallback(() => (onExit ? onExit() : setStep({ kind: "taps" })), [onExit]);
+  // The "Did you watch it?" / "Still watching?" card is rendered on the server
+  // with the page. The home-screen app resumes rather than reloads, and "Start
+  // again" doesn't reload either, so ask the server again at those moments:
+  // otherwise a card that's become due never shows.
+  const router = useRouter();
+  const onTaps = step.kind === "taps";
+  useEffect(() => {
+    if (!onTaps) return;
+    let hiddenAt = 0;
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") hiddenAt = Date.now();
+      else if (hiddenAt && Date.now() - hiddenAt >= RECHECK_AFTER_MS && navigator.onLine) router.refresh();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [onTaps, router]);
+
+  const toTaps = useCallback(() => {
+    if (onExit) return onExit();
+    setStep({ kind: "taps" });
+    if (navigator.onLine) router.refresh();
+  }, [onExit, router]);
 
   return (
     <FlowFrame mood={taps.mood}>
