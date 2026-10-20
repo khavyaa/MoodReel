@@ -3,7 +3,7 @@
 # MoodReel
 
 Personal mood-first recommender for movies, series and books. One owner, iPhone + Mac.
-Setup and architecture: README.md.
+Setup: README.md. Architecture, deck rules and deploy notes: docs/how-it-works.md (keep it current when behaviour changes).
 
 ## Workflow
 
