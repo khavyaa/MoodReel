@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { flow } from "./flow";
 import { E2E_SETUP_TOKEN } from "../../playwright.config";
 import { claimAccount, query, resetDatabase } from "./passkey";
 
@@ -57,5 +58,6 @@ test("search any title and mark it, and it shows in History under Seen & read", 
   await expect.poll(async () => (await stateOf("series", "5002"))?.seen).toBe(true);
 
   await page.goto("/history?tab=seen");
-  await expect(page.getByRole("list", { name: "Seen and read" }).getByRole("heading", { name: "English Series 3" })).toBeVisible();
+  // Newest first: what you just marked is in front.
+  await expect(flow(page, "Seen and read").getByRole("heading", { name: "English Series 3" })).toBeVisible();
 });

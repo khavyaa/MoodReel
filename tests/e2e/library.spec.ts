@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { bringToFront, flow } from "./flow";
 import { E2E_SETUP_TOKEN } from "../../playwright.config";
 import { claimAccount, query, resetDatabase } from "./passkey";
 
@@ -42,7 +43,7 @@ test("Seen & read lists everything you've watched, not only picks, and you can r
   await page.goto("/history");
   await expect(page.getByRole("link", { name: "Picks · 0" })).toBeVisible();
   await page.getByRole("link", { name: "Seen & read · 1" }).click();
-  const list = page.getByRole("list", { name: "Seen and read" });
+  const list = flow(page, "Seen and read");
   await expect(list.getByRole("heading", { name: title!.trim(), exact: true })).toBeVisible();
   await list.getByRole("button", { name: "4 stars" }).click();
   await expect.poll(async () => (await query<{ rating: number }>("select rating from title_states where seen"))[0].rating).toBe(8);
@@ -114,19 +115,20 @@ test("History: a pick you postponed can be marked watched right there, and in-pr
   await expect(watching.getByRole("link", { name: /Where to watch/ })).toHaveAttribute("href", /English%20Series%202|English\+Series\+2/);
 });
 
-test("rating a title keeps your place in the list: no reload, no jump to the top", async ({ page }) => {
+test("rating a title keeps your place in the flow: no reload, no jump back to the start", async ({ page }) => {
   for (let i = 0; i < 20; i++) await state("movie", 1000 + i, "seen", 10 + i);
   await page.goto("/history?tab=seen");
-  const list = page.getByRole("list", { name: "Seen and read" });
+  const list = flow(page, "Seen and read");
+  await bringToFront(list, "English Thriller 18");
   const target = list.getByRole("group", { name: "Your rating for English Thriller 18" });
   await target.scrollIntoViewIfNeeded();
   const before = await page.evaluate(() => window.scrollY);
-  expect(before).toBeGreaterThan(200);
   await target.getByRole("button", { name: "4 stars" }).click();
   await expect(target.getByRole("button", { name: "4 stars" })).toHaveAttribute("aria-pressed", "true");
   await expect
     .poll(async () => (await query<{ rating: number }>("select rating from title_states where external_id = '1017'"))[0]?.rating)
     .toBe(8);
   await page.waitForTimeout(1000);
+  await expect(list.getByRole("button", { name: "Show English Thriller 18" })).toHaveAttribute("aria-current", "true");
   expect(Math.abs((await page.evaluate(() => window.scrollY)) - before)).toBeLessThan(5);
 });

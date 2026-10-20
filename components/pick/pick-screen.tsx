@@ -1,6 +1,7 @@
 "use client";
 
 import { Check, ExternalLink, Play, Star } from "lucide-react";
+import { motion, useReducedMotion } from "motion/react";
 import type { DeckCard } from "@/lib/deck/build-movies";
 import { MOODS, type MoodId } from "@/lib/moods";
 import { bestsellerLabel, cardMeta, makersLabel, ratingScale, readLine, startLine } from "@/lib/card-meta";
@@ -31,6 +32,7 @@ export function PickScreen({
   saveFailed?: boolean;
   onAgain: () => void;
 }) {
+  const reduced = useReducedMotion() ?? false;
   const start = startLine(pick);
   const read = readLine(pick);
   const where = whereTo(pick);
@@ -38,13 +40,21 @@ export function PickScreen({
   const bestseller = bestsellerLabel(pick);
   return (
     <div className="grid flex-1 items-center gap-5 lg:grid-cols-[minmax(260px,380px)_minmax(0,1fr)] lg:gap-16">
-      <div className="mx-auto w-[min(40vw,200px)] lg:w-full">
+      <motion.div
+        className="mx-auto w-[min(40vw,200px)] lg:w-full"
+        initial={reduced ? false : { scale: 0.92, opacity: 0.6 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ type: "spring", stiffness: 220, damping: 18 }}
+      >
         <Poster title={pick.title} path={pick.posterPath} size="xl" sizes="(min-width: 1024px) 380px, 40vw" priority />
-      </div>
+      </motion.div>
 
       <div className="flex min-w-0 flex-col gap-4 lg:gap-5">
-        <p className="label text-muted">
-          {resultLabel} · {MOODS[mood].label}
+        <p className="label flex items-center gap-1.5 text-muted">
+          {`${resultLabel} ·`}
+          {/* The page now wears the poster's colour; the mood keeps its dot. */}
+          <span aria-hidden className="size-2.5 rounded-full shadow-[0_0_0_1.5px_var(--line)]" style={{ background: MOODS[mood].color }} />{" "}
+          {MOODS[mood].label}
         </p>
         <h1 className="display text-[clamp(3rem,8vw,7.5rem)]">{pick.title}</h1>
         {by && <p className="-mt-1 text-lg font-bold">{by}</p>}

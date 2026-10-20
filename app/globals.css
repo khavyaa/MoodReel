@@ -159,6 +159,52 @@ body {
   --muted: #9c98ab;
 }
 
+/*
+ * A poster tint: pages with a cover flow take a soft wash of the poster in
+ * front (--t, sampled in the browser). Playful: a pale wash with the poster's
+ * own deep ink. Cinematic: a dark ground tinted toward the poster.
+ */
+.tint-frame {
+  transition:
+    background-color 0.7s ease,
+    color 0.7s ease;
+}
+.tint-frame[data-tinted] {
+  --bg: color-mix(in oklab, var(--t) 22%, #f6f5f9);
+  --surface: var(--bg);
+  --fg: color-mix(in oklab, var(--t) 34%, #101014);
+  --muted: color-mix(in oklab, var(--fg) 74%, transparent);
+  --line: color-mix(in oklab, var(--fg) 22%, transparent);
+  --soft: color-mix(in oklab, var(--fg) 8%, transparent);
+  --raised: color-mix(in oklab, var(--t) 8%, #ffffff);
+  --accent: var(--fg);
+  --on-accent: var(--bg);
+  background: var(--bg);
+  color: var(--fg);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-look="playful"]) .tint-frame[data-tinted] {
+    --bg: color-mix(in oklab, var(--t) 20%, #0f0e12);
+    --fg: #ece8f1;
+    --muted: #a7a3b5;
+    --line: color-mix(in oklab, var(--t) 28%, #2e2c36);
+    --soft: color-mix(in oklab, #ffffff 6%, transparent);
+    --raised: color-mix(in oklab, var(--t) 14%, #16151b);
+    --accent: color-mix(in oklab, var(--t) 55%, #ffffff);
+    --on-accent: #0f0e12;
+  }
+}
+:root[data-look="cinematic"] .tint-frame[data-tinted] {
+  --bg: color-mix(in oklab, var(--t) 20%, #0f0e12);
+  --fg: #ece8f1;
+  --muted: #a7a3b5;
+  --line: color-mix(in oklab, var(--t) 28%, #2e2c36);
+  --soft: color-mix(in oklab, #ffffff 6%, transparent);
+  --raised: color-mix(in oklab, var(--t) 14%, #16151b);
+  --accent: color-mix(in oklab, var(--t) 55%, #ffffff);
+  --on-accent: #0f0e12;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { flow } from "./flow";
 import { E2E_SETUP_TOKEN } from "../../playwright.config";
 import { claimAccount, query, resetDatabase } from "./passkey";
 
@@ -80,7 +81,7 @@ test("Saved shows the link, and the pick screen offers \"I've read it\" for the 
     `insert into title_states (user_id, media, source, external_id, saved) values ('${await ownerId()}', 'movie', 'tmdb', '1007', true)`,
   );
   await page.goto("/saved");
-  const saved = page.getByRole("list", { name: "Saved titles" });
+  const saved = flow(page, "Saved titles");
   await expect(saved.getByText("Also a book · Author 2")).toBeVisible();
 
   await page.getByRole("button", { name: "Pick from my saved" }).click();

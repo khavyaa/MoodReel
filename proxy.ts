@@ -11,7 +11,8 @@ import { getSessionCookie } from "better-auth/cookies";
 const PUBLIC_PATHS = ["/sign-in", "/setup", "/about", "/offline", "/api/cron"];
 
 function isPublic(pathname: string) {
-  return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+  // "/" is the landing page; signed in, it's the films start screen instead (below).
+  return pathname === "/" || PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
 export function proxy(request: NextRequest) {
@@ -23,12 +24,13 @@ export function proxy(request: NextRequest) {
       return NextResponse.json({ error: "Sign in first." }, { status: 401 });
     }
     const url = request.nextUrl.clone();
-    url.pathname = "/sign-in";
-    url.search = pathname === "/" || pathname === "/movies" ? "" : `?next=${encodeURIComponent(pathname + search)}`;
+    // The app's front door goes to the landing page; any deeper link to sign-in, and back there after.
+    url.pathname = pathname === "/movies" ? "/" : "/sign-in";
+    url.search = pathname === "/movies" ? "" : `?next=${encodeURIComponent(pathname + search)}`;
     return NextResponse.redirect(url);
   }
 
-  if (signedIn && pathname === "/sign-in") {
+  if (signedIn && (pathname === "/sign-in" || pathname === "/")) {
     return NextResponse.redirect(new URL("/movies", request.url));
   }
 

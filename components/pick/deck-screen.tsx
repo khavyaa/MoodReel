@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AnimatePresence, animate, motion, useMotionValue, useReducedMotion, useTransform } from "framer-motion";
+import { AnimatePresence, animate, motion, useMotionValue, useReducedMotion, useTransform } from "motion/react";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Award, Check, Heart, Star, Undo2 } from "lucide-react";
 import { PeopleLine } from "@/components/people/people-line";
 import { DECK_SIZE } from "@/lib/deck/compose";
@@ -11,6 +11,7 @@ import { MAX_SAVES } from "@/lib/deck/finale";
 import { airingLabel, bestsellerLabel, cardMeta, makersLabel, ratingCountLabel, ratingScale } from "@/lib/card-meta";
 import { cn } from "@/lib/cn";
 import { Poster } from "./poster";
+import { usePosterColour } from "@/components/flow/use-poster-colour";
 
 export type SwipeAction = "saved" | "skipped" | "seen" | "disliked";
 /** How the card leaving the pile goes: the way it was swiped, or quietly to the back on undo. */
@@ -119,7 +120,8 @@ export function DeckScreen({
           The pile: the next two cards sit underneath, already loaded. When the
           top card leaves, they slide forward instead of a new card popping in.
         */}
-        <div className="relative mx-auto aspect-[2/3] w-[min(50vw,240px)] lg:w-full lg:max-w-[380px]">
+        <div className="relative isolate mx-auto aspect-[2/3] w-[min(50vw,240px)] lg:w-full lg:max-w-[380px]">
+          <PosterGlow path={card.posterPath} />
           <AnimatePresence custom={exitAs} initial={false}>
             {cards
               .slice(index, index + PILE)
@@ -450,5 +452,22 @@ function Progress({ total, index, saves }: { total: number; index: number; saves
         ))}
       </ol>
     </div>
+  );
+}
+
+/**
+ * A soft halo of the top card's colour behind the pile. The mood stays the
+ * page's colour; only the light behind the card changes as you swipe.
+ */
+function PosterGlow({ path }: { path: string | null }) {
+  const colour = usePosterColour(path);
+  return (
+    <motion.div
+      aria-hidden
+      className="pointer-events-none absolute -inset-[16%] -z-10 rounded-[50%] blur-[48px]"
+      initial={false}
+      animate={{ backgroundColor: colour ?? "rgba(0,0,0,0)", opacity: colour ? 0.7 : 0 }}
+      transition={{ duration: 0.7, ease: "easeOut" }}
+    />
   );
 }

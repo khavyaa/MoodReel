@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { E2E_SETUP_TOKEN } from "../../playwright.config";
 import { claimAccount, query, resetDatabase } from "./passkey";
+import { flow } from "./flow";
 
 test.describe.configure({ mode: "serial" });
 
@@ -118,8 +119,11 @@ test("pick a series from Saved, drop it, and History tells them apart", async ({
 
   await page.goto("/history");
   await expect(page.getByText("History · 2 picks")).toBeVisible();
-  await expect(page.getByText("You dropped this one.")).toBeVisible();
-  await expect(page.getByRole("button", { name: "4 stars" })).toHaveAttribute("aria-pressed", "true");
+  // Newest first: the one you dropped, then the one you finished.
+  const picks = flow(page, "Your picks");
+  await expect(picks.getByText("You dropped this one.")).toBeVisible();
+  await picks.getByRole("button", { name: "Next" }).click();
+  await expect(picks.getByRole("button", { name: "4 stars" })).toHaveAttribute("aria-pressed", "true");
 
   // Neither comes back in a new deck.
   await page.goto("/series");

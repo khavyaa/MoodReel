@@ -170,8 +170,10 @@ History show the link, and Settings → Background syncs shows the last sync. Ru
 
 **People page.** People in the nav lists who you follow and avoid, with photos (TMDb profiles,
 Open Library author photos, initials when there's none), suggestions, and one search across
-film and series people and authors. On a person's page every title has Seen it / Read it beside
-Save.
+film and series people (TMDb) and authors (Open Library). People you follow or avoid come up
+from the first letter; each source's results show as soon as they arrive (TMDb answers in a
+fraction of a second, Open Library can take a few), and the last results stay up while you keep
+typing. On a person's page every title has Seen it / Read it beside Save.
 
 **Lists.** Lists in the nav: award winners from Wikidata (Oscar Best Picture, Palme d'Or,
 National Film Award for Best Feature Film, Booker, International Booker, Pulitzer for Fiction,
@@ -206,12 +208,37 @@ Retry. A service worker (`public/sw.js`, production only) lets the home-screen a
 connection: Saved, History and the start screens open from your last visit, anything else shows
 `/offline`. Kept pages live on the device only and are deleted on sign-out.
 
+**Landing page.** Signed out, `/` is one screen with nothing to scroll: the story told as a
+looping cover flow of seven cards, one per mood colour (Gripping first, as the app opens), with
+the page taking each card's tint, the same springy motion as the app, a caption under the front
+card, and "Sign in with your passkey" (straight from the tap, as iPhone requires). It turns by
+itself every four seconds and rests a while after you touch it; Reduce Motion stops it. The
+cards shrink to fit short screens rather than being cut off. There's no sign-up: the setup-token
+link stays on the sign-in page only.
+
 **Looks.** Bold & playful in light mode, cinematic dark in dark mode, following the device. An
 override is stored per device in the browser and applied before the first paint.
+
+**Cover flow and poster tint.** Saved, Watching/Reading, History (Picks and Seen & read), list
+pages, a person's page and the people you follow show titles as a cover flow
+(`components/flow/cover-flow.tsx`, built on Motion): one poster in front, neighbours tilted
+away, moved by swiping, the arrows, the arrow keys or tapping a side poster, with springy
+settling. What's under each poster stays mounted, so its buttons keep their state as you
+browse; the page numbers below a flow still move 24 at a time. The page takes a soft tint of the
+poster in front: its colour is sampled in the browser from a small copy of the image
+(`lib/tint.ts`; TMDb and Open Library allow it), made rich enough to tint with, and fed to
+`.tint-frame` in `globals.css`, which re-points the tokens (pale wash in playful, tinted dark
+in cinematic). If an image can't be read the page keeps its normal look. Picking keeps the mood
+colour (the start screen, the deck and the head-to-head), with two touches of the poster: a soft
+glow of the top card's colour behind the deck, and tonight's pick, where the page fades from the
+mood into the winner's own colour while its poster settles in (the mood keeps a dot beside its
+name). Colours come from the poster's strongest hue family, so a poster of two opposite colours
+reads as one of them rather than grey. Reduce Motion swaps the tilt and springs for quick fades.
 
 ## Code map
 
 ```
+app/page.tsx       the landing page (signed out; signed in, / goes to /movies)
 app/(auth)/        sign-in and one-time setup
 app/(app)/         everything signed in: /movies, /series, /books, saved, history, people, lists, add, settings
 app/api/auth/      Better Auth endpoints
@@ -231,8 +258,10 @@ lib/ai/            AI Gateway calls, each with a rule-based fallback
 components/pick/   the flow: taps, deck, head-to-head, pick, save status
 components/library/ Saved, History, pages, adding what you've seen, Details sheet
 components/people/ the People page, search, photos, follow / avoid / seen controls
+components/flow/   the cover flow and the poster tint behind it
+components/landing/ the landing page's story cards
 components/lists/  follow a list, progress, collection search
-proxy.ts           sends signed-out requests to /sign-in
+proxy.ts           signed out: / is the landing page, /movies leads there, deeper links go to /sign-in
 ```
 
 **Data.** Titles are keyed by media, source and external id, since TMDb movie and TV ids

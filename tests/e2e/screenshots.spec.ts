@@ -76,6 +76,15 @@ test("iPhone screens", async ({ browser }, info) => {
 
 test("Mac screens", async ({ browser }, info) => {
   test.skip(info.project.name !== "laptop");
+  // The landing page, signed out, on its first card (taken well before it turns by itself).
+  const visitor = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1.5 });
+  const landing = await visitor.newPage();
+  await landing.goto("/");
+  await expect(landing.getByText("Films, series and books for the mood you're in.", { exact: true })).toBeVisible();
+  await landing.waitForTimeout(1200);
+  await shot(landing, "mac-landing");
+  await visitor.close();
+
   const light = await signedIn(browser, { width: 1440, height: 900, scale: 1.5 });
   await light.page.goto("/movies");
   await light.page.getByRole("button", { name: /Deal 15 films/ }).click();

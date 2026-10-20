@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { bringToFront, flow } from "./flow";
 import { E2E_SETUP_TOKEN } from "../../playwright.config";
 import { claimAccount, query, resetDatabase } from "./passkey";
 
@@ -37,9 +38,26 @@ test("Details from Saved shows everything: the full synopsis, its rating scale, 
 
 test("on a person's page, a title opens its details, fetched there and then", async ({ page }) => {
   await page.goto("/people/tmdb/703");
-  await page.getByRole("button", { name: "English Thriller 9", exact: true }).click();
+  const films = flow(page, /films/);
+  await bringToFront(films, "English Thriller 9");
+  await films.getByRole("button", { name: "English Thriller 9", exact: true }).click();
   const sheet = page.getByRole("dialog", { name: "English Thriller 9" });
   await expect(sheet.getByRole("heading", { name: "English Thriller 9" })).toBeVisible();
+  // Nothing from the cover flow behind sits on top of the sheet, anywhere on it.
+  const panel = (await sheet.locator(":scope > *").first().boundingBox())!;
+  const covered = await page.evaluate(
+    ({ x, y, width, height }) => {
+      const misses: string[] = [];
+      for (let i = 1; i < 6; i++)
+        for (let j = 1; j < 6; j++) {
+          const el = document.elementFromPoint(x + (width * i) / 6, y + (height * j) / 6);
+          if (el && !el.closest('[role="dialog"]')) misses.push(el.outerHTML.slice(0, 60));
+        }
+      return misses;
+    },
+    panel,
+  );
+  expect(covered).toEqual([]);
   await expect(sheet.getByText(/1h 58m/)).toBeVisible();
   await sheet.getByRole("button", { name: "Close" }).click();
   await expect(sheet).toHaveCount(0);

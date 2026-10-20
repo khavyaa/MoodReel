@@ -7,29 +7,51 @@ import { searchPeople, type PersonMatch } from "@/app/(app)/people-actions";
 import { parsePersonKey, personHref } from "@/lib/people/types";
 import { Avatar } from "./avatar";
 
-/** Search anyone: directors, actors and writers (TMDb) and authors (Open Library), in one box. */
-export function PeopleSearch() {
+type Found = { query: string; matches: PersonMatch[] };
+
+/** Does any word of the name start with what's typed ("nol" finds Christopher Nolan)? */
+const startsAWord = (name: string, q: string) =>
+  name
+    .toLowerCase()
+    .split(/[\s.-]+/)
+    .some((w) => w.startsWith(q)) || name.toLowerCase().startsWith(q);
+
+/**
+ * Search anyone: directors, actors and writers (TMDb) and authors (Open
+ * Library), in one box. People you already follow or avoid come up the moment
+ * you type; each source's answer shows as soon as it arrives (TMDb in a blink,
+ * Open Library can take a few seconds), and the last answer stays up while
+ * you keep typing instead of blanking.
+ */
+export function PeopleSearch({ known = [] }: { known?: PersonMatch[] }) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<{ screen: PersonMatch[]; books: PersonMatch[] } | null>(null);
+  const [screen, setScreen] = useState<Found | null>(null);
+  const [books, setBooks] = useState<Found | null>(null);
 
   useEffect(() => {
     const q = query.trim();
     if (q.length < 2) return;
     let live = true;
-    const timer = setTimeout(async () => {
-      const [screen, books] = await Promise.all([
-        searchPeople("movie", q).catch(() => []),
-        searchPeople("book", q).catch(() => []),
-      ]);
-      if (live) setResults({ screen, books });
-    }, 300);
+    const timer = setTimeout(() => {
+      searchPeople("movie", q)
+        .catch(() => [])
+        .then((matches) => live && setScreen({ query: q, matches }));
+      searchPeople("book", q)
+        .catch(() => [])
+        .then((matches) => live && setBooks({ query: q, matches }));
+    }, 200);
     return () => {
       live = false;
       clearTimeout(timer);
     };
   }, [query]);
 
-  const shown = query.trim().length >= 2 ? results : null;
+  const q = query.trim();
+  const active = q.length >= 2;
+  const yours = q.length >= 1 ? known.filter((p) => startsAWord(p.name, q.toLowerCase())).slice(0, 6) : [];
+  const yourKeys = new Set(yours.map((p) => p.key));
+  const fresh = (found: Found | null) => (found ? found.matches.filter((m) => !yourKeys.has(m.key)) : null);
+
   return (
     <div className="flex flex-col gap-3">
       <label className="flex h-12 items-center gap-3 rounded-2xl px-4 shadow-[inset_0_0_0_2px_var(--line)] focus-within:shadow-[inset_0_0_0_2px_var(--fg)]">
@@ -43,22 +65,26 @@ export function PeopleSearch() {
           className="h-full min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted"
         />
       </label>
-      {shown && (
+      {yours.length > 0 && <Results title="Your people" matches={yours} />}
+      {active && (
         <div className="grid gap-6 md:grid-cols-2">
-          <Results title="Films & series" matches={shown.screen} />
-          <Results title="Authors" matches={shown.books} />
+          <Results title="Films & series" matches={fresh(screen)} searching={screen?.query !== q} />
+          <Results title="Authors" matches={fresh(books)} searching={books?.query !== q} />
         </div>
       )}
     </div>
   );
 }
 
-function Results({ title, matches }: { title: string; matches: PersonMatch[] }) {
+function Results({ title, matches, searching = false }: { title: string; matches: PersonMatch[] | null; searching?: boolean }) {
   return (
-    <section aria-label={title} className="flex flex-col gap-2">
-      <h3 className="label text-muted">{title}</h3>
-      {matches.length === 0 ? (
-        <p className="text-sm text-muted">No one by that name.</p>
+    <section aria-label={title} aria-busy={searching} className="flex flex-col gap-2">
+      <h3 className="label flex items-center gap-2 text-muted">
+        {title}
+        {searching && <span className="tracking-normal normal-case">· searching…</span>}
+      </h3>
+      {matches === null ? null : matches.length === 0 ? (
+        !searching && <p className="text-sm text-muted">No one by that name.</p>
       ) : (
         <ul className="flex flex-col gap-1">
           {matches.map((m) => {
