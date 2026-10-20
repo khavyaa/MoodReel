@@ -272,6 +272,11 @@ export async function saveOutsideDeck(userId: string, media: Media, title: Title
   await logAction(userId, media, null, null, title, "saved", { saved: true, skipped: false });
 }
 
+/** "Not for me" from outside a deck (the add page's stack): the same as that swipe. */
+export async function dislikeOutsideDeck(userId: string, media: Media, title: TitleRef) {
+  await logAction(userId, media, null, null, title, "disliked", { disliked: true, saved: false });
+}
+
 /** "I've read it" or "I've seen it" from outside a deck: the same as that swipe. */
 export async function markSeenOutsideDeck(userId: string, media: Media, title: TitleRef) {
   await logAction(userId, media, null, null, title, "seen", { seen: true, saved: false });

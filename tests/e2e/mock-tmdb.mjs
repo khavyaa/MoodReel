@@ -223,6 +223,13 @@ http
           : [];
       return json(res, { page, results, total_pages: 1, total_results: results.length });
     }
+    // Title search (adding what you've watched): case-insensitive "contains".
+    if (url.pathname === "/3/search/movie" || url.pathname === "/3/search/tv") {
+      const q = (url.searchParams.get("query") || "").toLowerCase();
+      const pool = url.pathname.endsWith("movie") ? FILMS : SHOWS;
+      const results = pool.filter((f) => (f.title ?? f.name).toLowerCase().includes(q));
+      return json(res, { page: 1, results, total_pages: 1, total_results: results.length });
+    }
     const person = url.pathname.match(/^\/3\/person\/(\d+)$/);
     if (person) {
       const p = personResponse(Number(person[1]));

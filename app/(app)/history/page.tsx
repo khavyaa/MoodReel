@@ -48,9 +48,14 @@ async function History({ searchParams }: { searchParams: PageProps<"/history">["
         title="No picks yet"
         body="Each night's pick shows up here with the mood you were in, so you can see what worked and rate it after. Everything you mark seen or read is kept here too."
         action={
-          <Link href="/movies" className={buttonClasses("solid", "lg", "self-start")}>
-            Pick something
-          </Link>
+          <div className="flex flex-wrap gap-3">
+            <Link href="/movies" className={buttonClasses("solid", "lg")}>
+              Pick something
+            </Link>
+            <Link href="/add" className={buttonClasses("outline", "lg")}>
+              Add what you&apos;ve already seen
+            </Link>
+          </div>
         }
       />
     );
@@ -64,6 +69,9 @@ async function History({ searchParams }: { searchParams: PageProps<"/history">["
         </span>
         <h1 className="display text-[clamp(3rem,7vw,6rem)]">{tab === "picks" ? "What you picked" : "What you've seen"}</h1>
       </header>
+      <Link href="/add" className={buttonClasses("outline", "md", "self-start")}>
+        + Add what you&apos;ve already seen or read
+      </Link>
       <nav aria-label="History" className="flex flex-wrap gap-2">
         <TabLink tab="picks" current={tab} label={`Picks · ${picks}`} />
         <TabLink tab="seen" current={tab} label={`Seen & read · ${seen}`} />

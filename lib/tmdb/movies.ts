@@ -89,6 +89,22 @@ export async function discoverMovies(q: DiscoverQuery): Promise<MovieCandidate[]
   return data.results.map((m) => toCandidate(m, q.providers.length > 0));
 }
 
+/** Films by title, for adding what you've already watched. */
+export async function searchMovies(query: string): Promise<MovieCandidate[]> {
+  const data = await tmdb<{ results: TmdbMovie[] }>("/search/movie", { query, language: "en-US", include_adult: false }, 60 * 60);
+  return data.results.slice(0, 12).map((m) => toCandidate(m, false));
+}
+
+/** The most-watched films in a language (most TMDb votes), for "Have you seen these?". */
+export async function mostVotedMovies(language: string, page: number): Promise<MovieCandidate[]> {
+  const data = await tmdb<{ results: TmdbMovie[] }>(
+    "/discover/movie",
+    { include_adult: false, language: "en-US", with_original_language: language, sort_by: "vote_count.desc", page },
+    60 * 60 * 24,
+  );
+  return data.results.map((m) => toCandidate(m, false));
+}
+
 /* ---------------------------------------------------------------- details */
 
 /** Credit jobs that name the author of the book a film is based on. */
