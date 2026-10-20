@@ -6,10 +6,12 @@ the next book.
 
 Built for one person on an iPhone and a Mac. Sign-in is a passkey; there is no sign-up page.
 
-> **Status:** the v2 rebuild is complete (Phases 1–5). Movies, series and books work end to end:
-> taps → deck → head-to-head → tonight's pick (or "Read next"), plus Saved (with "Pick from my
-> saved"), History with ratings, a "Did you watch it?" check after a film, Watching / Reading lists
-> with check-ins for series and books, and an app that still opens offline.
+> **Status:** the v2 rebuild is complete (Phases 1–5), plus People (follow, avoid or deal by a
+> director, actor, writer or author) and Books on screen (books linked with their films and
+> series). Movies, series and books work end to end: taps → deck → head-to-head → tonight's pick
+> (or "Read next"), plus Saved (with "Pick from my saved"), History with ratings, a "Did you watch
+> it?" check after a film, Watching / Reading lists with check-ins for series and books, and an
+> app that still opens offline.
 
 ## Run it locally
 
@@ -80,6 +82,13 @@ a preview deployment's own URL; previews are for checking builds.
    left to skip, up for seen it, down for not for me; Undo steps back as far as you like. Four
    saves start the head-to-head.
 
+6. **After the pick.** About three hours later the films start screen asks "Did you watch it?":
+   watched (with optional stars) counts as seen, "Not yet" puts it back in Saved, "Skipped it"
+   stops asking. Only your latest unanswered pick is asked about. The start screen checks for a
+   due question when it loads, when you come back to the app after a minute or more (the
+   home-screen app resumes rather than reloads), and on "Start again"; series and book check-ins
+   work the same way.
+
 The rules live in `lib/taste/rules.ts`, each with a unit test, and their thresholds came from
 probing real TMDb data.
 
@@ -111,7 +120,8 @@ Series rules live in `lib/taste/series-rules.ts`.
   fiction and non-fiction lists into the database, about two years back, and matches each ISBN to
   its Open Library work. Weeks on the lists count towards quality, and lasting bestsellers join the
   pool even with few Open Library ratings. Without `NYT_API_KEY` this is skipped; Open Library's own
-  NYT subject tags still give a smaller signal.
+  NYT subject tags still give a smaller signal. Settings → Background syncs shows how the last run
+  went (Vercel's Hobby plan keeps function logs for only an hour).
 - **Never:** children's and young adult, romance and romantasy, self-help and business, comics and
   graphic novels (including ones only tagged with a comics class code), box sets and omnibuses.
 - **Mix:** English only, mostly the last 30 years, at most two classics and one book per author in
@@ -164,7 +174,8 @@ and the link is kept. The pull is one way: a film or series of a book you've rea
 (more if you rated the book well, at most three per deck) with a "You've read the book" badge,
 while a book you know from the screen ranks well down. "Adaptations only" on the start screen
 deals only films or series based on a book. Cards, the pick screen ("I've read it"), Saved and
-History show the link. Rules: `lib/adaptations/rules.ts`.
+History show the link, and Settings → Background syncs shows the last sync. Rules:
+`lib/adaptations/rules.ts`.
 
 **Offline.** Offline, swipes, saves and check-ins wait and are sent when the connection returns
 (Next's `useOffline`), and a banner says so. A service worker (`public/sw.js`, production only) lets
@@ -183,4 +194,4 @@ Library.
 
 This product uses the TMDb API but is not endorsed or certified by TMDb. Where-to-watch data is
 provided by JustWatch via TMDb. Book data comes from Open Library. Bestseller data: The New York
-Times Books API.
+Times Books API. Book ↔ film and series links come from Wikidata (CC0).

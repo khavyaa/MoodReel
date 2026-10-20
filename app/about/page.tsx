@@ -23,6 +23,11 @@ const CREDITS = [
     href: "https://developer.nytimes.com/",
     body: "Bestseller weeks for books. Data provided by The New York Times.",
   },
+  {
+    name: "Wikidata",
+    href: "https://www.wikidata.org/",
+    body: "Which films and series are based on which books. Wikidata's data is free to use (CC0).",
+  },
 ];
 
 export default function AboutPage() {
