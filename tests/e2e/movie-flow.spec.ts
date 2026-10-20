@@ -277,9 +277,15 @@ test("your streaming services are a setting", async ({ page }) => {
   await page.goto("/movies");
   await page.getByRole("button", { name: /Deal 15 films/ }).click();
   await expect(page.getByText("1/15")).toBeVisible();
-  for (let i = 0; i < 4 && !(await page.getByText("On Zee5").isVisible()); i++) {
-    await page.getByRole("button", { name: "Skip", exact: true }).click();
-  }
+  // In the fake TMDb only odd-numbered films stream (on Netflix and Zee5). Deck order varies
+  // between deals, so go straight to the first odd one rather than hoping it's near the top.
+  const deck = (
+    await query<{ deck: { externalId: string }[] }>("select deck from pick_sessions order by created_at desc limit 1")
+  )[0].deck.map((e) => Number(e.externalId));
+  const firstStreaming = deck.findIndex((id) => id % 2 === 1);
+  expect(firstStreaming).toBeGreaterThanOrEqual(0);
+  for (let i = 0; i < firstStreaming; i++) await page.getByRole("button", { name: "Skip", exact: true }).click();
+  await expect(page.getByText(`${firstStreaming + 1}/15`)).toBeVisible();
   await expect(page.getByText("On Zee5")).toBeVisible();
   await expect(page.getByText("On Netflix")).toHaveCount(0);
 });
