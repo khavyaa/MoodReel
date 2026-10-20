@@ -12,7 +12,8 @@ import {
   type Unavailable,
 } from "@/components/library/library-lists";
 import { LibrarySkeleton } from "@/components/library/library-skeleton";
-import { libraryKey, libraryTitles, shownFrom } from "@/lib/library";
+import { libraryKey, libraryTitles } from "@/lib/library";
+import { Pager, pageFrom } from "@/components/library/pager";
 import { withLinksByKey } from "@/lib/adaptations/server";
 import { LIST_PAGE, pickCount, pickHistory, providersFor, seenCount, seenTitles } from "@/lib/picks/server";
 import { requireOwner } from "@/lib/session";
@@ -36,8 +37,9 @@ async function History({ searchParams }: { searchParams: PageProps<"/history">["
   const owner = await requireOwner();
   const params = await searchParams;
   const tab: Tab = params.tab === "seen" ? "seen" : "picks";
-  const limit = shownFrom(params.show, LIST_PAGE);
   const [picks, seen] = await Promise.all([pickCount(owner.id), seenCount(owner.id)]);
+  const pages = Math.max(1, Math.ceil((tab === "picks" ? picks : seen) / LIST_PAGE));
+  const page = pageFrom(params.page, pages);
 
   if (picks === 0 && seen === 0) {
     return (
@@ -67,10 +69,16 @@ async function History({ searchParams }: { searchParams: PageProps<"/history">["
         <TabLink tab="seen" current={tab} label={`Seen & read · ${seen}`} />
       </nav>
       {tab === "picks" ? (
-        <Picks userId={owner.id} limit={limit} total={picks} />
+        <Picks userId={owner.id} page={page} />
       ) : (
-        <Seen userId={owner.id} limit={limit} total={seen} />
+        <Seen userId={owner.id} page={page} />
       )}
+      <Pager
+        page={page}
+        pages={pages}
+        href={(n) => `/history?${new URLSearchParams({ ...(tab === "seen" ? { tab } : {}), ...(n > 1 ? { page: String(n) } : {}) })}`}
+        label="History pages"
+      />
     </div>
   );
 }
@@ -93,18 +101,8 @@ function TabLink({ tab, current, label }: { tab: Tab; current: Tab; label: strin
   );
 }
 
-function ShowMore({ tab, limit, total, shown }: { tab: Tab; limit: number; total: number; shown: number }) {
-  if (total <= shown) return null;
-  const base = tab === "picks" ? "/history?" : "/history?tab=seen&";
-  return (
-    <Link href={`${base}show=${limit + LIST_PAGE}`} scroll={false} className="self-start text-sm font-bold underline underline-offset-4">
-      Show more · {(total - shown).toLocaleString("en-IN")} older
-    </Link>
-  );
-}
-
-async function Picks({ userId, limit, total }: { userId: string; limit: number; total: number }) {
-  const picks = await pickHistory(userId, limit);
+async function Picks({ userId, page }: { userId: string; page: number }) {
+  const picks = await pickHistory(userId, LIST_PAGE, (page - 1) * LIST_PAGE);
   if (picks.length === 0) return <p className="text-lg text-muted">No picks yet. Everything you&apos;ve seen or read is under Seen &amp; read.</p>;
   const cards = await withLinksByKey(userId, await libraryTitles(picks, await providersFor(userId)));
   const entries: HistoryEntry[] = [];
@@ -132,13 +130,12 @@ async function Picks({ userId, limit, total }: { userId: string; limit: number; 
     <>
       <HistoryList entries={entries} />
       <UnavailableList items={unavailable} />
-      <ShowMore tab="picks" limit={limit} total={total} shown={picks.length} />
     </>
   );
 }
 
-async function Seen({ userId, limit, total }: { userId: string; limit: number; total: number }) {
-  const seen = await seenTitles(userId, limit);
+async function Seen({ userId, page }: { userId: string; page: number }) {
+  const seen = await seenTitles(userId, LIST_PAGE, (page - 1) * LIST_PAGE);
   if (seen.length === 0) return <p className="text-lg text-muted">Nothing marked seen or read yet.</p>;
   const cards = await libraryTitles(seen, await providersFor(userId));
   const entries: SeenEntry[] = [];
@@ -152,7 +149,6 @@ async function Seen({ userId, limit, total }: { userId: string; limit: number; t
     <>
       <SeenList entries={entries} />
       <UnavailableList items={unavailable} />
-      <ShowMore tab="seen" limit={limit} total={total} shown={seen.length} />
     </>
   );
 }

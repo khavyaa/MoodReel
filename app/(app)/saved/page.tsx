@@ -6,7 +6,8 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { LibrarySkeleton } from "@/components/library/library-skeleton";
 import { SavedScreen } from "@/components/library/saved-screen";
 import { PeopleSection } from "@/components/people/people-section";
-import { libraryKey, libraryTitles, shownFrom } from "@/lib/library";
+import { libraryKey, libraryTitles } from "@/lib/library";
+import { Pager, pageFrom } from "@/components/library/pager";
 import { withLinksByKey } from "@/lib/adaptations/server";
 import { LIST_PAGE, inProgress, providersFor, savedCounts, savedTitles } from "@/lib/picks/server";
 import { requireOwner } from "@/lib/session";
@@ -29,15 +30,20 @@ export default function SavedPage({ searchParams }: PageProps<"/saved">) {
 
 async function Saved({ searchParams }: { searchParams: PageProps<"/saved">["searchParams"] }) {
   const owner = await requireOwner();
-  const limit = shownFrom((await searchParams).show, LIST_PAGE);
-  const [saved, counts, watching, reading, providers] = await Promise.all([
-    savedTitles(owner.id, limit),
-    savedCounts(owner.id),
+  const params = await searchParams;
+  // A type filter (?type=movie) and a page (?page=2), both in the address so Back works.
+  const type = params.type === "movie" || params.type === "series" || params.type === "book" ? params.type : null;
+  const counts = await savedCounts(owner.id);
+  const inView = type ? counts[type] : counts.movie + counts.series + counts.book;
+  const pages = Math.max(1, Math.ceil(inView / LIST_PAGE));
+  const page = pageFrom(params.page, pages);
+  const [saved, watching, reading, providers] = await Promise.all([
+    savedTitles(owner.id, LIST_PAGE, type ?? undefined, (page - 1) * LIST_PAGE),
     inProgress(owner.id, "series"),
     inProgress(owner.id, "book"),
     providersFor(owner.id),
   ]);
-  if (saved.length === 0 && watching.length === 0 && reading.length === 0) {
+  if (counts.movie + counts.series + counts.book === 0 && watching.length === 0 && reading.length === 0) {
     return (
       <AppFrame>
         <EmptyState
@@ -77,7 +83,7 @@ async function Saved({ searchParams }: { searchParams: PageProps<"/saved">["sear
     ...watching.filter((w) => !cards.has(libraryKey("series", w.id))).map((w) => ({ media: "series" as const, id: w.id, list: "watching" as const })),
     ...reading.filter((r) => !cards.has(libraryKey("book", r.id))).map((r) => ({ media: "book" as const, id: r.id, list: "reading" as const })),
   ];
-  const total = counts.movie + counts.series + counts.book;
+  const hrefFor = (n: number) => `/saved?${new URLSearchParams({ ...(type ? { type } : {}), ...(n > 1 ? { page: String(n) } : {}) })}`;
   return (
     <SavedScreen
       items={items}
@@ -89,8 +95,9 @@ async function Saved({ searchParams }: { searchParams: PageProps<"/saved">["sear
         </Suspense>
       }
       counts={counts}
+      filter={type ?? "all"}
       unavailable={unavailable}
-      moreHref={total > saved.length ? `/saved?show=${limit + LIST_PAGE}` : null}
+      pager={<Pager page={page} pages={pages} href={hrefFor} label="Saved pages" />}
     />
   );
 }

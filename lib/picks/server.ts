@@ -325,17 +325,18 @@ export async function updateTitleState(
   });
 }
 
-/** How many lists show at first, and how many more each "Show more" adds. */
-export const LIST_PAGE = 60;
+/** Titles per page in Saved and History. */
+export const LIST_PAGE = 24;
 
 /** Everything you swiped right on and haven't picked or removed, newest first; of one kind if `media` is given. */
-export async function savedTitles(userId: string, limit = LIST_PAGE, media?: Media) {
+export async function savedTitles(userId: string, limit = LIST_PAGE, media?: Media, offset = 0) {
   const rows = await getDb()
     .select({ id: titleStates.externalId, media: titleStates.media, savedAt: titleStates.updatedAt })
     .from(titleStates)
     .where(and(eq(titleStates.userId, userId), eq(titleStates.saved, true), media ? eq(titleStates.media, media) : undefined))
     .orderBy(desc(titleStates.updatedAt))
-    .limit(limit);
+    .limit(limit)
+    .offset(offset);
   return rows.map((r) => ({ id: Number(r.id), media: r.media as Media, savedAt: r.savedAt }));
 }
 
@@ -356,13 +357,14 @@ export async function savedCounts(userId: string): Promise<Record<Media, number>
  * titles marked seen from Saved, finished picks and "I've read it", with your
  * rating. Picks are in here too once you've watched them.
  */
-export async function seenTitles(userId: string, limit = LIST_PAGE) {
+export async function seenTitles(userId: string, limit = LIST_PAGE, offset = 0) {
   const rows = await getDb()
     .select({ id: titleStates.externalId, media: titleStates.media, rating: titleStates.rating, at: titleStates.updatedAt })
     .from(titleStates)
     .where(and(eq(titleStates.userId, userId), eq(titleStates.seen, true)))
     .orderBy(desc(titleStates.updatedAt))
-    .limit(limit);
+    .limit(limit)
+    .offset(offset);
   return rows.map((r) => ({ id: Number(r.id), media: r.media as Media, rating: r.rating, at: r.at }));
 }
 
@@ -384,7 +386,7 @@ export async function pickCount(userId: string): Promise<number> {
 }
 
 /** Past picks, newest first, with the mood, the reason, and what you made of it. */
-export async function pickHistory(userId: string, limit = LIST_PAGE) {
+export async function pickHistory(userId: string, limit = LIST_PAGE, offset = 0) {
   const db = getDb();
   const sessions = await db
     .select({
@@ -405,7 +407,8 @@ export async function pickHistory(userId: string, limit = LIST_PAGE) {
       ),
     )
     .orderBy(desc(pickSessions.completedAt))
-    .limit(limit);
+    .limit(limit)
+    .offset(offset);
 
   const ids = [...new Set(sessions.flatMap((s) => (s.pick ? [s.pick.externalId] : [])))];
   const states = ids.length
