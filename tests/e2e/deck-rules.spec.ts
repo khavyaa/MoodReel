@@ -45,15 +45,16 @@ test("a followed director's three-hour film stays out of an 'around 2 hours' dec
 });
 
 test("deal from someone with a long career: once their best-known titles are seen, the rest still come up", async ({ page }) => {
-  // Lead Actor (780) is in all 35 rule-passing fake films. You've seen all but one, Malayalam Mystery 5,
-  // which is the last of them by popularity: beyond the 24 their page lists.
+  // Lead Actor (780) is in all 35 rule-passing fake films. You've seen all but one, Malayalam Mystery 4
+  // (3003): among his least known, beyond the 24 their page lists. (The test above already saw 3004.)
   const owner = await ownerId();
-  const seen = [
+  const all = [
     ...Array.from({ length: 20 }, (_, i) => 1000 + i),
     ...Array.from({ length: 5 }, (_, i) => 2000 + i),
-    ...Array.from({ length: 4 }, (_, i) => 3000 + i),
+    ...Array.from({ length: 5 }, (_, i) => 3000 + i),
     ...Array.from({ length: 5 }, (_, i) => 4000 + i),
   ];
+  const seen = all.filter((id) => id !== 3003);
   for (const id of seen) {
     await query(
       `insert into title_states (user_id, media, source, external_id, seen) values ('${owner}', 'movie', 'tmdb', '${id}', true)
@@ -65,5 +66,5 @@ test("deal from someone with a long career: once their best-known titles are see
   await page.getByRole("link", { name: /Deal from Lead Actor/ }).click();
   await page.getByRole("button", { name: "Deal from Lead Actor" }).click();
   await expect(page.getByText("From Lead Actor", { exact: true }).first()).toBeVisible();
-  expect(await lastDeck()).toEqual([3004]);
+  expect(await lastDeck()).toEqual([3003]);
 });
