@@ -17,10 +17,8 @@ const nextConfig: NextConfig = {
     },
   },
   // Posters and covers load straight from TMDb / Open Library (`unoptimized`),
-  // so the image optimizer needs no remote allowlist.
-  async redirects() {
-    return [{ source: "/", destination: "/movies", permanent: false }];
-  },
+  // so the image optimizer needs no remote allowlist. "/" is the landing page
+  // signed out; proxy.ts sends you on to /movies when you're signed in.
   async headers() {
     return [
       {

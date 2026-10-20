@@ -208,6 +208,14 @@ Retry. A service worker (`public/sw.js`, production only) lets the home-screen a
 connection: Saved, History and the start screens open from your last visit, anything else shows
 `/offline`. Kept pages live on the device only and are deleted on sign-out.
 
+**Landing page.** Signed out, `/` is one screen with nothing to scroll: the story told as a
+looping cover flow of seven cards, one per mood colour (Gripping first, as the app opens), with
+the page taking each card's tint, the same springy motion as the app, a caption under the front
+card, and "Sign in with your passkey" (straight from the tap, as iPhone requires). It turns by
+itself every four seconds and rests a while after you touch it; Reduce Motion stops it. The
+cards shrink to fit short screens rather than being cut off. There's no sign-up: the setup-token
+link stays on the sign-in page only.
+
 **Looks.** Bold & playful in light mode, cinematic dark in dark mode, following the device. An
 override is stored per device in the browser and applied before the first paint.
 
@@ -230,6 +238,7 @@ reads as one of them rather than grey. Reduce Motion swaps the tilt and springs 
 ## Code map
 
 ```
+app/page.tsx       the landing page (signed out; signed in, / goes to /movies)
 app/(auth)/        sign-in and one-time setup
 app/(app)/         everything signed in: /movies, /series, /books, saved, history, people, lists, add, settings
 app/api/auth/      Better Auth endpoints
@@ -250,8 +259,9 @@ components/pick/   the flow: taps, deck, head-to-head, pick, save status
 components/library/ Saved, History, pages, adding what you've seen, Details sheet
 components/people/ the People page, search, photos, follow / avoid / seen controls
 components/flow/   the cover flow and the poster tint behind it
+components/landing/ the landing page's story cards
 components/lists/  follow a list, progress, collection search
-proxy.ts           sends signed-out requests to /sign-in
+proxy.ts           signed out: / is the landing page, /movies leads there, deeper links go to /sign-in
 ```
 
 **Data.** Titles are keyed by media, source and external id, since TMDb movie and TV ids

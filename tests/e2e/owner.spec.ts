@@ -68,7 +68,7 @@ test("once claimed, setup can only add a passkey to the same account", async ({ 
 });
 
 test("the page never scrolls sideways", async ({ page }) => {
-  for (const path of ["/sign-in", "/setup", "/about"]) {
+  for (const path of ["/", "/sign-in", "/setup", "/about"]) {
     await page.goto(path);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(overflow, path).toBeLessThanOrEqual(0);

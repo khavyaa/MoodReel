@@ -10,6 +10,10 @@ next book.
 ![Neon Postgres](https://img.shields.io/badge/Postgres-Neon-00E599?logo=postgresql&logoColor=white)
 
 <p align="center">
+  <img src="docs/screenshots/mac-landing.png" alt="The landing page: the story as a cover flow of mood-coloured cards, with sign-in" width="100%">
+</p>
+
+<p align="center">
   <img src="docs/screenshots/iphone-1-start.png" alt="The start screen: mood, energy and time" width="200">
   &nbsp;
   <img src="docs/screenshots/iphone-2-deck.png" alt="A card in the deck, with the book it's based on" width="200">
@@ -21,7 +25,8 @@ next book.
 
 <p align="center"><sub>Screenshots use the test catalogue (made-up titles, no real posters). Refresh them with <code>npm run screenshots</code>.</sub></p>
 
-Built for one person on an iPhone and a Mac. Sign-in is a passkey; there is no sign-up page.
+Built for one person on an iPhone and a Mac. Signed out, the landing page above is all there is to see;
+sign-in is a passkey, and there is no sign-up page.
 
 ## What it does
 
