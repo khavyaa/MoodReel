@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="944" height="104" viewBox="0 0 944 104" role="img" aria-label="MoodReel moods: Gripping, Dark, Mind-bending, Funny, Feel-good, Moving, Romantic">
+<rect x="0" y="0" width="128" height="104" rx="18" fill="#FF4A1C"/>
+<text x="14" y="34" fill="#1C0A05" font-family="Helvetica Neue, Arial, sans-serif" font-size="16" font-weight="800">Gripping</text>
+<text x="14" y="66" fill="#1C0A05" font-family="Helvetica Neue, Arial, sans-serif" font-size="11.5" opacity="0.85">Thrillers, crime,</text>
+<text x="14" y="82" fill="#1C0A05" font-family="Helvetica Neue, Arial, sans-serif" font-size="11.5" opacity="0.85">mysteries</text>
+<rect x="136" y="0" width="128" height="104" rx="18" fill="#3330D9"/>
+<text x="150" y="34" fill="#F3F2FF" font-family="Helvetica Neue, Arial, sans-serif" font-size="16" font-weight="800">Dark</text>
+<text x="150" y="66" fill="#F3F2FF" font-family="Helvetica Neue, Arial, sans-serif" font-size="11.5" opacity="0.85">Heavy, morally</text>
+<text x="150" y="82" fill="#F3F2FF" font-family="Helvetica Neue, Arial, sans-serif" font-size="11.5" opacity="0.85">messy</text>
+<rect x="272" y="0" width="128" height="104" rx="18" fill="#7B3DFF"/>
+<text x="286" y="34" fill="#FBF9FF" font-family="Helvetica Neue, Arial, sans-serif" font-size="16" font-weight="800">Mind-bending</text>
+<text x="286" y="66" fill="#FBF9FF" font-family="Helvetica Neue, Arial, sans-serif" font-size="11.5" opacity="0.85">Twists, loops,</text>
+<text x="286" y="82" fill="#FBF9FF" font-family="Helvetica Neue, Arial, sans-serif" font-size="11.5" opacity="0.85">arguable endings</text>
+<rect x="408" y="0" width="128" height="104" rx="18" fill="#A9E033"/>
+<text x="422" y="34" fill="#122004" font-family="Helvetica Neue, Arial, sans-serif" font-size="16" font-weight="800">Funny</text>
+<text x="422" y="66" fill="#122004" font-family="Helvetica Neue, Arial, sans-serif" font-size="11.5" opacity="0.85">Proper comedies</text>
+<text x="422" y="82" fill="#122004" font-family="Helvetica Neue, Arial, sans-serif" font-size="11.5" opacity="0.85">for grown-ups</text>
+<rect x="544" y="0" width="128" height="104" rx="18" fill="#FFC633"/>
+<text x="558" y="34" fill="#241A00" font-family="Helvetica Neue, Arial, sans-serif" font-size="16" font-weight="800">Feel-good</text>
+<text x="558" y="66" fill="#241A00" font-family="Helvetica Neue, Arial, sans-serif" font-size="11.5" opacity="0.85">Warm, leaves</text>
+<text x="558" y="82" fill="#241A00" font-family="Helvetica Neue, Arial, sans-serif" font-size="11.5" opacity="0.85">you lighter</text>
+<rect x="680" y="0" width="128" height="104" rx="18" fill="#12A88F"/>
+<text x="694" y="34" fill="#03201A" font-family="Helvetica Neue, Arial, sans-serif" font-size="16" font-weight="800">Moving</text>
+<text x="694" y="66" fill="#03201A" font-family="Helvetica Neue, Arial, sans-serif" font-size="11.5" opacity="0.85">Dramas that land</text>
+<text x="694" y="82" fill="#03201A" font-family="Helvetica Neue, Arial, sans-serif" font-size="11.5" opacity="0.85">somewhere real</text>
+<rect x="816" y="0" width="128" height="104" rx="18" fill="#FF5C9E"/>
+<text x="830" y="34" fill="#29040F" font-family="Helvetica Neue, Arial, sans-serif" font-size="16" font-weight="800">Romantic</text>
+<text x="830" y="66" fill="#29040F" font-family="Helvetica Neue, Arial, sans-serif" font-size="11.5" opacity="0.85">Love stories,</text>
+<text x="830" y="82" fill="#29040F" font-family="Helvetica Neue, Arial, sans-serif" font-size="11.5" opacity="0.85">slow burns</text>
+</svg>

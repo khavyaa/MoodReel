@@ -1,17 +1,103 @@
 # MoodReel
 
-A personal tool for deciding what to watch or read. Three taps (mood, energy, time), a short
-swipe deck, a head-to-head between your favourites, and one pick: tonight's movie or series, or
-the next book.
+**What to watch or read tonight, in three taps.** Pick a mood, an energy and a time; swipe a
+short deck; let your favourites go head-to-head; get one pick: tonight's film or series, or the
+next book.
+
+[![CI](https://github.com/khavyaa/MoodReel/actions/workflows/ci.yml/badge.svg)](https://github.com/khavyaa/MoodReel/actions/workflows/ci.yml)
+![Next.js 16](https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs&logoColor=white)
+![Vercel](https://img.shields.io/badge/hosted_on-Vercel-000000?logo=vercel&logoColor=white)
+![Neon Postgres](https://img.shields.io/badge/Postgres-Neon-00E599?logo=postgresql&logoColor=white)
+![Passkeys](https://img.shields.io/badge/sign--in-passkeys_only-4B5563)
+![Personal project](https://img.shields.io/badge/built_for-one_person-FF4A1C)
+
+<p align="center">
+  <img src="docs/screenshots/iphone-1-start.png" alt="The start screen: mood, energy and time" width="200">
+  &nbsp;
+  <img src="docs/screenshots/iphone-2-deck.png" alt="A card in the deck, with the book it's based on" width="200">
+  &nbsp;
+  <img src="docs/screenshots/iphone-3-pick.png" alt="Tonight's pick, with why it won" width="200">
+  &nbsp;
+  <img src="docs/screenshots/iphone-4-details.png" alt="The Details sheet for a saved film" width="200">
+</p>
+
+<p align="center"><sub>Screenshots use the test catalogue (made-up titles, no real posters). Refresh them with <code>npm run screenshots</code>.</sub></p>
 
 Built for one person on an iPhone and a Mac. Sign-in is a passkey; there is no sign-up page.
 
-> **Status:** the v2 rebuild is complete (Phases 1–5), plus People (follow, avoid or deal by a
-> director, actor, writer or author) and Books on screen (books linked with their films and
-> series). Movies, series and books work end to end: taps → deck → head-to-head → tonight's pick
-> (or "Read next"), plus Saved (with "Pick from my saved"), History with ratings, a "Did you watch
-> it?" check after a film, Watching / Reading lists with check-ins for series and books, and an
-> app that still opens offline.
+## What it does
+
+- **Films, series and books**, each with its own rules: Indian-language films only when they're
+  crime, thriller or acclaimed; short Hindi series, never soaps; no children's, romance or
+  self-help books.
+- **A deck that learns**: saves, skips, "not for me" and your star ratings tune what comes next,
+  and nothing you've seen or turned down comes back.
+- **People**: follow or avoid directors, actors, writers and authors, or deal a deck from one of
+  them.
+- **Books on screen**: films and series of books you've read rank first, with the book on the card.
+- **A personal library**: Saved, Watching and Reading lists with check-ins, History with picks
+  and everything you've seen or read, a Details sheet for any title, and an app that opens offline.
+
+## The moods
+
+<p align="center">
+  <img src="docs/moods.svg" alt="Gripping, Dark, Mind-bending, Funny, Feel-good, Moving and Romantic, each in its colour" width="100%">
+</p>
+
+Each mood recolours the whole screen in the playful look; the cinematic dark look keeps a dark
+ground with the mood as the accent.
+
+<table>
+  <tr>
+    <td><img src="docs/screenshots/mac-deck-playful.png" alt="The deck on a Mac in the playful look"></td>
+    <td><img src="docs/screenshots/mac-deck-cinematic.png" alt="The deck on a Mac in the cinematic dark look, Dark mood"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Playful (light)</sub></td>
+    <td align="center"><sub>Cinematic (dark)</sub></td>
+  </tr>
+</table>
+
+## How a night works
+
+```mermaid
+flowchart LR
+  T["Three taps<br/>mood · energy · time"] --> D["Deck of up to 15<br/>swipe save · skip · seen · not for me"]
+  D -->|2–4 saves| H["Head-to-head<br/>best of your saves"]
+  H --> P["Tonight's pick<br/>and why it won"]
+  D -->|one save| P
+  P -->|film, 3 hours later| W["Did you watch it?<br/>stars → History"]
+  P -->|series or book| L["Watching / Reading list<br/>check-ins until finished"]
+  S["Saved"] -->|Pick from my saved| H
+```
+
+Swipes save as you go, so a reload or a closed app offers to resume the deck where you left it.
+
+## How it's put together
+
+```mermaid
+flowchart LR
+  subgraph Devices
+    I["iPhone<br/>home-screen app"]
+    M["Mac<br/>browser"]
+  end
+  subgraph Vercel
+    A["Next.js 16 app<br/>passkeys · decks · library"]
+    C["Daily cron 08:00 IST"]
+  end
+  DB[("Neon Postgres<br/>ids and your actions")]
+  I & M --> A
+  A --> DB
+  A --> TMDB["TMDb<br/>films · series · people"]
+  A --> OL["Open Library<br/>books · authors"]
+  A -.->|optional| AI["Vercel AI Gateway<br/>re-weights, never decides"]
+  C --> NYT["NYT Books API<br/>bestseller weeks"]
+  C --> WD["Wikidata<br/>book ↔ film links"]
+  C --> DB
+```
+
+Only ids and your own actions are stored; titles, posters and ratings come fresh from TMDb and
+Open Library.
 
 ## Run it locally
 
@@ -28,7 +114,8 @@ npm run dev
 Open http://localhost:3000/setup, enter your `OWNER_SETUP_TOKEN`, and save a passkey. That
 creates the only account. On any later device, the same page adds a passkey to it.
 
-## Scripts
+<details>
+<summary><b>Scripts</b></summary>
 
 | Command | What it does |
 | --- | --- |
@@ -36,27 +123,35 @@ creates the only account. On any later device, the same page adds a passkey to i
 | `npm run build` | Production build (on Vercel, applies migrations first) |
 | `npm run lint` / `npm run typecheck` | ESLint / TypeScript |
 | `npm test` | Unit tests |
-| `npm run test:db` | Auth and schema tests against Postgres (`DATABASE_URL_TEST`) |
-| `npm run test:e2e` | Passkey sign-up and sign-in in a real browser, at laptop and iPhone sizes |
+| `npm run test:db` | Auth, schema and taste tests against Postgres (`DATABASE_URL_TEST`) |
+| `npm run test:e2e` | Browser tests at laptop and iPhone sizes, against a fake TMDb and Open Library |
+| `npm run screenshots` | Regenerate the README screenshots from the test catalogue |
 | `npm run db:generate` | Create a migration after changing `lib/db/schema` |
 | `npm run db:migrate` | Apply migrations to `DATABASE_URL` |
 
-CI runs all of these on every push, against a throwaway Postgres.
+CI runs lint, types and all three test suites on every push, against a throwaway Postgres.
 
-## Making changes
+</details>
+
+<details>
+<summary><b>Making changes</b></summary>
 
 `main` is the stable version; production deploys from it. All work happens on a branch
 (`feat/…`, `fix/…`, `chore/…`) and goes in through a reviewed pull request. CI (lint, types,
 unit, database and browser tests) runs on every PR.
 
-## Deploy (Vercel + Neon, free tiers)
+</details>
+
+<details>
+<summary><b>Deploy (Vercel + Neon, free tiers)</b></summary>
 
 1. In the Vercel project, **Storage → Create → Neon** and connect it. This sets `DATABASE_URL`.
    With a database branch per preview deployment (the integration's Preview setting), each
    preview gets its own copy of production and never touches live data.
 2. Add `BETTER_AUTH_SECRET`, `OWNER_SETUP_TOKEN` and `TMDB_ACCESS_TOKEN` (Production and
-   Preview). For book bestsellers, also `NYT_API_KEY` and `CRON_SECRET` (optional). AI needs nothing: on Vercel the AI Gateway authenticates itself. Locally, set
-   `AI_GATEWAY_API_KEY` to try it, or leave it unset and the rules do everything.
+   Preview). For book bestsellers, also `NYT_API_KEY` and `CRON_SECRET` (optional). AI needs
+   nothing: on Vercel the AI Gateway authenticates itself. Locally, set `AI_GATEWAY_API_KEY` to
+   try it, or leave it unset and the rules do everything.
 3. Deploy. Migrations run during production builds only; pull-request previews run on their own
    Neon branch, which is never migrated. Neon's free plan allows 10 branches: when a new
    branch's preview fails at once with "Resource provisioning failed", delete the `preview/…`
@@ -68,7 +163,12 @@ unit, database and browser tests) runs on every PR.
 Passkeys are bound to the domain they were created on. One made on production won't sign in on
 a preview deployment's own URL; previews are for checking builds.
 
-## How a deck is picked
+</details>
+
+## Under the hood
+
+<details>
+<summary><b>How a film deck is picked</b></summary>
 
 1. **Pools.** TMDb Discover, per language (English, Hindi, Tamil, Malayalam), filtered by the
    mood's genres or keywords, your runtime limit, and a per-language vote floor. Separate pools
@@ -78,8 +178,8 @@ a preview deployment's own URL; previews are for checking builds.
    acclaimed. Anything you've seen, marked "Not for me", saved or picked never returns; skips
    return after 60 days.
 3. **Score.** Weighted rating (new releases damped), mood fit, energy fit, taste learned from your
-   swipes, a bonus for your services, and a markdown for films everyone has seen. No raw
-   popularity.
+   swipes and star ratings, a bonus for your services, and a markdown for films everyone has seen.
+   No raw popularity.
 4. **AI pass (optional).** The top 30 go to a fast model through Vercel's AI Gateway, which flags
    which genuinely fit the mood. It only re-weights; if it's slow or unavailable, the rules decide.
 5. **Deck.** Every film is checked against your time once its details are in (TMDb's own
@@ -88,7 +188,6 @@ a preview deployment's own URL; previews are for checking builds.
    taking turns for those slots when films in more than one fit. Swipe right to save,
    left to skip, up for seen it, down for not for me; Undo steps back as far as you like. Four
    saves start the head-to-head.
-
 6. **After the pick.** About three hours later the films start screen asks "Did you watch it?":
    watched (with optional stars) counts as seen, "Not yet" puts it back in Saved, "Skipped it"
    stops asking. Only your latest unanswered pick is asked about. The start screen checks for a
@@ -99,7 +198,10 @@ a preview deployment's own URL; previews are for checking builds.
 The rules live in `lib/taste/rules.ts`, each with a unit test, and their thresholds came from
 probing real TMDb data.
 
-## How a series deck differs
+</details>
+
+<details>
+<summary><b>How a series deck differs</b></summary>
 
 - **Languages:** English, and Hindi of any genre when it's well rated (weighted 7.2+). About one
   show in four is Hindi. Hindi is a small pool on TMDb (about 120 shows with 15+ votes).
@@ -119,10 +221,14 @@ probing real TMDb data.
 
 Series rules live in `lib/taste/series-rules.ts`.
 
-## How a book deck works
+</details>
+
+<details>
+<summary><b>How a book deck works</b></summary>
 
 - **Catalogue:** Open Library (free, no key): subjects, page counts, covers, and reader ratings out
-  of 5. Its ratings are thin (a famous book has a few hundred), so quality also uses how many people logged it as read and NYT weeks.
+  of 5. Its ratings are thin (a famous book has a few hundred), so quality also uses how many
+  people logged it as read and NYT weeks.
 - **Bestsellers:** the New York Times lists. A daily Vercel cron (`/api/cron/nyt`) syncs the adult
   fiction and non-fiction lists into the database, about two years back, and matches each ISBN to
   its Open Library work. Weeks on the lists count towards quality, and lasting bestsellers join the
@@ -130,49 +236,31 @@ Series rules live in `lib/taste/series-rules.ts`.
   NYT subject tags still give a smaller signal. Settings → Background syncs shows how the last run
   went (Vercel's Hobby plan keeps function logs for only an hour).
 - **Never:** children's and young adult, romance and romantasy, self-help and business, comics and
-  graphic novels (including ones only tagged with a comics class code), box sets and omnibuses.
+  graphic novels (including ones only tagged with a comics class code), box sets, title sets and
+  omnibuses.
 - **Mix:** English only, mostly the last 30 years, at most two classics and one book per author in
   a deck. Length replaces time: short (under 250 pages), medium, long (450+).
 - **Clean-up:** works filed under a foreign title get their English edition's title, messy edition
-  titles are tidied, and descriptions that aren't in English are dropped.
+  titles are tidied, and descriptions that aren't in English are dropped. Author pages drop sets,
+  adaptations, textbook editions and duplicate records, and don't show impossible years.
 - **After "Read next"** a book goes on your Reading list. About once a week the books screen asks
   "Still reading?": finished (with optional stars) moves it to History, gave up counts like "not
   for me". "Where to get it" searches Amazon India's books.
 
 Book rules live in `lib/books/rules.ts`.
 
-## How it's put together
+</details>
 
-```
-app/(auth)/        sign-in and one-time setup
-app/(app)/         everything signed in: /movies, /series, /books, saved, history, settings
-app/api/auth/      Better Auth endpoints
-lib/auth.ts        passkey-only, single-owner auth
-lib/session.ts     the data access layer: every read of your data verifies the session here
-lib/db/            Drizzle schema and client (plain Postgres, no vendor lock-in)
-lib/moods.ts       moods, energy and time vocabulary, and their colours
-lib/taste/         language gates, weighted rating, mood/energy fit, taste from swipes (films and series)
-lib/deck/          deck composition, head-to-head, AI re-weighting, the movie and series deck builders
-lib/tmdb/          TMDb client (retries flaky connections), movie, series and provider queries
-lib/books/         Open Library client, NYT bestseller sync, book rules
-lib/people/        follow / avoid / suggest rules, a person's work, decks from one person
-lib/adaptations/   book ↔ film/series links: Wikidata sync, ranking rules, links on cards
-app/api/cron/      the daily NYT sync and weekly Wikidata sync (Vercel cron, guarded by CRON_SECRET)
-lib/ai/            AI Gateway calls, each with a rule-based fallback
-components/pick/   the flow: taps, deck, head-to-head, pick
-proxy.ts           sends signed-out requests to /sign-in
-```
-
-**Looks.** Bold & playful in light mode, cinematic dark in dark mode, following the device. An
-override is stored per device in the browser and applied before the first paint.
+<details>
+<summary><b>People, books on screen, details, offline</b></summary>
 
 **People.** Directors, creators, writers and lead actors (TMDb) and authors (Open Library) are
 tappable on every card. Follow someone and their unseen work joins your decks (skipping the
 "everyone has seen it" markdown, at most two per person and four per deck) with a badge; avoid
 someone and nothing of theirs is dealt. "Deal from …" (a person's page, the start screen's
 search, or People in Saved) makes a deck from all of their work, not only the best-known titles
-their page lists. People you keep loving (three
-titles, four for actors) are suggested. Rules: `lib/people/rules.ts`.
+their page lists. People you keep loving (three titles, four for actors) are suggested. Rules:
+`lib/people/rules.ts`.
 
 **Books on screen.** Which films and series are based on which books comes from Wikidata (TMDb ids
 P4947/P4983, "based on" P144, Open Library id P648), synced weekly by the same cron; on other days
@@ -190,10 +278,39 @@ or a person's page opens a Details sheet: the full synopsis, length, rating and 
 TMDb, /5 Open Library), people, the linked book or film, and where to watch or get it.
 
 **Offline.** Offline, swipes, saves and check-ins wait and are sent when the connection returns
-(Next's `useOffline`), and a banner says so. A service worker (`public/sw.js`, production only) lets
-the home-screen app open with no connection: Saved, History and the start screens open from your
-last visit, anything else shows `/offline`. Kept pages live on the device only and are deleted on
-sign-out.
+(Next's `useOffline`), and a banner says so. A save that fails for another reason says so, with
+Retry. A service worker (`public/sw.js`, production only) lets the home-screen app open with no
+connection: Saved, History and the start screens open from your last visit, anything else shows
+`/offline`. Kept pages live on the device only and are deleted on sign-out.
+
+**Looks.** Bold & playful in light mode, cinematic dark in dark mode, following the device. An
+override is stored per device in the browser and applied before the first paint.
+
+</details>
+
+<details>
+<summary><b>Code map</b></summary>
+
+```
+app/(auth)/        sign-in and one-time setup
+app/(app)/         everything signed in: /movies, /series, /books, saved, history, settings, people
+app/api/auth/      Better Auth endpoints
+app/api/cron/      the daily NYT sync and weekly Wikidata sync (Vercel cron, guarded by CRON_SECRET)
+lib/auth.ts        passkey-only, single-owner auth
+lib/session.ts     the data access layer: every read of your data verifies the session here
+lib/db/            Drizzle schema and client (plain Postgres, no vendor lock-in)
+lib/moods.ts       moods, energy and time vocabulary, and their colours
+lib/taste/         language gates, weighted rating, mood/energy fit, taste from swipes and ratings
+lib/deck/          deck composition, head-to-head, AI re-weighting, the film, series and book builders
+lib/tmdb/          TMDb client (retries and deadlines), movie, series, people and provider queries
+lib/books/         Open Library client, NYT bestseller sync, book rules
+lib/people/        follow / avoid / suggest rules, a person's work, decks from one person
+lib/adaptations/   book ↔ film/series links: Wikidata sync, ranking rules, links on cards
+lib/ai/            AI Gateway calls, each with a rule-based fallback
+components/pick/   the flow: taps, deck, head-to-head, pick, save status
+components/library/ Saved, History, Details sheet
+proxy.ts           sends signed-out requests to /sign-in
+```
 
 **Data.** Titles are keyed by media, source and external id, since TMDb movie and TV ids
 overlap. Only ids and your own actions are stored; details come fresh from TMDb and Open
@@ -201,6 +318,8 @@ Library.
 
 **Portability.** Nothing is Neon-specific. Moving to a self-hosted Postgres means changing
 `DATABASE_URL`, then exporting and importing the data.
+
+</details>
 
 ## Credits
 
