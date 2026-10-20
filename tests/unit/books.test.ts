@@ -116,6 +116,9 @@ describe("Open Library data", () => {
     expect(isOmnibus("Works", 815)).toBe(true);
     expect(isOmnibus("Mistborn", 1712)).toBe(true);
     expect(isOmnibus("The Hunger Box", 300)).toBe(false);
+    expect(isOmnibus("Mitch Albom 7 Title Set", null)).toBe(true);
+    expect(isOmnibus("Jack Reacher 3 Books Set", null)).toBe(true);
+    expect(isOmnibus("The Set Piece", 300)).toBe(false);
   });
 
   it("reads NYT weeks from Open Library's subject tags", () => {
