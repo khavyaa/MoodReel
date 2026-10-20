@@ -99,6 +99,14 @@ describe("moods", () => {
     expect(moodFit(film({ id: 33, genreIds: [GENRE.comedy, GENRE.family, GENRE.animation] }), "funny")).toBe(0);
   });
 
+  it("keeps crime films and thrillers out of funny, even when TMDb also calls them comedies", () => {
+    // Aaranya Kaandam: Comedy, Action, Crime, Drama.
+    expect(moodFit(film({ id: 34, genreIds: [GENRE.comedy, GENRE.action, GENRE.crime, GENRE.drama] }), "funny")).toBe(0);
+    expect(moodFit(film({ id: 35, genreIds: [GENRE.comedy, GENRE.thriller] }), "funny")).toBe(0);
+    // An action comedy is still funny.
+    expect(moodFit(film({ id: 36, genreIds: [GENRE.comedy, GENRE.action] }), "funny")).toBeGreaterThan(0);
+  });
+
   it("rules out films with a genre the mood excludes", () => {
     expect(moodFit(film({ id: 9, genreIds: [GENRE.thriller, GENRE.family] }), "gripping")).toBe(0);
     expect(moodFit(film({ id: 10, genreIds: [GENRE.drama, GENRE.romance] }), "dark")).toBe(0);
