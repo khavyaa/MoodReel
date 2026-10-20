@@ -214,9 +214,14 @@ export const EXCLUDED_KEYWORDS: readonly number[] = [
 ];
 
 /** How strongly a film fits the mood: the share of its genres the mood asked for, plus a little for any match. */
+/** A genre the mood never deals (Funny: no crime or thrillers), whatever else fits. */
+export function moodExcludes(movie: MovieCandidate, mood: MoodId): boolean {
+  return movie.genreIds.some((g) => MOVIE_MOODS[mood].exclude.includes(g));
+}
+
 export function moodFit(movie: MovieCandidate, mood: MoodId): number {
   const rule = MOVIE_MOODS[mood];
-  if (movie.genreIds.some((g) => rule.exclude.includes(g))) return 0;
+  if (moodExcludes(movie, mood)) return 0;
   const hits = movie.genreIds.filter((g) => rule.genres.includes(g)).length;
   if (hits === 0) return 0;
   return Math.min(1, 0.5 + hits / Math.max(2, movie.genreIds.length));

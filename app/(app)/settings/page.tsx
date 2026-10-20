@@ -11,6 +11,7 @@ import { providersFor } from "@/lib/picks/server";
 import { regionProviders } from "@/lib/tmdb/providers";
 import { nytStatus } from "@/lib/books/nyt";
 import { adaptationsStatus } from "@/lib/adaptations/sync";
+import { lastListsSync } from "@/lib/lists/sync";
 import { ServicesPicker } from "@/components/settings/services-picker";
 
 export const metadata = { title: "Settings" };
@@ -46,6 +47,12 @@ export default function SettingsPage() {
           <Section title="Books on screen" note="Which films and series are based on which books, from Wikidata, every week; links are checked on the other days.">
             <Suspense fallback={<p className="text-muted">Checking the last sync…</p>}>
               <Adaptations />
+            </Suspense>
+          </Section>
+
+          <Section title="Award lists" note="Oscar, Palme d'Or, Booker and the other winners' lists, from Wikidata, every week.">
+            <Suspense fallback={<p className="text-muted">Checking the last sync…</p>}>
+              <AwardLists />
             </Suspense>
           </Section>
         </Group>
@@ -172,6 +179,29 @@ async function Adaptations() {
       <dt className="text-muted">Links</dt>
       <dd>
         {count(status.films, "film")} and {count(status.series, "series", "series")}, from {count(status.books, "book")}
+      </dd>
+      {run && run.report.errors.length > 0 && (
+        <>
+          <dt className="font-semibold">Problems</dt>
+          <dd className="font-semibold">{run.report.errors.join("; ")}</dd>
+        </>
+      )}
+    </dl>
+  );
+}
+
+async function AwardLists() {
+  await requireOwner();
+  const run = await lastListsSync().catch(() => undefined);
+  if (run === undefined) return <p className="text-muted">Couldn&apos;t read the sync status just now.</p>;
+  const titles = run ? Object.values(run.report.lists).reduce((sum, n) => sum + n, 0) : 0;
+  return (
+    <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-2 text-sm">
+      <dt className="text-muted">Last sync</dt>
+      <dd>
+        {run
+          ? `${SYNC_TIME.format(run.at)} · ${count(Object.keys(run.report.lists).length, "list")}, ${count(titles, "title")}`
+          : "Not yet: lists fill in when you first open them, and the weekly sync keeps them current"}
       </dd>
       {run && run.report.errors.length > 0 && (
         <>

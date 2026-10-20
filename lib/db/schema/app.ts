@@ -235,3 +235,36 @@ export const adaptations = pgTable(
     index("adaptations_unchecked_idx").on(t.bookId).where(sql`not ${t.checked}`),
   ],
 );
+
+/**
+ * Titles on well-known lists (award winners and the like), synced from
+ * Wikidata into the database. Shared reference data, not per user. TMDb's
+ * top-rated lists and collections are fetched live, so they aren't stored.
+ */
+export const listItems = pgTable(
+  "list_items",
+  {
+    /** The list's slug in `lib/lists/catalog.ts`, e.g. "oscar-best-picture". */
+    listSlug: text("list_slug").notNull(),
+    media: mediaType("media").notNull(),
+    /** TMDb id, or Open Library work number for books. */
+    externalId: integer("external_id").notNull(),
+    /** The year it won or was listed, when Wikidata says: lists show newest first. */
+    year: integer("year"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.listSlug, t.media, t.externalId] })],
+);
+
+/** Lists you follow: their titles rank a little higher in your decks, with a badge. */
+export const listFollows = pgTable(
+  "list_follows",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    listSlug: text("list_slug").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.listSlug] })],
+);

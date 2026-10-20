@@ -57,6 +57,13 @@
       "when": 1791912886696,
       "tag": "0007_adaptations",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792505396163,
+      "tag": "0008_lists",
+      "breakpoints": true
     }
   ]
 }

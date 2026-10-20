@@ -64,6 +64,8 @@ export type DeckCard = {
   book: BookFacts | null;
   /** The book it's based on, or a book's film or series. */
   link?: TitleLink | null;
+  /** A list you follow that it's on, for the card's badge ("On Oscar Best Picture"). */
+  listName?: string | null;
 };
 
 export type BookFacts = {

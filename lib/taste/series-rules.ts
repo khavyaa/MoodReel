@@ -185,9 +185,14 @@ export function isSeriesMood(mood: string): mood is SeriesMood {
   return mood in SERIES_MOODS;
 }
 
+/** A genre the mood never deals, whatever else fits. */
+export function seriesMoodExcludes(show: MovieCandidate, mood: SeriesMood): boolean {
+  return show.genreIds.some((g) => SERIES_MOODS[mood].exclude.includes(g));
+}
+
 export function seriesMoodFit(show: MovieCandidate, mood: SeriesMood): number {
   const rule = SERIES_MOODS[mood];
-  if (show.genreIds.some((g) => rule.exclude.includes(g))) return 0;
+  if (seriesMoodExcludes(show, mood)) return 0;
   if (rule.needs && !rule.needs.some((set) => set.every((g) => show.genreIds.includes(g)))) return 0;
   const hits = show.genreIds.filter((g) => rule.genres.includes(g)).length;
   if (hits === 0) return 0;

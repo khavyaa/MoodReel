@@ -22,7 +22,7 @@ flowchart LR
   A --> OL["Open Library<br/>books · authors"]
   A -.->|optional| AI["Vercel AI Gateway<br/>re-weights, never decides"]
   C --> NYT["NYT Books API<br/>bestseller weeks"]
-  C --> WD["Wikidata<br/>book ↔ film links"]
+  C --> WD["Wikidata<br/>book ↔ film links · award lists"]
   C --> DB
 ```
 
@@ -78,7 +78,8 @@ a preview deployment's own URL; previews are for checking builds.
    pull what's on your services (set in Settings; Netflix, Prime Video, Apple TV and JioHotstar to
    start) and well-rated films fewer people have seen.
 2. **Your rules.** English: any genre. Tamil, Malayalam, Hindi: only crime/thriller/mystery, or
-   acclaimed. Anything you've seen, marked "Not for me", saved or picked never returns; skips
+   acclaimed. Each mood also rules some genres out whatever else fits: Funny deals no crime
+   films or thrillers (TMDb files dark crime films as comedies too), nor family, horror or war. Anything you've seen, marked "Not for me", saved or picked never returns; skips
    return after 60 days.
 3. **Score.** Weighted rating (new releases damped), mood fit, energy fit, taste learned from your
    swipes and star ratings, a bonus for your services, and a markdown for films everyone has seen.
@@ -152,7 +153,7 @@ Book rules live in `lib/books/rules.ts`.
 tappable on every card. Follow someone and their unseen work joins your decks (skipping the
 "everyone has seen it" markdown, at most two per person and four per deck) with a badge; avoid
 someone and nothing of theirs is dealt. "Deal from …" (a person's page, the start screen's
-search, or People in Saved) makes a deck from all of their work, not only the best-known titles
+search, or the People page) makes a deck from all of their work, not only the best-known titles
 their page lists. People you keep loving (three titles, four for actors) are suggested. Rules:
 `lib/people/rules.ts`.
 
@@ -166,6 +167,34 @@ while a book you know from the screen ranks well down. "Adaptations only" on the
 deals only films or series based on a book. Cards, the pick screen ("I've read it"), Saved and
 History show the link, and Settings → Background syncs shows the last sync. Rules:
 `lib/adaptations/rules.ts`.
+
+**People page.** People in the nav lists who you follow and avoid, with photos (TMDb profiles,
+Open Library author photos, initials when there's none), suggestions, and one search across
+film and series people and authors. On a person's page every title has Seen it / Read it beside
+Save.
+
+**Lists.** Lists in the nav: award winners from Wikidata (Oscar Best Picture, Palme d'Or,
+National Film Award for Best Feature Film, Booker, International Booker, Pulitzer for Fiction,
+Hugo for Best Novel; P166 with TMDb or Open Library ids), synced weekly by the cron into
+`list_items` and filled on the spot the first time a list is opened; TMDb's top rated films and
+series (Discover by rating with a vote floor, since `/top_rated` lets in barely voted titles);
+and any TMDb film collection, found by search or from the films you've seen. Each shows your
+progress and pages of 24, with Seen / Save on every title. Follow a list and its unseen titles
+join your decks like a followed person's work (a small boost, sharing the cap of three with books
+you've read) with an "On …" badge. "Deal from this list" makes a deck of only its titles you
+haven't seen, saved or turned down, within your time, best fit for the mood first; your language
+rules don't apply, but the mood's exclusions do, and titles that don't fit the mood at all are
+left out unless none do. IMDb's lists, AFI 100, Sight & Sound and the 1001 books aren't
+available: there's no free API and Wikidata doesn't hold them. Code: `lib/lists/`.
+
+**Adding what you've already seen or read.** History → "Add what you've already seen or read":
+search films, series or books and mark them seen with optional stars, or rate a quick stack of
+the most-watched films (English with Hindi, Tamil and Malayalam), series or books, swiping Seen,
+Not for me or Haven't seen. Both count like a seen title with its rating.
+
+**Library pages.** Saved and History show 24 titles a page with page numbers; Saved filters by
+films, series or books in the address, so Back returns to the same page. Rating a title updates
+it in place, without reloading the page.
 
 **Details.** Any title in Saved, History (Picks and Seen & read), Watching/Reading, the pick screen
 or a person's page opens a Details sheet: the full synopsis, length, rating and its scale (/10
@@ -184,9 +213,9 @@ override is stored per device in the browser and applied before the first paint.
 
 ```
 app/(auth)/        sign-in and one-time setup
-app/(app)/         everything signed in: /movies, /series, /books, saved, history, settings, people
+app/(app)/         everything signed in: /movies, /series, /books, saved, history, people, lists, add, settings
 app/api/auth/      Better Auth endpoints
-app/api/cron/      the daily NYT sync and weekly Wikidata sync (Vercel cron, guarded by CRON_SECRET)
+app/api/cron/      the daily NYT sync and weekly Wikidata syncs (Vercel cron, guarded by CRON_SECRET)
 lib/auth.ts        passkey-only, single-owner auth
 lib/session.ts     the data access layer: every read of your data verifies the session here
 lib/db/            Drizzle schema and client (plain Postgres, no vendor lock-in)
@@ -197,9 +226,12 @@ lib/tmdb/          TMDb client (retries and deadlines), movie, series, people an
 lib/books/         Open Library client, NYT bestseller sync, book rules
 lib/people/        follow / avoid / suggest rules, a person's work, decks from one person
 lib/adaptations/   book ↔ film/series links: Wikidata sync, ranking rules, links on cards
+lib/lists/         award lists, TMDb top rated and collections: catalogue, sync, progress, list decks
 lib/ai/            AI Gateway calls, each with a rule-based fallback
 components/pick/   the flow: taps, deck, head-to-head, pick, save status
-components/library/ Saved, History, Details sheet
+components/library/ Saved, History, pages, adding what you've seen, Details sheet
+components/people/ the People page, search, photos, follow / avoid / seen controls
+components/lists/  follow a list, progress, collection search
 proxy.ts           sends signed-out requests to /sign-in
 ```
 

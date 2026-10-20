@@ -1,4 +1,4 @@
-import { Bookmark, History, Settings, Sparkles, Users } from "lucide-react";
+import { Bookmark, History, ListChecks, Settings, Sparkles, Users } from "lucide-react";
 import { MEDIA, MEDIA_SLUGS, type MediaSlug } from "@/lib/moods";
 
 /** The places beside picking. On a phone Settings lives in the top bar, so the bottom bar has room. */
@@ -6,6 +6,7 @@ export const PLACES = [
   { href: "/saved", label: "Saved", icon: Bookmark },
   { href: "/history", label: "History", icon: History },
   { href: "/people", label: "People", icon: Users },
+  { href: "/lists", label: "Lists", icon: ListChecks },
   { href: "/settings", label: "Settings", icon: Settings },
 ] as const;
 

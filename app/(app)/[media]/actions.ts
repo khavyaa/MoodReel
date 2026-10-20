@@ -29,6 +29,15 @@ import type { BookCandidate } from "@/lib/books/rules";
 import { parsePersonKey, personKey } from "@/lib/people/types";
 import { adaptFilterFor, screenCandidates, withLinks } from "@/lib/adaptations/server";
 import { libraryKey, libraryTitles } from "@/lib/library";
+import { listBySlug } from "@/lib/lists/catalog";
+import { followedListTitles } from "@/lib/lists/server";
+import { buildListDeck } from "@/lib/lists/deck";
+import { booksByWork } from "@/lib/books/openlibrary";
+
+/** A title on a list you follow ranks this much higher (and skips the "everyone has seen it" markdown). */
+const LIST_BOOST = 0.1;
+/** At most this many unseen titles from lists you follow join one deal's pool. */
+const LIST_EXTRAS = 12;
 import { NO_ADAPT } from "@/lib/adaptations/rules";
 
 const level = z.union([z.literal(0), z.literal(1), z.literal(2)]);
@@ -58,13 +67,16 @@ export async function deal(
   input: unknown,
   withPerson?: string | null,
   adaptationsOnly?: boolean,
+  fromList?: string | null,
 ): Promise<DealResponse> {
   const owner = await requireOwner();
   mediaSchema.parse(media);
   const only = z.boolean().optional().parse(adaptationsOnly) === true && media !== "book";
+  const listSlug = z.string().max(80).nullish().parse(fromList) ?? null;
+  if (listSlug && !listBySlug(listSlug)) throw new z.ZodError([]);
   const source = media === "book" ? "Open Library" : "TMDb";
   try {
-    const [exclude, taste, providers, people, adapt] = await Promise.all([
+    const [exclude, taste, providers, people, adapt, onLists] = await Promise.all([
       handledIds(owner.id, media),
       tasteFor(owner.id, media),
       providersFor(owner.id),
@@ -73,29 +85,38 @@ export async function deal(
         console.error("[moodreel] adaptation links unavailable", error);
         return { filter: { ...NO_ADAPT, only }, extraIds: [] as number[] };
       }),
+      followedListTitles(owner.id, media).catch(() => new Map<number, string>()),
     ]);
     const seed = Date.now() % 100_000;
-    const [extra, adaptExtra] = await Promise.all([
+    // Titles on lists you follow rank a little higher, like films of books you've read
+    // (and share their cap per deck), and a few unseen ones join the pool.
+    const bonus = new Map(adapt.filter.bonus);
+    for (const id of onLists.keys()) bonus.set(id, Math.max(bonus.get(id) ?? 0, LIST_BOOST));
+    const listIds = [...onLists.keys()].filter((id) => !exclude.has(id)).slice(0, LIST_EXTRAS);
+    const [extra, adaptExtra, listBooks] = await Promise.all([
       followedWork(media, people.follow).catch(() => []),
       media === "book"
         ? []
-        : screenCandidates(media, adapt.extraIds.filter((id) => !exclude.has(id)), providers).catch(() => []),
+        : screenCandidates(media, [...adapt.extraIds, ...listIds].filter((id) => !exclude.has(id)), providers).catch(() => []),
+      media === "book" ? booksByWork(listIds).then((m) => [...m.values()]).catch(() => []) : [],
     ]);
-    const options = { exclude, taste, seed, providers, people, adapt: adapt.filter, adaptExtra };
+    const options = { exclude, taste, seed, providers, people, adapt: { ...adapt.filter, bonus }, adaptExtra };
     const taps = media === "movie" ? movieTaps.parse(input) : media === "series" ? seriesTaps.parse(input) : bookTaps.parse(input);
     const person = parsePersonKey(withPerson);
     if (withPerson && !person) throw new z.ZodError([]);
-    const dealt = person
-      ? await buildPersonDeck(media, taps, person, { exclude, taste, providers, followed: people.follow.has(personKey(person)) })
-      : media === "movie"
-        ? await buildMovieDeck(movieTaps.parse(input), { ...options, extra })
-        : media === "series"
-          ? await buildSeriesDeck(seriesTaps.parse(input), { ...options, extra })
-          : await buildBookDeck(bookTaps.parse(input), { ...options, extra: extra as BookCandidate[] });
+    const dealt = listSlug
+      ? await buildListDeck(media, taps, listSlug, { exclude, taste, providers })
+      : person
+        ? await buildPersonDeck(media, taps, person, { exclude, taste, providers, followed: people.follow.has(personKey(person)) })
+        : media === "movie"
+          ? await buildMovieDeck(movieTaps.parse(input), { ...options, extra })
+          : media === "series"
+            ? await buildSeriesDeck(seriesTaps.parse(input), { ...options, extra })
+            : await buildBookDeck(bookTaps.parse(input), { ...options, extra: [...(extra as BookCandidate[]), ...listBooks] });
     const { missingLanguages, curatedByAi } = dealt;
-    const cards = await withLinks(owner.id, dealt.cards);
+    const cards = (await withLinks(owner.id, dealt.cards)).map((c) => ({ ...c, listName: listSlug ? null : (onLists.get(c.id) ?? null) }));
     console.info(
-      `[moodreel] dealt ${cards.length} ${media} cards${person ? ` from ${personKey(person)}` : ""}${only ? " (adaptations only)" : ""}, ${cards.filter((c) => c.link).length} linked (${curatedByAi ? "AI-curated" : "rules only"})`,
+      `[moodreel] dealt ${cards.length} ${media} cards${person ? ` from ${personKey(person)}` : ""}${listSlug ? ` from list ${listSlug}` : ""}${only ? " (adaptations only)" : ""}, ${cards.filter((c) => c.link).length} linked, ${cards.filter((c) => c.listName).length} on followed lists (${curatedByAi ? "AI-curated" : "rules only"})`,
     );
     const sessionId = await createDeckSession(owner.id, media, taps, cards.map((c) => c.id));
     return { ok: true, sessionId, cards, missingLanguages };

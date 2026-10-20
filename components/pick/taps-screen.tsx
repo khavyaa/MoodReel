@@ -69,6 +69,8 @@ export function TapsScreen({
   onPerson,
   adaptations = false,
   onAdaptations,
+  listName = null,
+  onClearList,
 }: {
   media: "movie" | "series" | "book";
   value: TapsValue;
@@ -79,6 +81,9 @@ export function TapsScreen({
   /** "Adaptations only": films and series only. */
   adaptations?: boolean;
   onAdaptations?: (next: boolean) => void;
+  /** Dealing from a list (a list page's "Deal from this list"), and how to stop. */
+  listName?: string | null;
+  onClearList?: () => void;
 }) {
   const media = MEDIA[kind === "movie" ? "movies" : kind === "series" ? "series" : "books"];
   const series = kind === "series";
@@ -89,7 +94,19 @@ export function TapsScreen({
       <div className="flex flex-col gap-7">
         <h1 className="display text-[clamp(3.25rem,8.5vw,7.5rem)]">{media.ask}</h1>
 
-        {onPerson && <SomeoneInMind media={kind} value={person} onChange={onPerson} />}
+        {listName ? (
+          <p className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="label text-muted">From the list</span>
+            <span className="rounded-full bg-soft px-3 py-1 font-bold shadow-[inset_0_0_0_1.5px_var(--line)]">{listName}</span>
+            {onClearList && (
+              <button type="button" onClick={onClearList} className="font-semibold text-muted underline-offset-4 hover:underline">
+                Deal without it
+              </button>
+            )}
+          </p>
+        ) : (
+          onPerson && <SomeoneInMind media={kind} value={person} onChange={onPerson} />
+        )}
 
         <fieldset className="flex flex-col gap-3">
           <legend className="label mb-3 text-muted">Mood</legend>
@@ -133,7 +150,7 @@ export function TapsScreen({
           </div>
         </fieldset>
 
-        {onAdaptations && !book && !person && (
+        {onAdaptations && !book && !person && !listName && (
           <AdaptationsSwitch on={adaptations} onChange={onAdaptations} noun={series ? "Series" : "Films"} />
         )}
 
@@ -144,6 +161,8 @@ export function TapsScreen({
         >
           {person
             ? `Deal from ${person.name}`
+            : listName
+              ? `Deal from ${listName}`
             : adaptations && !book
               ? `Deal ${DECK_SIZE} adaptations`
               : `Deal ${DECK_SIZE} ${series ? "series" : book ? "books" : "films"}`}

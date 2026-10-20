@@ -209,6 +209,13 @@ function json(res, body, status = 200) {
 http
   .createServer((req, res) => {
     const url = new URL(req.url, "http://localhost");
+    // TMDb's top rated (discover by rating, any language): every fake film or show, best first.
+    if ((url.pathname === "/3/discover/movie" || url.pathname === "/3/discover/tv") && !url.searchParams.has("with_original_language")) {
+      const page = Number(url.searchParams.get("page") || 1);
+      const pool = url.pathname.endsWith("movie") ? FILMS.filter((f) => f.id !== 4999) : SHOWS.filter((s) => s.id < 5900);
+      const results = page === 1 ? pool : [];
+      return json(res, { page, results, total_pages: 1, total_results: results.length });
+    }
     if (url.pathname === "/3/discover/movie") {
       const lang = url.searchParams.get("with_original_language");
       const page = Number(url.searchParams.get("page") || 1);
@@ -229,6 +236,14 @@ http
       const pool = url.pathname.endsWith("movie") ? FILMS : SHOWS;
       const results = pool.filter((f) => (f.title ?? f.name).toLowerCase().includes(q));
       return json(res, { page: 1, results, total_pages: 1, total_results: results.length });
+    }
+    // One film collection: "Thriller Trilogy" (1000, 1001, 1002).
+    if (url.pathname === "/3/search/collection") {
+      const q = (url.searchParams.get("query") || "").toLowerCase();
+      return json(res, { results: "thriller trilogy".includes(q) ? [{ id: 9100, name: "Thriller Trilogy", poster_path: null }] : [] });
+    }
+    if (url.pathname === "/3/collection/9100") {
+      return json(res, { id: 9100, name: "Thriller Trilogy", overview: "Three tense films.", parts: FILMS.filter((f) => f.id <= 1002) });
     }
     const person = url.pathname.match(/^\/3\/person\/(\d+)$/);
     if (person) {
@@ -271,6 +286,12 @@ http
     if (url.pathname === "/wikidata/sparql") {
       const q = url.searchParams.get("query") || "";
       res.writeHead(200, { "content-type": "text/csv" });
+      // Award lists (P166): Best Picture went to three fake films, the Booker to one fake book.
+      if (q.includes("P166")) {
+        if (q.includes("Q102427")) return res.end("id,year\r\n1001,2020\r\n1006,2019\r\n2002,2018\r\n");
+        if (q.includes("Q160082")) return res.end("id,year\r\nOL7003W,2019\r\n");
+        return res.end("id,year\r\n");
+      }
       return res.end(q.includes("P4947") ? "tmdb,ol\r\n1011,OL7004W\r\n1012,OL5000M\r\n" : "tmdb,ol\r\n5003,OL7006W\r\n");
     }
     // An edition, for Wikidata links that name one instead of the work.
