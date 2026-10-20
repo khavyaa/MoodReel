@@ -39,32 +39,33 @@ function sample(src: string): Promise<string | null> {
   });
 }
 
+/** Hue families a poster's pixels are sorted into; one more holds the near-greys. */
+const HUES = 12;
+
 /**
- * Pure: the colour a poster reads as. Each pixel counts by how colourful it is
- * and how far from black or white, so a vivid figure outweighs a grey sky or a
- * black border. Exported for tests.
+ * Pure: the colour a poster reads as. Pixels are sorted by hue family, each
+ * counting by how colourful it is and how far from black or white, and the
+ * strongest family wins: a vivid figure outweighs a grey sky or a black border,
+ * and a poster of cyan sky and red figures reads as one of them, not as the
+ * grey their average would be. Exported for tests.
  */
 export function dominant(rgba: ArrayLike<number>): string | null {
-  let r = 0;
-  let g = 0;
-  let b = 0;
-  let total = 0;
+  const bins = Array.from({ length: HUES + 1 }, () => ({ r: 0, g: 0, b: 0, w: 0 }));
   for (let i = 0; i + 3 < rgba.length; i += 4) {
     if (rgba[i + 3] < 128) continue;
     const [pr, pg, pb] = [rgba[i], rgba[i + 1], rgba[i + 2]];
-    const max = Math.max(pr, pg, pb) / 255;
-    const min = Math.min(pr, pg, pb) / 255;
-    const light = (max + min) / 2;
-    const sat = max === min ? 0 : (max - min) / (1 - Math.abs(2 * light - 1));
+    const [h, sat, light] = hsl(pr / 255, pg / 255, pb / 255);
     const weight = 0.04 + sat * (1 - Math.abs(light - 0.5) * 1.6);
     if (weight <= 0) continue;
-    r += pr * weight;
-    g += pg * weight;
-    b += pb * weight;
-    total += weight;
+    const bin = bins[sat < 0.12 ? HUES : Math.floor(h / (360 / HUES)) % HUES];
+    bin.r += pr * weight;
+    bin.g += pg * weight;
+    bin.b += pb * weight;
+    bin.w += weight;
   }
-  if (!total) return null;
-  return vivid(r / total, g / total, b / total);
+  const best = bins.reduce((a, b) => (b.w > a.w ? b : a));
+  if (!best.w) return null;
+  return vivid(best.r / best.w, best.g / best.w, best.b / best.w);
 }
 
 /** The same hue, made rich enough to tint with: an averaged poster is often a muddy grey-brown. */

@@ -220,9 +220,12 @@ browse; the page numbers below a flow still move 24 at a time. The page takes a 
 poster in front: its colour is sampled in the browser from a small copy of the image
 (`lib/tint.ts`; TMDb and Open Library allow it), made rich enough to tint with, and fed to
 `.tint-frame` in `globals.css`, which re-points the tokens (pale wash in playful, tinted dark
-in cinematic). If an image can't be read the page keeps its normal look. The deck, head-to-head
-and pick screens keep the mood colour. Reduce Motion swaps the tilt and springs for quick
-fades.
+in cinematic). If an image can't be read the page keeps its normal look. Picking keeps the mood
+colour (the start screen, the deck and the head-to-head), with two touches of the poster: a soft
+glow of the top card's colour behind the deck, and tonight's pick, where the page fades from the
+mood into the winner's own colour while its poster settles in (the mood keeps a dot beside its
+name). Colours come from the poster's strongest hue family, so a poster of two opposite colours
+reads as one of them rather than grey. Reduce Motion swaps the tilt and springs for quick fades.
 
 ## Code map
 

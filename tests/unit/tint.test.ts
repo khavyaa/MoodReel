@@ -23,6 +23,12 @@ describe("poster tint", () => {
     expect(Math.max(gr, gg, gb) - Math.min(gr, gg, gb)).toBeLessThan(40);
   });
 
+  it("picks one of two opposite colours rather than the grey they'd average to", () => {
+    const poster = pixels(...Array(12).fill([150, 220, 225]), ...Array(8).fill([220, 50, 40]));
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(dominant(poster)!.slice(i, i + 2), 16));
+    expect(Math.max(r, g, b) - Math.min(r, g, b)).toBeGreaterThan(60);
+  });
+
   it("has nothing to say about a see-through image", () => {
     expect(dominant([0, 0, 0, 0, 255, 0, 0, 10])).toBeNull();
   });

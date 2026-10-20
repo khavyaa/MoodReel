@@ -24,6 +24,7 @@ import { buttonClasses } from "@/components/ui/button";
 import { DeckScreen, type ExitAs, type SwipeAction } from "./deck-screen";
 import { FinaleScreen } from "./finale-screen";
 import { FlowFrame } from "./flow-frame";
+import { usePosterColour } from "@/components/flow/use-poster-colour";
 import { PickScreen } from "./pick-screen";
 import { TapsScreen, type TapsValue } from "./taps-screen";
 import { SaveStatusBar, useSaveQueue } from "./save-queue";
@@ -289,6 +290,8 @@ export function PickFlow({
     return () => document.removeEventListener("visibilitychange", onVisibility);
   }, [onTaps, router]);
 
+  const pickTint = usePosterColour(step.kind === "pick" ? step.pick.posterPath : null);
+
   const toTaps = useCallback(() => {
     if (onExit) return onExit();
     setStep({ kind: "taps" });
@@ -296,7 +299,7 @@ export function PickFlow({
   }, [onExit, router]);
 
   return (
-    <FlowFrame mood={taps.mood}>
+    <FlowFrame mood={taps.mood} tint={pickTint}>
       <SaveStatusBar status={saveStatus} onRetry={() => void retry()} />
       {step.kind === "taps" && (
         <>
