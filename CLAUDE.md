@@ -3,7 +3,7 @@
 # MoodReel
 
 Personal mood-first recommender for movies, series and books. One owner, iPhone + Mac.
-Setup and architecture: README.md.
+Setup: README.md. Architecture, deck rules and deploy notes: docs/how-it-works.md (keep it current when behaviour changes).
 
 ## Workflow
 
@@ -15,6 +15,9 @@ Setup and architecture: README.md.
 - A PR description is text only: what changed and why, how it was tested, and anything the
   reviewer must do (env vars, migrations). No images or image-hosting branches; screenshots of
   anything visible go to the owner in the chat instead.
+- The README's images live in `docs/` and are made from the test catalogue, never real data:
+  `npm run screenshots` regenerates `docs/screenshots/`; `docs/moods.svg` follows `lib/moods.ts`.
+  Refresh them in the same PR when a screen they show changes noticeably.
 - CI must be green before asking for review. Never merge your own PR.
 - Database migrations run only in production builds (`scripts/migrate.mjs`). Each preview runs
   on its own Neon branch (`preview/<git branch>`, a copy of production taken when that branch
