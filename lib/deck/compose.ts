@@ -20,6 +20,20 @@ export function jitter(seed: number, id: number): number {
   return (x - Math.floor(x) - 0.5) * 0.04;
 }
 
+/**
+ * Takes turns between languages, best first within each, so one language can't
+ * fill every non-English slot when films in the others fit too. Input best-first;
+ * languages take turns in the order of their best candidate.
+ */
+export function spreadLanguages<T extends { movie: MovieCandidate }>(ranked: T[]): T[] {
+  const groups = new Map<string, T[]>();
+  for (const r of ranked) groups.set(r.movie.language, [...(groups.get(r.movie.language) ?? []), r]);
+  const queues = [...groups.values()];
+  const out: T[] = [];
+  for (let i = 0; out.length < ranked.length; i++) for (const q of queues) if (q[i]) out.push(q[i]);
+  return out;
+}
+
 export function composeDeck<T extends MovieCandidate>(
   scored: Scored<T>[],
   { size = DECK_SIZE, englishShare = ENGLISH_SHARE, seed = 1 } = {},
@@ -29,7 +43,7 @@ export function composeDeck<T extends MovieCandidate>(
     .sort((a, b) => b.score - a.score || a.movie.id - b.movie.id);
 
   const english = ranked.filter((s) => s.movie.language === "en");
-  const others = ranked.filter((s) => s.movie.language !== "en");
+  const others = spreadLanguages(ranked.filter((s) => s.movie.language !== "en"));
 
   const targetOthers = Math.round(size * (1 - englishShare));
   let takeOthers = Math.min(others.length, targetOthers);

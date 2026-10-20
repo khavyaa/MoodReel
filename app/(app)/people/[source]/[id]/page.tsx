@@ -5,7 +5,7 @@ import { AppFrame } from "@/components/shell/app-frame";
 import { Poster } from "@/components/pick/poster";
 import { FollowAvoid, SaveButton } from "@/components/people/person-controls";
 import { buttonClasses } from "@/components/ui/button";
-import { personWorks } from "@/lib/people/works";
+import { PAGE_LIMIT, personWorks } from "@/lib/people/works";
 import { peoplePrefsFor } from "@/lib/people/server";
 import { personKey, type PersonSource } from "@/lib/people/types";
 import { statesFor, type Media } from "@/lib/picks/server";
@@ -56,13 +56,26 @@ async function Person({ source, id }: { source: PersonSource; id: number }) {
   const { person } = works;
   const pref = prefs.find((p) => personKey(p.person) === personKey(person))?.kind;
 
-  const sections: { title: string; media: Media; rows: Row[] }[] = [
-    { title: "Films", media: "movie" as const, rows: works.films.map((w) => ({ media: "movie" as const, candidate: w.candidate })) },
-    { title: "Series", media: "series" as const, rows: works.series.map((w) => ({ media: "series" as const, candidate: w.candidate })) },
+  const sections: { title: string; media: Media; total: number; rows: Row[] }[] = [
+    {
+      title: "Films",
+      media: "movie" as const,
+      total: works.films.length,
+      rows: works.films.slice(0, PAGE_LIMIT).map((w) => ({ media: "movie" as const, candidate: w.candidate })),
+    },
+    {
+      title: "Series",
+      media: "series" as const,
+      total: works.series.length,
+      rows: works.series.slice(0, PAGE_LIMIT).map((w) => ({ media: "series" as const, candidate: w.candidate })),
+    },
     {
       title: "Books",
       media: "book" as const,
-      rows: works.books.map((b) => ({ media: "book" as const, candidate: b, pages: b.pages, tags: bookTags(b.subjects) })),
+      total: works.books.length,
+      rows: works.books
+        .slice(0, PAGE_LIMIT)
+        .map((b) => ({ media: "book" as const, candidate: b, pages: b.pages, tags: bookTags(b.subjects) })),
     },
   ].filter((s) => s.rows.length > 0);
 
@@ -71,7 +84,7 @@ async function Person({ source, id }: { source: PersonSource; id: number }) {
       sections.map(async (s) => [s.media, await statesFor(owner.id, s.media, s.rows.map((r) => r.candidate.id))] as const),
     ),
   );
-  const count = sections.reduce((n, s) => n + s.rows.length, 0);
+  const count = sections.reduce((n, s) => n + s.total, 0);
   const dealHref = (media: Media) =>
     `/${media === "movie" ? "movies" : media === "series" ? "series" : "books"}?with=${personKey(person)}&name=${encodeURIComponent(person.name)}`;
 
@@ -155,6 +168,11 @@ async function Person({ source, id }: { source: PersonSource; id: number }) {
                 );
               })}
             </ul>
+            {s.total > s.rows.length && (
+              <p className="text-sm text-muted">
+                Their best-known {s.rows.length} of {s.total}. &ldquo;Deal from {person.name}&rdquo; draws on all of them.
+              </p>
+            )}
           </section>
         ))}
         {works.hiddenByLanguage.length > 0 && (

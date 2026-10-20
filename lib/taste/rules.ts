@@ -243,6 +243,17 @@ export function energyFit(movie: MovieCandidate, energy: Taps["energy"]): number
 /** Runtime ceiling per time choice, for the TMDb query. Null means no limit. */
 export const RUNTIME_LIMIT: Record<Taps["time"], number | null> = { 0: 100, 1: 140, 2: null };
 
+/**
+ * Whether a film fits the time you chose. Discover pools filter on runtime
+ * themselves, but films added from elsewhere (people you follow, books you've
+ * read) don't, so every film is checked once its details are in. An unknown
+ * runtime is kept: it's rare once details are fetched.
+ */
+export function fitsRuntime(runtime: number | null | undefined, time: Taps["time"]): boolean {
+  const limit = RUNTIME_LIMIT[time];
+  return limit === null || runtime == null || runtime <= limit;
+}
+
 /* ----------------------------------------------------------------- scoring */
 
 /**

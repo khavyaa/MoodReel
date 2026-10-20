@@ -8,7 +8,7 @@ import { seriesCard } from "@/lib/deck/build-series";
 import { DECK_SIZE } from "@/lib/deck/compose";
 import { getSeriesDetails } from "@/lib/tmdb/series";
 import { getTmdbPerson, type PersonWork } from "@/lib/tmdb/people";
-import { RUNTIME_LIMIT, isLanguage, passesGate, scoreMovie, type TasteProfile } from "@/lib/taste/rules";
+import { fitsRuntime, isLanguage, passesGate, scoreMovie, type TasteProfile } from "@/lib/taste/rules";
 import { fitsCommitment, scoreSeries, seriesGate, shortEnoughForHindi, type SeriesMood } from "@/lib/taste/series-rules";
 import type { Taps } from "@/lib/taste/types";
 import type { BookCandidate } from "@/lib/books/rules";
@@ -20,6 +20,11 @@ import type { Person, PersonSource } from "./types";
  * the mood: it's their work you asked for.
  */
 
+/**
+ * All of a person's work that passes your rules, best known first. The page
+ * shows the first PAGE_LIMIT of each; decks and the followed pool use it all,
+ * so a long career doesn't run out once its best-known titles are handled.
+ */
 export type PersonPageData = {
   person: Person;
   films: PersonWork[];
@@ -29,13 +34,14 @@ export type PersonPageData = {
   hiddenByLanguage: string[];
 };
 
-const PAGE_LIMIT = 24;
+/** How many titles of each kind a person's page lists. */
+export const PAGE_LIMIT = 24;
 
 export async function personWorks(source: PersonSource, id: number): Promise<PersonPageData | null> {
   if (source === "openlibrary") {
     const author = await authorWithBooks(id);
     if (!author) return null;
-    const books = (await withNytWeeks(author.books)).filter((b) => !hasNeverSubject(b.subjects)).slice(0, PAGE_LIMIT);
+    const books = (await withNytWeeks(author.books)).filter((b) => !hasNeverSubject(b.subjects));
     return {
       person: { source, id, name: author.name, role: "author" },
       films: [],
@@ -63,8 +69,8 @@ export async function personWorks(source: PersonSource, id: number): Promise<Per
   });
   return {
     person: { source, id, name: p.name, role: p.role },
-    films: films.slice(0, PAGE_LIMIT),
-    series: series.slice(0, PAGE_LIMIT),
+    films,
+    series,
     books: [],
     hiddenByLanguage: hidden.slice(0, 6),
   };
@@ -90,12 +96,8 @@ export async function buildPersonDeck(
   if (media === "movie") {
     const open = works.films.filter((w) => !exclude.has(w.candidate.id)).slice(0, 30);
     const details = await detailsById(open.map((w) => w.candidate.id));
-    const limit = RUNTIME_LIMIT[taps.time];
     cards = open
-      .filter((w) => {
-        const runtime = details.get(w.candidate.id)?.runtime ?? null;
-        return limit === null || runtime === null || runtime <= limit;
-      })
+      .filter((w) => fitsRuntime(details.get(w.candidate.id)?.runtime, taps.time))
       .map((w) => ({ w, score: scoreMovie(w.candidate, taps, taste) }))
       .sort((a, b) => b.score - a.score)
       .slice(0, DECK_SIZE)
@@ -127,6 +129,8 @@ export async function buildPersonDeck(
 
 /** At most this many followed people are looked up per deal, most recently followed first. */
 const FOLLOWED_LOOKUPS = 8;
+/** Of each followed person's work, the best-known this many join the pool (the deck takes two at most). */
+const FOLLOWED_PER_PERSON = 40;
 
 /**
  * Followed people's work, as extra deck candidates: their films are often too
@@ -141,11 +145,13 @@ export async function followedWork(media: "movie" | "series" | "book", follow: M
       const [source, id] = key.split(":");
       const works = await personWorks(source as PersonSource, Number(id)).catch(() => null);
       if (!works) return [];
-      return media === "movie"
-        ? works.films.map((w) => w.candidate)
-        : media === "series"
-          ? works.series.map((w) => w.candidate)
-          : works.books;
+      const all =
+        media === "movie"
+          ? works.films.map((w) => w.candidate)
+          : media === "series"
+            ? works.series.map((w) => w.candidate)
+            : works.books;
+      return all.slice(0, FOLLOWED_PER_PERSON);
     }),
   );
   return lists.flat();

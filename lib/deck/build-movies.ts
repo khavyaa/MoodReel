@@ -1,5 +1,5 @@
 import "server-only";
-import { composeDeck, DECK_SIZE } from "./compose";
+import { composeDeck, DECK_SIZE, spreadLanguages } from "./compose";
 import { applyCuration } from "./curation";
 import { curateWithAi } from "@/lib/ai/curate";
 import { discoverMovies, getMovieDetails, type DiscoverQuery, type MovieDetails } from "@/lib/tmdb/movies";
@@ -24,6 +24,7 @@ import {
   MOVIE_MOODS,
   RUNTIME_LIMIT,
   eligible,
+  fitsRuntime,
   mainstreamPenalty,
   passesGate,
   scoreMovie,
@@ -152,6 +153,8 @@ const CURATE_TOP = 30;
 
 /** Candidates whose details (runtime, people, services) are fetched before the deck is composed. */
 const DETAIL_TOP = { en: 32, other: 20 } as const;
+/** When too many are over your time, at most this many batches of details are fetched. */
+const DETAIL_ROUNDS = 3;
 
 export function movieCard(m: MovieCandidate, d: MovieDetails | null, providers: number[], followedName: string | null = null): DeckCard {
   return {
@@ -265,11 +268,25 @@ export async function buildMovieDeck(
   // Who made and stars in a film is only in its details, so the best candidates
   // of each language get theirs before the deck is composed: avoided people's
   // films drop out here, followed people's rank higher.
-  const shortlist = [
-    ...ranked.filter((r) => r.movie.language === "en").slice(0, DETAIL_TOP.en),
-    ...ranked.filter((r) => r.movie.language !== "en").slice(0, DETAIL_TOP.other),
-  ];
-  const details = await detailsById(shortlist.map((s) => s.movie.id));
+  // Other languages take turns, so Tamil and Malayalam aren't crowded out by Hindi.
+  // Every film, whatever pool it came from, must fit the time you chose; TMDb's
+  // own runtime filter lets long films through, so when many don't fit, the
+  // next candidates down are checked too.
+  const english = ranked.filter((r) => r.movie.language === "en");
+  const others = spreadLanguages(ranked.filter((r) => r.movie.language !== "en"));
+  const details = new Map<number, MovieDetails>();
+  const shortlist: typeof ranked = [];
+  for (let round = 0; round < DETAIL_ROUNDS; round++) {
+    const fitting = (lang: "en" | "other") => shortlist.filter((s) => (s.movie.language === "en") === (lang === "en")).length;
+    const batch = [
+      ...(fitting("en") < DETAIL_TOP.en ? english.slice(round * DETAIL_TOP.en, (round + 1) * DETAIL_TOP.en) : []),
+      ...(fitting("other") < DETAIL_TOP.other ? others.slice(round * DETAIL_TOP.other, (round + 1) * DETAIL_TOP.other) : []),
+    ];
+    if (!batch.length) break;
+    const found = await detailsById(batch.map((s) => s.movie.id));
+    for (const [id, d] of found) details.set(id, d);
+    shortlist.push(...batch.filter((s) => fitsRuntime(details.get(s.movie.id)?.runtime, taps.time)));
+  }
   const peopleOf = (id: number) => details.get(id)?.people ?? null;
   // Films of books you've read: only the best few, so they don't fill every deck.
   const scored = capFromBooks(
