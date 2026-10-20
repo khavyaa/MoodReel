@@ -295,19 +295,66 @@ export async function updateTitleState(
   });
 }
 
-/** Everything you swiped right on and haven't picked or removed, newest first. */
-export async function savedTitles(userId: string, limit = 80) {
+/** How many lists show at first, and how many more each "Show more" adds. */
+export const LIST_PAGE = 60;
+
+/** Everything you swiped right on and haven't picked or removed, newest first; of one kind if `media` is given. */
+export async function savedTitles(userId: string, limit = LIST_PAGE, media?: Media) {
   const rows = await getDb()
     .select({ id: titleStates.externalId, media: titleStates.media, savedAt: titleStates.updatedAt })
     .from(titleStates)
-    .where(and(eq(titleStates.userId, userId), eq(titleStates.saved, true)))
+    .where(and(eq(titleStates.userId, userId), eq(titleStates.saved, true), media ? eq(titleStates.media, media) : undefined))
     .orderBy(desc(titleStates.updatedAt))
     .limit(limit);
   return rows.map((r) => ({ id: Number(r.id), media: r.media as Media, savedAt: r.savedAt }));
 }
 
+/** How many titles of each kind are saved, all of them, not only the ones a page shows. */
+export async function savedCounts(userId: string): Promise<Record<Media, number>> {
+  const rows = await getDb()
+    .select({ media: titleStates.media, n: sql<number>`count(*)` })
+    .from(titleStates)
+    .where(and(eq(titleStates.userId, userId), eq(titleStates.saved, true)))
+    .groupBy(titleStates.media);
+  const counts: Record<Media, number> = { movie: 0, series: 0, book: 0 };
+  for (const r of rows) counts[r.media as Media] = Number(r.n);
+  return counts;
+}
+
+/**
+ * Everything you've watched or read, newest first: Seen it / Read it swipes,
+ * titles marked seen from Saved, finished picks and "I've read it", with your
+ * rating. Picks are in here too once you've watched them.
+ */
+export async function seenTitles(userId: string, limit = LIST_PAGE) {
+  const rows = await getDb()
+    .select({ id: titleStates.externalId, media: titleStates.media, rating: titleStates.rating, at: titleStates.updatedAt })
+    .from(titleStates)
+    .where(and(eq(titleStates.userId, userId), eq(titleStates.seen, true)))
+    .orderBy(desc(titleStates.updatedAt))
+    .limit(limit);
+  return rows.map((r) => ({ id: Number(r.id), media: r.media as Media, rating: r.rating, at: r.at }));
+}
+
+export async function seenCount(userId: string): Promise<number> {
+  const [row] = await getDb()
+    .select({ n: sql<number>`count(*)` })
+    .from(titleStates)
+    .where(and(eq(titleStates.userId, userId), eq(titleStates.seen, true)));
+  return Number(row?.n ?? 0);
+}
+
+/** How many picks you've made in all. */
+export async function pickCount(userId: string): Promise<number> {
+  const [row] = await getDb()
+    .select({ n: sql<number>`count(*)` })
+    .from(pickSessions)
+    .where(and(eq(pickSessions.userId, userId), eq(pickSessions.status, "picked")));
+  return Number(row?.n ?? 0);
+}
+
 /** Past picks, newest first, with the mood, the reason, and what you made of it. */
-export async function pickHistory(userId: string, limit = 50) {
+export async function pickHistory(userId: string, limit = LIST_PAGE) {
   const db = getDb();
   const sessions = await db
     .select({

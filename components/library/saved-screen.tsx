@@ -10,7 +10,8 @@ import { AppFrame } from "@/components/shell/app-frame";
 import { PickFlow, type FlowStart } from "@/components/pick/pick-flow";
 import { Chip } from "@/components/pick/taps-screen";
 import { cn } from "@/lib/cn";
-import { SavedList, WatchingList, type WatchingEntry } from "./library-lists";
+import Link from "next/link";
+import { SavedList, UnavailableList, WatchingList, type Unavailable, type WatchingEntry } from "./library-lists";
 
 type Kind = "movie" | "series" | "book";
 type Filter = "all" | Kind;
@@ -26,8 +27,9 @@ export function SavedScreen({
   items,
   watching,
   reading,
-  total,
-  missing,
+  counts,
+  unavailable,
+  moreHref,
   people,
 }: {
   items: LibraryMovie[];
@@ -35,17 +37,23 @@ export function SavedScreen({
   reading: WatchingEntry[];
   /** The People section, rendered on the server. */
   people?: React.ReactNode;
-  total: number;
-  missing: number;
+  /** Everything saved, by kind: not only what this page shows. */
+  counts: Record<Kind, number>;
+  /** Saved, watching or reading titles whose details couldn't load just now. */
+  unavailable: Unavailable[];
+  /** "Show more", when more is saved than shown. */
+  moreHref: string | null;
 }) {
   const [start, setStart] = useState<(FlowStart & { media: Kind }) | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
   if (start) return <PickFlow media={start.media} start={start} onExit={() => setStart(null)} />;
 
-  const films = items.filter((i) => i.media === "movie").length;
-  const shows = items.filter((i) => i.media === "series").length;
-  const books = items.filter((i) => i.media === "book").length;
+  const films = counts.movie;
+  const shows = counts.series;
+  const books = counts.book;
+  const total = films + shows + books;
   const shown = filter === "all" ? items : items.filter((i) => i.media === filter);
+  const shownUnavailable = filter === "all" ? unavailable : unavailable.filter((u) => u.media === filter);
   const kinds: Kind[] = (
     [
       ["movie", films],
@@ -86,7 +94,7 @@ export function SavedScreen({
           <div role="group" aria-label="Show" className="flex flex-wrap gap-2">
             {(
               [
-                ["all", `All · ${items.length}`],
+                ["all", `All · ${total}`],
                 ...(films ? ([["movie", `Movies · ${films}`]] as const) : []),
                 ...(shows ? ([["series", `Series · ${shows}`]] as const) : []),
                 ...(books ? ([["book", `Books · ${books}`]] as const) : []),
@@ -100,8 +108,13 @@ export function SavedScreen({
         )}
 
         {items.length > 0 && <SavedList movies={shown} />}
+        {shownUnavailable.length > 0 && <UnavailableList items={shownUnavailable} />}
+        {moreHref && (
+          <Link href={moreHref} scroll={false} className="self-start text-sm font-bold underline underline-offset-4">
+            Show more · {total - items.length - unavailable.filter((u) => u.list === "saved").length} older
+          </Link>
+        )}
         {people}
-        {missing > 0 && <p className="text-sm text-muted">{missing} couldn&apos;t load from TMDb just now.</p>}
       </div>
     </AppFrame>
   );

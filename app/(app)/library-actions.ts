@@ -83,16 +83,20 @@ export type SavedPickResponse =
  * Skips the deck: the saved films (or series) that best fit the mood, and the
  * time or commitment you chose, go straight into the head-to-head.
  */
+/** "Pick from my saved" looks at up to this many saves of the kind you chose (each needs its details fetched). */
+const ALL_SAVED = 200;
+
 export async function pickFromSaved(input: unknown): Promise<SavedPickResponse> {
   const owner = await requireOwner();
   const { media, mood, time } = savedTaps.parse(input);
   const taps = { mood, energy: 1 as const, time };
+  // Every save of this kind, not only the latest ones the Saved page shows first.
   const [saved, taste, providers] = await Promise.all([
-    savedTitles(owner.id),
+    savedTitles(owner.id, ALL_SAVED, media),
     tasteFor(owner.id, media),
     providersFor(owner.id),
   ]);
-  const ids = saved.filter((s) => s.media === media).map((s) => s.id);
+  const ids = saved.map((s) => s.id);
 
   let best: DeckCard[];
   if (media === "book") {
