@@ -79,6 +79,11 @@ export async function createDeckSession(
   taps: { mood: string; energy: number; time: number },
   ids: number[],
 ) {
+  // Only the newest deck can be resumed: dealing a new one closes the unfinished ones.
+  await getDb()
+    .update(pickSessions)
+    .set({ status: "abandoned" })
+    .where(and(eq(pickSessions.userId, userId), eq(pickSessions.media, media), eq(pickSessions.status, "dealing")));
   const [row] = await getDb()
     .insert(pickSessions)
     .values({
@@ -566,4 +571,60 @@ export async function lovedTitles(userId: string, limit = 40) {
     .orderBy(desc(titleStates.updatedAt))
     .limit(limit);
   return rows.map((r) => ({ id: Number(r.id), media: r.media as Media }));
+}
+
+/* ----------------------------------------------------------------- resume */
+
+/** An unfinished deck is offered for resuming for this long after it was dealt. */
+export const RESUME_WITHIN_HOURS = 24;
+
+/**
+ * Your latest unfinished deck of this kind from the last day, and how far you
+ * got: the swipes saved against it, in deck order (an undone swipe is gone
+ * from the log, so the card counts as not swiped yet).
+ */
+export async function resumableDeck(userId: string, media: Media) {
+  const db = getDb();
+  const [session] = await db
+    .select()
+    .from(pickSessions)
+    .where(
+      and(
+        eq(pickSessions.userId, userId),
+        eq(pickSessions.media, media),
+        eq(pickSessions.status, "dealing"),
+        eq(pickSessions.origin, "deck"),
+        gt(pickSessions.createdAt, sql`now() - make_interval(hours => ${RESUME_WITHIN_HOURS})`),
+      ),
+    )
+    .orderBy(desc(pickSessions.createdAt))
+    .limit(1);
+  if (!session || session.deck.length === 0) return null;
+  const logged = await db
+    .select({ id: titleActions.externalId, action: titleActions.action })
+    .from(titleActions)
+    .where(and(eq(titleActions.pickSessionId, session.id), inArray(titleActions.action, SWIPES)))
+    .orderBy(titleActions.createdAt);
+  const last = new Map(logged.map((a) => [a.id, a.action as SwipeAction]));
+  const actions: SwipeAction[] = [];
+  for (const entry of session.deck) {
+    const action = last.get(entry.externalId);
+    if (!action) break;
+    actions.push(action);
+  }
+  return {
+    sessionId: session.id,
+    taps: { mood: session.mood, energy: session.energy, time: session.time },
+    ids: session.deck.map((e) => Number(e.externalId)),
+    actions,
+    createdAt: session.createdAt,
+  };
+}
+
+/** "Start again": the unfinished deck won't be offered again. */
+export async function abandonDeck(userId: string, sessionId: string) {
+  await getDb()
+    .update(pickSessions)
+    .set({ status: "abandoned" })
+    .where(and(eq(pickSessions.id, sessionId), eq(pickSessions.userId, userId), eq(pickSessions.status, "dealing")));
 }

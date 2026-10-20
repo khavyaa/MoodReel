@@ -7,6 +7,8 @@ import { buildSeriesDeck } from "@/lib/deck/build-series";
 import { buildBookDeck } from "@/lib/deck/build-books";
 import { TmdbError } from "@/lib/tmdb/client";
 import {
+  abandonDeck,
+  resumableDeck,
   markSeenOutsideDeck,
   completePick,
   createDeckSession,
@@ -17,6 +19,7 @@ import {
   tasteFor,
   undoSwipe,
   type Media,
+  type SwipeAction,
 } from "@/lib/picks/server";
 import { writeWhy } from "@/lib/ai/why";
 import { MEDIA } from "@/lib/moods";
@@ -25,6 +28,7 @@ import { buildPersonDeck, followedWork } from "@/lib/people/works";
 import type { BookCandidate } from "@/lib/books/rules";
 import { parsePersonKey, personKey } from "@/lib/people/types";
 import { adaptFilterFor, screenCandidates, withLinks } from "@/lib/adaptations/server";
+import { libraryKey, libraryTitles } from "@/lib/library";
 import { NO_ADAPT } from "@/lib/adaptations/rules";
 
 const level = z.union([z.literal(0), z.literal(1), z.literal(2)]);
@@ -161,4 +165,57 @@ export async function pick(
   const why = await writeWhy({ ...w, mood, energy, beat: Math.max(0, context.beat | 0) });
   await completePick(owner.id, sessionId, w, why);
   return { why: why.text };
+}
+
+/* ----------------------------------------------------------------- resume */
+
+export type ResumeOffer = { sessionId: string; mood: string; dealt: number; saves: number; total: number };
+
+/** Whether there's an unfinished deck from the last day to offer on the start screen. Cheap: no catalogue calls. */
+export async function resumeOffer(media: Media): Promise<ResumeOffer | null> {
+  const owner = await requireOwner();
+  const deck = await resumableDeck(owner.id, mediaSchema.parse(media));
+  if (!deck) return null;
+  return {
+    sessionId: deck.sessionId,
+    mood: deck.taps.mood,
+    dealt: deck.actions.length,
+    saves: deck.actions.filter((a) => a === "saved").length,
+    total: deck.ids.length,
+  };
+}
+
+export type ResumeResponse =
+  | { ok: true; sessionId: string; taps: { mood: string; energy: 0 | 1 | 2; time: 0 | 1 | 2 }; cards: DeckCard[]; actions: SwipeAction[] }
+  | { ok: false; error: string };
+
+/** The unfinished deck itself, its cards fetched again, and where you were in it. */
+export async function resumeDeck(media: Media): Promise<ResumeResponse> {
+  const owner = await requireOwner();
+  mediaSchema.parse(media);
+  const deck = await resumableDeck(owner.id, media);
+  if (!deck) return { ok: false, error: "That deck has expired. Deal a new one." };
+  const found = await withLinks(
+    owner.id,
+    [...(await libraryTitles(deck.ids.map((id) => ({ media, id })), await providersFor(owner.id))).values()],
+  );
+  const byKey = new Map(found.map((c) => [libraryKey(c.media, c.id), c]));
+  const cards = deck.ids.flatMap((id) => byKey.get(libraryKey(media, id)) ?? []);
+  // Positions in the deck must line up with the swipes, so a card that can't load means no resume this time.
+  if (cards.length !== deck.ids.length) {
+    return { ok: false, error: `Couldn't load that deck from ${media === "book" ? "Open Library" : "TMDb"} just now. Try again, or deal a new one.` };
+  }
+  return {
+    ok: true,
+    sessionId: deck.sessionId,
+    taps: { mood: deck.taps.mood, energy: level.parse(deck.taps.energy), time: level.parse(deck.taps.time) },
+    cards,
+    actions: deck.actions,
+  };
+}
+
+/** "Start again": forget the unfinished deck. */
+export async function abandon(sessionId: string) {
+  const owner = await requireOwner();
+  await abandonDeck(owner.id, z.string().uuid().parse(sessionId));
 }
