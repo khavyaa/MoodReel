@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useOffline } from "next/offline";
 import { useRouter, useSearchParams } from "next/navigation";
 import { parsePersonKey } from "@/lib/people/types";
@@ -16,6 +16,10 @@ import { FinaleScreen } from "./finale-screen";
 import { FlowFrame } from "./flow-frame";
 import { PickScreen } from "./pick-screen";
 import { TapsScreen, type TapsValue } from "./taps-screen";
+import { SaveStatusBar, useSaveQueue } from "./save-queue";
+
+/** A new deal waits this long at most for earlier saves, so it doesn't deal what you just swiped. */
+const DEAL_WAITS_FOR_SAVES_MS = 8000;
 
 /** Back in the app after this long, the start screen checks for a due "Did you watch it?" card. */
 const RECHECK_AFTER_MS = 60_000;
@@ -34,7 +38,15 @@ type Step =
       /** The deck it came from, so "Back to the deck" can undo the last save. Null when picking from Saved. */
       deck: DeckStep | null;
     }
-  | { kind: "pick"; sessionId: string; pick: DeckCard; saves: DeckCard[]; why: string | null };
+  | {
+      kind: "pick";
+      sessionId: string;
+      pick: DeckCard;
+      saves: DeckCard[];
+      why: string | null;
+      /** The pick is recorded (on your History, off your Saved list). */
+      recorded: boolean;
+    };
 
 type DeckStep = {
   kind: "deck";
@@ -73,16 +85,12 @@ export function PickFlow({
     if (!start) return { kind: "taps" };
     const finale = startFinale(start.cards);
     if (finale) return { kind: "finale", sessionId: start.sessionId, finale, saves: start.cards, deck: null };
-    return { kind: "pick", sessionId: start.sessionId, pick: start.cards[0], saves: start.cards, why: start.why };
+    // A single saved title is picked on the server before the flow starts.
+    return { kind: "pick", sessionId: start.sessionId, pick: start.cards[0], saves: start.cards, why: start.why, recorded: true };
   });
 
-  // Swipes save in the background, strictly in order, so a fast swiper never
-  // races their own saves. A failed save is logged, never blocks the deck.
-  const queue = useRef<Promise<unknown>>(Promise.resolve());
-  const enqueue = useCallback((job: () => Promise<unknown>) => {
-    queue.current = queue.current.then(job).catch((error) => console.warn("[moodreel] save failed", error));
-    return queue.current;
-  }, []);
+  // Swipes, undos and the pick save in the background, in order; see save-queue.
+  const { enqueue, retry, settled, status: saveStatus } = useSaveQueue();
 
   // A person from the URL (a person page's "Deal from …", the People list) or the start screen's search.
   const params = useSearchParams();
@@ -96,6 +104,8 @@ export function PickFlow({
 
   const deal = useCallback(async (from: ChosenPerson | null = person, onlyAdaptations = adaptations) => {
     setStep({ kind: "dealing" });
+    // Earlier swipes first, so the new deck can't deal what you just turned down.
+    await Promise.race([settled(), new Promise((r) => setTimeout(r, DEAL_WAITS_FOR_SAVES_MS))]);
     const result = await dealDeck(media, taps, from?.key ?? null, Boolean(onlyAdaptations && !from)).catch(() => null);
     if (!result || !result.ok) {
       setStep({ kind: "error", message: result?.error ?? "Couldn't deal a deck just now." });
@@ -114,12 +124,12 @@ export function PickFlow({
       exitAs: "skipped",
       returning: null,
     });
-  }, [media, taps, person, adaptations]);
+  }, [media, taps, person, adaptations, settled]);
 
   const reveal = useCallback(
     (sessionId: string, pick: DeckCard, saves: DeckCard[]) => {
-      setStep({ kind: "pick", sessionId, pick, saves, why: null });
-      void enqueue(async () => {
+      setStep({ kind: "pick", sessionId, pick, saves, why: null, recorded: false });
+      enqueue(async () => {
         const { why } = await pickTitle(
           sessionId,
           {
@@ -139,7 +149,7 @@ export function PickFlow({
           },
           { mood: taps.mood, energy: taps.energy, beat: saves.length - 1 },
         );
-        setStep((s) => (s.kind === "pick" && s.pick.id === pick.id ? { ...s, why } : s));
+        setStep((s) => (s.kind === "pick" && s.pick.id === pick.id ? { ...s, why, recorded: true } : s));
       });
     },
     [enqueue, taps.mood, taps.energy],
@@ -149,7 +159,7 @@ export function PickFlow({
     (deck: DeckStep) => {
       const saves = savesOf(deck);
       if (saves.length === 0) {
-        void enqueue(() => noSavesThisTime(deck.sessionId));
+        enqueue(() => noSavesThisTime(deck.sessionId));
         setStep({ kind: "empty" });
         return;
       }
@@ -165,7 +175,7 @@ export function PickFlow({
       if (step.kind !== "deck") return;
       const card = step.cards[step.actions.length];
       if (!card) return;
-      void enqueue(() => swipe(step.sessionId, titleRef(card), action));
+      enqueue(() => swipe(step.sessionId, titleRef(card), action));
       const next: DeckStep = { ...step, actions: [...step.actions, action], exitAs: action, returning: null };
       if (deckIsDone(next.actions.length, next.cards.length, savesOf(next).length)) finishDeck(next);
       else setStep(next);
@@ -180,7 +190,7 @@ export function PickFlow({
       if (i < 0) return;
       const card = deck.cards[i];
       const action = deck.actions[i];
-      void enqueue(() => undoSwipe(deck.sessionId, card.id));
+      enqueue(() => undoSwipe(deck.sessionId, card.id));
       setStep({ ...deck, actions: deck.actions.slice(0, i), exitAs: "undo", returning: { id: card.id, action } });
     },
     [enqueue],
@@ -221,6 +231,7 @@ export function PickFlow({
 
   return (
     <FlowFrame mood={taps.mood}>
+      <SaveStatusBar status={saveStatus} onRetry={() => void retry()} />
       {step.kind === "taps" && (
         <>
           {notice}
@@ -274,6 +285,8 @@ export function PickFlow({
           why={step.why}
           resultLabel={config.result}
           savedForLater={step.saves.filter((c) => c.id !== step.pick.id)}
+          recorded={step.recorded}
+          saveFailed={saveStatus === "failed"}
           onAgain={toTaps}
         />
       )}
