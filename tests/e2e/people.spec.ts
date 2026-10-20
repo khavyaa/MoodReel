@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { E2E_SETUP_TOKEN } from "../../playwright.config";
 import { claimAccount, query, resetDatabase } from "./passkey";
+import { bringToFront, flow } from "./flow";
 
 test.describe.configure({ mode: "serial" });
 
@@ -95,14 +96,18 @@ test("deal from a person: from their page, and from the start screen's search", 
 test("the People page: following with Deal, suggestions from what you love, and undo an avoid", async ({ page }) => {
   // Love three films by Eli Director (saved from his page).
   await page.goto("/people/tmdb/704");
-  for (let i = 0; i < 3; i++) await page.getByRole("button", { name: "Save", exact: true }).first().click();
+  const films = flow(page, /films/);
+  for (let i = 0; i < 3; i++) {
+    await films.getByRole("button", { name: "Save", exact: true }).click();
+    await films.getByRole("button", { name: "Next" }).click();
+  }
   await expect.poll(async () => (await query<{ n: string }>("select count(*) as n from title_states where saved"))[0].n).toBe("3");
 
   await page.goto("/people");
   const people = page.locator("#people");
   await expect(people.getByText("Following · 1")).toBeVisible();
   await expect(people.getByRole("link", { name: /Ben Director/ })).toBeVisible();
-  await expect(people.getByRole("link", { name: "Deal →" })).toHaveAttribute("href", /\/movies\?with=tmdb:701&name=Ben%20Director/);
+  await expect(people.getByRole("link", { name: "Deal from them →" })).toHaveAttribute("href", /\/movies\?with=tmdb:701&name=Ben%20Director/);
 
   await expect(people.getByText(/You've loved 3 titles with/).filter({ hasText: "Eli Director" })).toBeVisible();
   const eli = people.getByRole("listitem").filter({ hasText: "Eli Director" });
@@ -139,9 +144,16 @@ test("People is in the navigation, and its search finds directors, actors and au
 
 test("a person's page marks a title seen, right there, without leaving your place", async ({ page }) => {
   await page.goto("/people/tmdb/702");
-  const row = page.getByRole("listitem").filter({ hasText: "English Thriller 3" }).first();
-  await row.getByRole("button", { name: "Seen it" }).click();
-  await expect(row.getByText("Seen", { exact: true })).toBeVisible();
+  const films = flow(page, /films/);
+  await bringToFront(films, "English Thriller 3");
+  await films.getByRole("button", { name: "Seen it" }).click();
+  await expect(films.getByText("Seen", { exact: true })).toBeVisible();
+  // Still in front: marking it didn't reload the page or send you back to the start.
+  await expect(films.getByRole("button", { name: "Show English Thriller 3" })).toHaveAttribute("aria-current", "true");
+  // Browse away and back: it still says Seen.
+  await films.getByRole("button", { name: "Next" }).click();
+  await films.getByRole("button", { name: "Previous" }).click();
+  await expect(films.getByText("Seen", { exact: true })).toBeVisible();
   await expect
     .poll(async () => (await query<{ seen: boolean }>("select seen from title_states where external_id = '1002' and media = 'movie'"))[0]?.seen)
     .toBe(true);

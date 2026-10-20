@@ -5,7 +5,7 @@ import type { PhotoRef } from "@/lib/people/types";
 import { cn } from "@/lib/cn";
 
 /** TMDb profile photos ("tmdb:/abc.jpg") or Open Library author photos ("ol:123"). */
-function photoUrl(ref: string, size: "sm" | "lg") {
+export function photoUrl(ref: string, size: "sm" | "lg") {
   if (ref.startsWith("tmdb:")) return `https://image.tmdb.org/t/p/${size === "lg" ? "h632" : "w185"}${ref.slice(5)}`;
   // `default=false` makes Open Library answer 404 instead of a blank image, so the initials show.
   return `https://covers.openlibrary.org/a/olid/OL${ref.slice(3)}A-${size === "lg" ? "L" : "M"}.jpg?default=false`;

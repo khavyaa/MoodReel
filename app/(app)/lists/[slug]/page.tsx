@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { AppFrame } from "@/components/shell/app-frame";
-import { Poster } from "@/components/pick/poster";
+import { CoverFlow } from "@/components/flow/cover-flow";
 import { DetailsButton } from "@/components/library/title-details";
 import { Pager, pageFrom } from "@/components/library/pager";
 import { TitleButtons } from "@/components/people/person-controls";
@@ -90,8 +90,19 @@ async function List({ slug, page: pageParam }: { slug: string; page: string | st
       {entries.length === 0 ? (
         <p className="text-muted">This list hasn&apos;t loaded yet. Try again in a moment.</p>
       ) : (
-        <ul aria-label="Titles on this list" className="grid gap-x-10 gap-y-5 md:grid-cols-2">
-          {slice.map((e, i) => {
+        <CoverFlow
+          label="Titles on this list"
+          items={slice.map((e, i) => {
+            const card = cards.get(libraryKey(def.media, e.id));
+            return {
+              key: String(e.id),
+              title: card?.title ?? `${def.media === "book" ? "A book" : "A title"} that didn't load just now`,
+              image: card?.posterPath ?? null,
+              badge: marker((page - 1) * LIST_PAGE + i, e.year),
+              done: !!states.get(e.id)?.seen,
+            };
+          })}
+          infos={slice.map((e, i) => {
             const card = cards.get(libraryKey(def.media, e.id));
             const state = states.get(e.id);
             const status = state?.seen
@@ -101,32 +112,27 @@ async function List({ slug, page: pageParam }: { slug: string; page: string | st
                 : state?.disliked
                   ? "Not for me"
                   : null;
-            const title = card?.title ?? `${def.media === "book" ? "A book" : "A title"} that didn't load just now`;
             return (
-              <li key={e.id} className="grid grid-cols-[56px_minmax(0,1fr)] gap-4">
-                <Poster title={title} path={card?.posterPath ?? null} size="sm" sizes="56px" className="rounded-lg shadow-none" />
-                <div className="flex min-w-0 flex-col gap-1.5">
+              <div key={e.id} className="flex flex-col items-center gap-3 text-center">
+                <div className="flex flex-col items-center gap-0.5">
                   <p className="label text-muted">{[marker((page - 1) * LIST_PAGE + i, e.year), card?.year].filter(Boolean).join(" · ")}</p>
                   {card ? (
-                    <DetailsButton card={card} media={def.media} id={e.id} title={card.title} className="block max-w-full truncate text-left font-black">
+                    <DetailsButton card={card} media={def.media} id={e.id} title={card.title} className="text-xl leading-tight font-black">
                       {card.title}
                     </DetailsButton>
                   ) : (
-                    <p className="text-sm text-muted">{title}</p>
+                    <p className="text-sm text-muted">This one didn&apos;t load just now.</p>
                   )}
-                  {status ? (
-                    <span className="self-start rounded-md bg-soft px-2 py-1 text-xs font-bold shadow-[inset_0_0_0_1.5px_var(--line)]">{status}</span>
-                  ) : card ? (
-                    <TitleButtons
-                      media={def.media}
-                      title={{ id: e.id, language: card.language, genreIds: card.genreIds, tags: card.book?.tags }}
-                    />
-                  ) : null}
                 </div>
-              </li>
+                {status ? (
+                  <span className="rounded-md bg-soft px-2 py-1 text-xs font-bold shadow-[inset_0_0_0_1.5px_var(--line)]">{status}</span>
+                ) : card ? (
+                  <TitleButtons media={def.media} title={{ id: e.id, language: card.language, genreIds: card.genreIds, tags: card.book?.tags }} />
+                ) : null}
+              </div>
             );
           })}
-        </ul>
+        />
       )}
       <Pager page={page} pages={pages} href={(n) => `/lists/${def.slug}${n > 1 ? `?page=${n}` : ""}`} label="List pages" />
     </div>

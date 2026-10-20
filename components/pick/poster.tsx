@@ -9,7 +9,7 @@ const SIZES = { sm: "w185", md: "w342", lg: "w500", xl: "w780" } as const;
 const COVER_SIZES = { sm: "M", md: "M", lg: "L", xl: "L" } as const;
 
 /** TMDb poster paths ("/abc.jpg") or Open Library covers ("ol:12345"). */
-function imageUrl(path: string, size: keyof typeof SIZES) {
+export function imageUrl(path: string, size: keyof typeof SIZES) {
   if (path.startsWith("ol:")) return `https://covers.openlibrary.org/b/id/${path.slice(3)}-${COVER_SIZES[size]}.jpg`;
   return `https://image.tmdb.org/t/p/${SIZES[size]}${path}`;
 }

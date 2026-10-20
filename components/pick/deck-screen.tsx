@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AnimatePresence, animate, motion, useMotionValue, useReducedMotion, useTransform } from "framer-motion";
+import { AnimatePresence, animate, motion, useMotionValue, useReducedMotion, useTransform } from "motion/react";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Award, Check, Heart, Star, Undo2 } from "lucide-react";
 import { PeopleLine } from "@/components/people/people-line";
 import { DECK_SIZE } from "@/lib/deck/compose";

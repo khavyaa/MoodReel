@@ -10,7 +10,7 @@ import { airingLabel, bestsellerLabel, cardMeta, makersLabel, ratingScale } from
 import { whereTo } from "@/lib/watch";
 import { buttonClasses } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
-import { Poster } from "@/components/pick/poster";
+import { CoverFlow } from "@/components/flow/cover-flow";
 import { linkChip, linkLine } from "@/components/pick/title-link";
 import type { FollowUpAnswer, Media } from "@/lib/picks/server";
 import { CheckInAnswers, WatchAnswer } from "./watch-prompt";
@@ -64,52 +64,51 @@ export function SavedList({ movies }: { movies: LibraryMovie[] }) {
   if (shown.length === 0) return <p className="text-lg text-muted">All cleared.</p>;
 
   return (
-    <ul aria-label="Saved titles" className="grid gap-x-10 gap-y-8 md:grid-cols-2 2xl:grid-cols-3">
-      {shown.map((m) => (
-        <li key={keyOf(m)} className="grid grid-cols-[96px_minmax(0,1fr)] gap-4 sm:grid-cols-[120px_minmax(0,1fr)]">
-          <Poster title={m.title} path={m.posterPath} size="md" sizes="120px" className="rounded-xl" />
-          <div className="flex min-w-0 flex-col gap-2">
-            <p className="label text-muted">{meta(m)}</p>
-            <h2 className="text-xl leading-tight font-black sm:text-2xl">{m.title}</h2>
-            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-              <span className="inline-flex items-center gap-1 font-semibold">
-                <Star className="size-3.5 fill-current" aria-hidden /> {m.rating.toFixed(1)}
-                <span className="font-normal opacity-70">{ratingScale(m)}</span>
+    <CoverFlow
+      label="Saved titles"
+      items={shown.map((m) => ({ key: keyOf(m), title: m.title, image: m.posterPath }))}
+      infos={shown.map((m) => (
+        <div key={keyOf(m)} className="flex flex-col items-center gap-2 text-center">
+          <p className="label text-muted">{meta(m)}</p>
+          <h2 className="text-2xl leading-tight font-black">{m.title}</h2>
+          <p className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm">
+            <span className="inline-flex items-center gap-1 font-semibold">
+              <Star className="size-3.5 fill-current" aria-hidden /> {m.rating.toFixed(1)}
+              <span className="font-normal opacity-70">{ratingScale(m)}</span>
+            </span>
+            {m.streamingOn.map((s) => (
+              <span key={s} className="rounded-md bg-accent px-1.5 py-0.5 text-xs font-bold text-on-accent">
+                {s}
               </span>
-              {m.streamingOn.map((s) => (
-                <span key={s} className="rounded-md bg-accent px-1.5 py-0.5 text-xs font-bold text-on-accent">
-                  {s}
-                </span>
-              ))}
-              {airingLabel(m) && <span className="text-xs text-muted">{airingLabel(m)}</span>}
-              {bestsellerLabel(m) && <span className="text-xs text-muted">{bestsellerLabel(m)}</span>}
-            </p>
-            {m.book && makersLabel(m) && <p className="-mt-1 text-sm font-semibold">{makersLabel(m)}</p>}
-            {m.link && (
-              <span
-                className={cn(
-                  "self-start rounded-md px-2 py-0.5 text-xs font-bold",
-                  m.link.known ? "bg-fg text-bg" : "shadow-[inset_0_0_0_1.5px_var(--fg)]",
-                )}
-              >
-                {linkChip(m.link)}
-              </span>
-            )}
-            {m.overview && <p className="line-clamp-2 text-sm text-muted">{m.overview}</p>}
-            <WatchLinks movie={m} />
-            <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1 text-sm font-semibold">
-              <button type="button" onClick={() => act(m, markSeen)} className="inline-flex items-center gap-1 underline-offset-4 hover:underline">
-                <Check className="size-4" aria-hidden /> {m.media === "book" ? "Read it" : "Seen it"}
-              </button>
-              <button type="button" onClick={() => act(m, removeSaved)} className="inline-flex items-center gap-1 text-muted underline-offset-4 hover:underline">
-                <X className="size-4" aria-hidden /> Remove
-              </button>
-              <DetailsButton card={m} media={m.media} id={m.id} title={m.title} />
-            </div>
+            ))}
+            {airingLabel(m) && <span className="text-xs text-muted">{airingLabel(m)}</span>}
+            {bestsellerLabel(m) && <span className="text-xs text-muted">{bestsellerLabel(m)}</span>}
+          </p>
+          {m.book && makersLabel(m) && <p className="-mt-1 text-sm font-semibold">{makersLabel(m)}</p>}
+          {m.link && (
+            <span
+              className={cn(
+                "rounded-md px-2 py-0.5 text-xs font-bold",
+                m.link.known ? "bg-fg text-bg" : "shadow-[inset_0_0_0_1.5px_var(--fg)]",
+              )}
+            >
+              {linkChip(m.link)}
+            </span>
+          )}
+          {m.overview && <p className="line-clamp-2 max-w-[52ch] text-sm text-muted">{m.overview}</p>}
+          <WatchLinks movie={m} />
+          <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 pt-1 text-sm font-semibold">
+            <button type="button" onClick={() => act(m, markSeen)} className="inline-flex items-center gap-1 underline-offset-4 hover:underline">
+              <Check className="size-4" aria-hidden /> {m.media === "book" ? "Read it" : "Seen it"}
+            </button>
+            <button type="button" onClick={() => act(m, removeSaved)} className="inline-flex items-center gap-1 text-muted underline-offset-4 hover:underline">
+              <X className="size-4" aria-hidden /> Remove
+            </button>
+            <DetailsButton card={m} media={m.media} id={m.id} title={m.title} />
           </div>
-        </li>
+        </div>
       ))}
-    </ul>
+    />
   );
 }
 
@@ -133,62 +132,61 @@ export type HistoryEntry = {
 
 export function HistoryList({ entries }: { entries: HistoryEntry[] }) {
   return (
-    <ol className="flex flex-col divide-y divide-line">
-      {entries.map((e) => {
+    <CoverFlow
+      label="Your picks"
+      items={entries.map((e) => ({ key: e.sessionId, title: e.movie.title, image: e.movie.posterPath, done: e.seen }))}
+      infos={entries.map((e) => {
         const mood = MOODS[e.mood as MoodId];
         return (
-          <li key={e.sessionId} className="grid grid-cols-[80px_minmax(0,1fr)] gap-4 py-6 first:pt-0 sm:grid-cols-[110px_minmax(0,1fr)] sm:gap-6">
-            <Poster title={e.movie.title} path={e.movie.posterPath} size="md" sizes="110px" className="rounded-xl" />
-            <div className="flex min-w-0 flex-col gap-2">
-              <p className="label flex flex-wrap items-center gap-x-2 text-muted">
-                {e.pickedAt && <span>{DATE.format(new Date(e.pickedAt))}</span>}
-                {mood && (
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="size-2.5 rounded-full" style={{ background: mood.color }} aria-hidden />
-                    {mood.label}
-                  </span>
-                )}
-              </p>
-              <h2 className="text-xl leading-tight font-black sm:text-2xl">{e.movie.title}</h2>
-              <p className="text-sm text-muted">{meta(e.movie)}</p>
-              {e.movie.link && <p className="text-sm font-semibold">{linkLine(e.movie.link)}</p>}
-              {e.why && <p className="max-w-[60ch] leading-snug">{e.why}</p>}
-              {e.seen ? (
-                <Stars media={e.movie.media} id={e.movie.id} stars={e.stars} title={e.movie.title} />
-              ) : e.movie.media !== "movie" ? (
-                e.watching ? (
-                  <div className="flex flex-col gap-2">
-                    <p className="text-sm font-semibold">{e.movie.media === "book" ? "Reading." : "Watching."} Done with it?</p>
-                    <CheckInAnswers media={e.movie.media} seriesId={e.movie.id} showStillWatching={false} />
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted">
-                    {e.dropped
-                      ? e.movie.media === "book"
-                        ? "You gave up on this one."
-                        : "You dropped this one."
-                      : `Off your ${e.movie.media === "book" ? "Reading" : "Watching"} list.`}
-                  </p>
-                )
-              ) : e.followUp === "later" ? (
-                <WatchedNow movie={e.movie} />
-              ) : e.followUp ? (
-                <p className="text-sm text-muted">You skipped this one.</p>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  <p className="text-sm font-semibold">Did you watch it?</p>
-                  <WatchAnswer sessionId={e.sessionId} />
-                </div>
+          <div key={e.sessionId} className="flex flex-col items-center gap-2 text-center">
+            <p className="label flex flex-wrap items-center justify-center gap-x-2 text-muted">
+              {e.pickedAt && <span>{DATE.format(new Date(e.pickedAt))}</span>}
+              {mood && (
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="size-2.5 rounded-full" style={{ background: mood.color }} aria-hidden />
+                  {mood.label}
+                </span>
               )}
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                <WatchLinks movie={e.movie} />
-                <DetailsButton card={e.movie} media={e.movie.media} id={e.movie.id} title={e.movie.title} className="text-sm font-semibold" />
+            </p>
+            <h2 className="text-2xl leading-tight font-black">{e.movie.title}</h2>
+            <p className="text-sm text-muted">{meta(e.movie)}</p>
+            {e.movie.link && <p className="text-sm font-semibold">{linkLine(e.movie.link)}</p>}
+            {e.why && <p className="max-w-[56ch] leading-snug">{e.why}</p>}
+            {e.seen ? (
+              <Stars media={e.movie.media} id={e.movie.id} stars={e.stars} title={e.movie.title} />
+            ) : e.movie.media !== "movie" ? (
+              e.watching ? (
+                <div className="flex flex-col items-center gap-2">
+                  <p className="text-sm font-semibold">{e.movie.media === "book" ? "Reading." : "Watching."} Done with it?</p>
+                  <CheckInAnswers media={e.movie.media} seriesId={e.movie.id} showStillWatching={false} />
+                </div>
+              ) : (
+                <p className="text-sm text-muted">
+                  {e.dropped
+                    ? e.movie.media === "book"
+                      ? "You gave up on this one."
+                      : "You dropped this one."
+                    : `Off your ${e.movie.media === "book" ? "Reading" : "Watching"} list.`}
+                </p>
+              )
+            ) : e.followUp === "later" ? (
+              <WatchedNow movie={e.movie} />
+            ) : e.followUp ? (
+              <p className="text-sm text-muted">You skipped this one.</p>
+            ) : (
+              <div className="flex flex-col items-center gap-2">
+                <p className="text-sm font-semibold">Did you watch it?</p>
+                <WatchAnswer sessionId={e.sessionId} />
               </div>
+            )}
+            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
+              <WatchLinks movie={e.movie} />
+              <DetailsButton card={e.movie} media={e.movie.media} id={e.movie.id} title={e.movie.title} className="text-sm font-semibold" />
             </div>
-          </li>
+          </div>
         );
       })}
-    </ol>
+    />
   );
 }
 
@@ -196,7 +194,7 @@ export function HistoryList({ entries }: { entries: HistoryEntry[] }) {
 function WatchedNow({ movie }: { movie: LibraryMovie }) {
   const [pending, startTransition] = useTransition();
   return (
-    <div className="flex flex-wrap items-center gap-3">
+    <div className="flex flex-wrap items-center justify-center gap-3">
       <p className="text-sm text-muted">Not watched yet: it&apos;s in Saved.</p>
       <button
         type="button"
@@ -230,7 +228,7 @@ function Stars({ media, id, stars, title }: { media: Media; id: number; stars: n
   }
 
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex flex-wrap items-center justify-center gap-x-3">
       <div role="group" aria-label={`Your rating for ${title}`} className="flex">
         {[1, 2, 3, 4, 5].map((n) => (
           <button
@@ -265,36 +263,38 @@ export function WatchingList({ entries, media = "series" }: { entries: WatchingE
       <h2 id={id} className="text-2xl font-black">
         {book ? "Reading" : "Watching"} · {entries.length}
       </h2>
-      <ul className="grid gap-5 md:grid-cols-2">
-        {entries.map(({ since, show }) => (
-          <li key={show.id} className="grid grid-cols-[64px_minmax(0,1fr)] gap-4">
-            <Poster title={show.title} path={show.posterPath} size="sm" sizes="64px" className="rounded-lg shadow-none" />
-            <div className="flex min-w-0 flex-col gap-2">
-              <div>
-                <p className="font-black">{show.title}</p>
-                <p className="text-sm text-muted">
-                  {(book
-                    ? [show.book?.authors[0], `started ${SHORT_DATE.format(new Date(since))}`, show.book?.pages ? `${show.book.pages} pages` : null]
-                    : [`Started ${SHORT_DATE.format(new Date(since))}`, show.streamingOn[0], cardMeta(show).split(" · ").slice(2, 3)[0]]
-                  )
-                    .filter(Boolean)
-                    .join(" · ")}
-                </p>
-              </div>
+      <CoverFlow
+        label={book ? "Books you're reading" : "Series you're watching"}
+        tint={false}
+        items={entries.map(({ show }) => ({ key: String(show.id), title: show.title, image: show.posterPath }))}
+        infos={entries.map(({ since, show }) => (
+          <div key={show.id} className="flex flex-col items-center gap-2 text-center">
+            <div>
+              <p className="text-xl font-black">{show.title}</p>
+              <p className="text-sm text-muted">
+                {(book
+                  ? [show.book?.authors[0], `started ${SHORT_DATE.format(new Date(since))}`, show.book?.pages ? `${show.book.pages} pages` : null]
+                  : [`Started ${SHORT_DATE.format(new Date(since))}`, show.streamingOn[0], cardMeta(show).split(" · ").slice(2, 3)[0]]
+                )
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-x-4">
               <a
                 href={whereTo(show).href}
                 target="_blank"
                 rel="noreferrer noopener"
-                className="inline-flex items-center gap-1 self-start text-sm font-bold underline underline-offset-4"
+                className="inline-flex items-center gap-1 text-sm font-bold underline underline-offset-4"
               >
                 {whereTo(show).label} <ExternalLink className="size-3.5" aria-hidden />
               </a>
-              <DetailsButton card={show} media={show.media} id={show.id} title={show.title} className="self-start text-sm font-semibold" />
-              <CheckInAnswers media={media} seriesId={show.id} showStillWatching={false} />
+              <DetailsButton card={show} media={show.media} id={show.id} title={show.title} className="text-sm font-semibold" />
             </div>
-          </li>
+            <CheckInAnswers media={media} seriesId={show.id} showStillWatching={false} />
+          </div>
         ))}
-      </ul>
+      />
       <p className="text-sm text-muted">
         Finished asks for stars, then it moves to History. {book ? "Gave up" : "Dropped"} counts like &ldquo;not for
         me&rdquo;.
@@ -310,22 +310,21 @@ export type SeenEntry = { at: string; stars: number | null; movie: LibraryMovie 
 /** Everything you've watched or read, newest first, each with your stars. */
 export function SeenList({ entries }: { entries: SeenEntry[] }) {
   return (
-    <ul aria-label="Seen and read" className="grid gap-x-10 gap-y-6 md:grid-cols-2">
-      {entries.map((e) => (
-        <li key={keyOf(e.movie)} className="grid grid-cols-[64px_minmax(0,1fr)] gap-4">
-          <Poster title={e.movie.title} path={e.movie.posterPath} size="sm" sizes="64px" className="rounded-lg shadow-none" />
-          <div className="flex min-w-0 flex-col gap-1.5">
-            <p className="label text-muted">
-              {e.movie.media === "book" ? "Read" : "Seen"} · {DATE.format(new Date(e.at))}
-            </p>
-            <h2 className="truncate text-lg leading-tight font-black">{e.movie.title}</h2>
-            <p className="text-sm text-muted">{meta(e.movie)}</p>
-            <Stars media={e.movie.media} id={e.movie.id} stars={e.stars} title={e.movie.title} />
-            <DetailsButton card={e.movie} media={e.movie.media} id={e.movie.id} title={e.movie.title} className="self-start text-sm font-semibold" />
-          </div>
-        </li>
+    <CoverFlow
+      label="Seen and read"
+      items={entries.map((e) => ({ key: keyOf(e.movie), title: e.movie.title, image: e.movie.posterPath }))}
+      infos={entries.map((e) => (
+        <div key={keyOf(e.movie)} className="flex flex-col items-center gap-1.5 text-center">
+          <p className="label text-muted">
+            {e.movie.media === "book" ? "Read" : "Seen"} · {DATE.format(new Date(e.at))}
+          </p>
+          <h2 className="text-2xl leading-tight font-black">{e.movie.title}</h2>
+          <p className="text-sm text-muted">{meta(e.movie)}</p>
+          <Stars media={e.movie.media} id={e.movie.id} stars={e.stars} title={e.movie.title} />
+          <DetailsButton card={e.movie} media={e.movie.media} id={e.movie.id} title={e.movie.title} className="text-sm font-semibold" />
+        </div>
       ))}
-    </ul>
+    />
   );
 }
 

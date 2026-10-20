@@ -170,8 +170,10 @@ History show the link, and Settings → Background syncs shows the last sync. Ru
 
 **People page.** People in the nav lists who you follow and avoid, with photos (TMDb profiles,
 Open Library author photos, initials when there's none), suggestions, and one search across
-film and series people and authors. On a person's page every title has Seen it / Read it beside
-Save.
+film and series people (TMDb) and authors (Open Library). People you follow or avoid come up
+from the first letter; each source's results show as soon as they arrive (TMDb answers in a
+fraction of a second, Open Library can take a few), and the last results stay up while you keep
+typing. On a person's page every title has Seen it / Read it beside Save.
 
 **Lists.** Lists in the nav: award winners from Wikidata (Oscar Best Picture, Palme d'Or,
 National Film Award for Best Feature Film, Booker, International Booker, Pulitzer for Fiction,
@@ -209,6 +211,19 @@ connection: Saved, History and the start screens open from your last visit, anyt
 **Looks.** Bold & playful in light mode, cinematic dark in dark mode, following the device. An
 override is stored per device in the browser and applied before the first paint.
 
+**Cover flow and poster tint.** Saved, Watching/Reading, History (Picks and Seen & read), list
+pages, a person's page and the people you follow show titles as a cover flow
+(`components/flow/cover-flow.tsx`, built on Motion): one poster in front, neighbours tilted
+away, moved by swiping, the arrows, the arrow keys or tapping a side poster, with springy
+settling. What's under each poster stays mounted, so its buttons keep their state as you
+browse; the page numbers below a flow still move 24 at a time. The page takes a soft tint of the
+poster in front: its colour is sampled in the browser from a small copy of the image
+(`lib/tint.ts`; TMDb and Open Library allow it), made rich enough to tint with, and fed to
+`.tint-frame` in `globals.css`, which re-points the tokens (pale wash in playful, tinted dark
+in cinematic). If an image can't be read the page keeps its normal look. The deck, head-to-head
+and pick screens keep the mood colour. Reduce Motion swaps the tilt and springs for quick
+fades.
+
 ## Code map
 
 ```
@@ -231,6 +246,7 @@ lib/ai/            AI Gateway calls, each with a rule-based fallback
 components/pick/   the flow: taps, deck, head-to-head, pick, save status
 components/library/ Saved, History, pages, adding what you've seen, Details sheet
 components/people/ the People page, search, photos, follow / avoid / seen controls
+components/flow/   the cover flow and the poster tint behind it
 components/lists/  follow a list, progress, collection search
 proxy.ts           sends signed-out requests to /sign-in
 ```

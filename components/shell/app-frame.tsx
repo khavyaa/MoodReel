@@ -3,6 +3,7 @@ import { MOODS, type MoodId } from "@/lib/moods";
 import { cn } from "@/lib/cn";
 import { AppHeader } from "./app-header";
 import { BottomNav } from "./bottom-nav";
+import { TintFrame } from "@/components/flow/tint-frame";
 
 /*
  * The frame every signed-in screen sits in. Given a mood, the whole frame,
@@ -23,8 +24,8 @@ export function AppFrame({
     ? ({ "--m": MOODS[mood].color, "--mi": MOODS[mood].ink } as CSSProperties)
     : undefined;
 
-  return (
-    <div className={cn("flex min-h-dvh flex-1 flex-col", mood && "mood")} style={style}>
+  const content = (
+    <>
       <AppHeader />
       <main
         className={cn(
@@ -35,6 +36,15 @@ export function AppFrame({
         {children}
       </main>
       <BottomNav />
-    </div>
+    </>
   );
+  // Mood screens wear the mood; the rest can take a poster's tint from a cover flow.
+  if (mood) {
+    return (
+      <div className="mood flex min-h-dvh flex-1 flex-col" style={style}>
+        {content}
+      </div>
+    );
+  }
+  return <TintFrame className="flex min-h-dvh flex-1 flex-col">{content}</TintFrame>;
 }

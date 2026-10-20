@@ -4,6 +4,7 @@ import { useOptimistic, useState, useTransition } from "react";
 import { saveFromPage, seenFromPage, setPerson } from "@/app/(app)/people-actions";
 import type { Person } from "@/lib/people/types";
 import { cn } from "@/lib/cn";
+import { useMarkDone } from "@/components/flow/cover-flow";
 
 /** Follow / Avoid on a person's page. Tapping the active one clears it. */
 export function FollowAvoid({ person, initial }: { person: Person; initial: "follow" | "avoid" | null }) {
@@ -52,15 +53,18 @@ type TitleRef = { id: number; language: string; genreIds: number[]; tags?: strin
 export function TitleButtons({ media, title }: { media: "movie" | "series" | "book"; title: TitleRef }) {
   const [state, setState] = useState<"saved" | "seen" | null>(null);
   const [pending, startTransition] = useTransition();
+  const markDone = useMarkDone();
   const seenLabel = media === "book" ? "Read it" : "Seen it";
 
   function act(next: "saved" | "seen") {
     setState(next);
+    if (next === "seen") markDone?.(true);
     startTransition(async () => {
       try {
         await (next === "saved" ? saveFromPage(media, title) : seenFromPage(media, title));
       } catch {
         setState(null);
+        markDone?.(false);
       }
     });
   }

@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { E2E_SETUP_TOKEN } from "../../playwright.config";
 import { claimAccount, query, resetDatabase } from "./passkey";
+import { flow } from "./flow";
 
 test.describe.configure({ mode: "serial" });
 
@@ -99,14 +100,16 @@ test("saved and history show the run, and you can tidy and rate them", async ({ 
   // Saved: the three saves that didn't win.
   await page.goto("/saved");
   await expect(page.getByText("Saved · 3 films")).toBeVisible();
-  const saved = page.getByRole("list", { name: "Saved titles" }).getByRole("listitem");
+  const flowed = flow(page, "Saved titles");
+  const saved = flowed.getByRole("listitem");
   await expect(saved).toHaveCount(3);
-  const where = saved.first().getByRole("link", { name: /Where to watch/ });
+  const where = flowed.getByRole("link", { name: /Where to watch/ });
   await expect(where).toHaveAttribute("href", /^https:\/\/www\.google\.com\/search\?q=.+movie/);
 
-  await saved.first().getByRole("button", { name: "Remove" }).click();
+  // The buttons belong to the poster in front.
+  await flowed.getByRole("button", { name: "Remove" }).click();
   await expect(saved).toHaveCount(2);
-  await saved.first().getByRole("button", { name: "Seen it" }).click();
+  await flowed.getByRole("button", { name: "Seen it" }).click();
   await expect(saved).toHaveCount(1);
   await expect
     .poll(async () => (await query<{ n: string }>("select count(*) as n from title_states where saved"))[0].n)

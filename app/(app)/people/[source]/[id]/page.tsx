@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { AppFrame } from "@/components/shell/app-frame";
-import { Poster } from "@/components/pick/poster";
+import { CoverFlow } from "@/components/flow/cover-flow";
 import { FollowAvoid, TitleButtons } from "@/components/people/person-controls";
 import { Avatar } from "@/components/people/avatar";
 import { DetailsButton } from "@/components/library/title-details";
@@ -99,108 +99,101 @@ async function Person({ source, id, as }: { source: PersonSource; id: number; as
     `/${media === "movie" ? "movies" : media === "series" ? "series" : "books"}?with=${personKey(person)}&name=${encodeURIComponent(person.name)}`;
 
   return (
-    <div className="grid gap-10 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)] lg:gap-16">
-      <div className="flex flex-col gap-5">
-        <Link href="/people" className="text-sm font-bold text-muted hover:text-fg">
+    <div className="flex flex-col gap-10">
+      <header className="flex flex-col gap-5">
+        <Link href="/people" className="self-start text-sm font-bold text-muted hover:text-fg">
           ← People
         </Link>
-        <span className="label text-muted">
-          {ROLE[as ?? person.role] ?? "Person"}{as && as !== person.role && ROLE[person.role] ? ` · also ${ROLE[person.role].toLowerCase()}` : ""} · {count} {person.role === "author" ? (count === 1 ? "book" : "books") : count === 1 ? "title" : "titles"} for you
-        </span>
-        <div className="flex items-center gap-5">
-          <Avatar name={person.name} photo={works.photo} size="lg" />
-          <h1 className="display min-w-0 text-[clamp(2.75rem,7vw,6rem)]">{person.name}</h1>
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:gap-8">
+          <div className="flex min-w-0 items-center gap-5">
+            <Avatar name={person.name} photo={works.photo} size="lg" />
+            <div className="flex min-w-0 flex-col gap-2">
+              <span className="label text-muted">
+                {ROLE[as ?? person.role] ?? "Person"}
+                {as && as !== person.role && ROLE[person.role] ? ` · also ${ROLE[person.role].toLowerCase()}` : ""} · {count}{" "}
+                {person.role === "author" ? (count === 1 ? "book" : "books") : count === 1 ? "title" : "titles"} for you
+              </span>
+              {/* Sized to its column: a long name wraps rather than running under the posters. */}
+              <h1 className="display text-[clamp(2.25rem,5vw,4.75rem)] [overflow-wrap:anywhere]">{person.name}</h1>
+            </div>
+          </div>
+          <div className="flex flex-col gap-3 lg:ml-auto lg:items-end">
+            <FollowAvoid person={person} initial={pref === "follow" || pref === "avoid" ? pref : null} />
+            <div className="flex flex-wrap gap-2 lg:justify-end">
+              {sections.map((s) => (
+                <Link key={s.media} href={dealHref(s.media)} className={buttonClasses("solid", "lg")}>
+                  {sections.length > 1 ? `Deal ${s.title.toLowerCase()} from ${person.name}` : `Deal from ${person.name}`} →
+                </Link>
+              ))}
+            </div>
+            <p className="max-w-[44ch] text-sm text-muted lg:text-right">
+              Mood and time as usual; only their work, and nothing you&apos;ve seen, saved or turned down.
+            </p>
+          </div>
         </div>
-        <FollowAvoid person={person} initial={pref === "follow" || pref === "avoid" ? pref : null} />
-        <div className="flex flex-wrap gap-2">
-          {sections.map((s) => (
-            <Link key={s.media} href={dealHref(s.media)} className={buttonClasses("solid", "lg")}>
-              {sections.length > 1 ? `Deal ${s.title.toLowerCase()} from ${person.name}` : `Deal from ${person.name}`} →
-            </Link>
-          ))}
-        </div>
-        <p className="max-w-[40ch] text-sm text-muted">
-          Mood and time as usual; only their work, and nothing you&apos;ve seen, saved or turned down.
-        </p>
-      </div>
+      </header>
 
-      <div className="flex flex-col gap-10">
-        {sections.length === 0 && <p className="text-muted">Nothing of theirs fits your rules.</p>}
-        {sections.map((s) => (
-          <section key={s.media} aria-labelledby={`works-${s.media}`} className="flex flex-col gap-3">
-            {sections.length > 1 && (
-              <h2 id={`works-${s.media}`} className="text-xl font-black">
-                {s.title}
-              </h2>
-            )}
-            <ul className="flex flex-col gap-3">
-              {s.rows.map((r) => {
-                const state = states.get(s.media)?.get(r.candidate.id);
-                const stars = state?.rating ? Math.round(state.rating / 2) : 0;
-                const status = state?.inProgress
-                  ? s.media === "book"
-                    ? "Reading"
-                    : "Watching"
-                  : state?.seen
-                    ? `${s.media === "book" ? "Read" : "Seen"}${stars ? ` ${"★".repeat(stars)}` : ""}`
-                    : state?.saved
-                      ? "Saved"
-                      : state?.disliked
-                        ? "Not for me"
-                        : null;
-                return (
-                  <li key={r.candidate.id} className="grid grid-cols-[48px_minmax(0,1fr)_auto] items-center gap-4">
-                    <Poster
-                      title={r.candidate.title}
-                      path={r.candidate.posterPath}
-                      size="sm"
-                      sizes="48px"
-                      className="rounded-lg shadow-none"
+      {sections.length === 0 && <p className="text-muted">Nothing of theirs fits your rules.</p>}
+      {sections.map((s, n) => (
+        <section key={s.media} aria-labelledby={`works-${s.media}`} className="flex flex-col gap-2">
+          <h2 id={`works-${s.media}`} className={sections.length > 1 ? "text-xl font-black" : "sr-only"}>
+            {s.title} · {s.total}
+          </h2>
+          <CoverFlow
+            label={`${person.name}: ${s.title.toLowerCase()}`}
+            tint={n === 0}
+            items={s.rows.map((r) => {
+              const state = states.get(s.media)?.get(r.candidate.id);
+              return { key: String(r.candidate.id), title: r.candidate.title, image: r.candidate.posterPath, done: !!state?.seen };
+            })}
+            infos={s.rows.map((r) => {
+              const state = states.get(s.media)?.get(r.candidate.id);
+              const stars = state?.rating ? Math.round(state.rating / 2) : 0;
+              const status = state?.inProgress
+                ? s.media === "book"
+                  ? "Reading"
+                  : "Watching"
+                : state?.seen
+                  ? `${s.media === "book" ? "Read" : "Seen"}${stars ? ` ${"★".repeat(stars)}` : ""}`
+                  : state?.saved
+                    ? "Saved"
+                    : state?.disliked
+                      ? "Not for me"
+                      : null;
+              return (
+                <div key={r.candidate.id} className="flex flex-col items-center gap-3 text-center">
+                  <div className="flex flex-col items-center gap-0.5">
+                    <DetailsButton media={s.media} id={r.candidate.id} title={r.candidate.title} className="text-xl leading-tight font-black">
+                      {r.candidate.title}
+                    </DetailsButton>
+                    <p className="text-sm text-muted">
+                      {[r.candidate.year, r.pages ? `${r.pages} pages` : null, r.candidate.voteCount ? `★ ${r.candidate.voteAverage.toFixed(1)}` : null]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </p>
+                  </div>
+                  {status ? (
+                    <span className="rounded-md bg-soft px-2 py-1 text-xs font-bold shadow-[inset_0_0_0_1.5px_var(--line)]">{status}</span>
+                  ) : (
+                    <TitleButtons
+                      media={s.media}
+                      title={{ id: r.candidate.id, language: r.candidate.language, genreIds: r.candidate.genreIds, tags: r.tags }}
                     />
-                    <div className="min-w-0">
-                      <DetailsButton
-                        media={s.media}
-                        id={r.candidate.id}
-                        title={r.candidate.title}
-                        className="block max-w-full truncate text-left font-black"
-                      >
-                        {r.candidate.title}
-                      </DetailsButton>
-                      <p className="text-sm text-muted">
-                        {[
-                          r.candidate.year,
-                          r.pages ? `${r.pages} pages` : null,
-                          r.candidate.voteCount ? `★ ${r.candidate.voteAverage.toFixed(1)}` : null,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </p>
-                    </div>
-                    {status ? (
-                      <span className="rounded-md bg-soft px-2 py-1 text-xs font-bold shadow-[inset_0_0_0_1.5px_var(--line)]">{status}</span>
-                    ) : (
-                      <TitleButtons
-                        media={s.media}
-                        title={{ id: r.candidate.id, language: r.candidate.language, genreIds: r.candidate.genreIds, tags: r.tags }}
-                      />
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-            {s.total > s.rows.length && (
-              <p className="text-sm text-muted">
-                Their best-known {s.rows.length} of {s.total}. &ldquo;Deal from {person.name}&rdquo; draws on all of them.
-              </p>
-            )}
-          </section>
-        ))}
-        {works.hiddenByLanguage.length > 0 && (
-          <p className="text-sm text-muted">
-            Not shown, by your language rules: {works.hiddenByLanguage.join(", ")}.
-          </p>
-        )}
-      </div>
+                  )}
+                </div>
+              );
+            })}
+          />
+          {s.total > s.rows.length && (
+            <p className="text-center text-sm text-muted">
+              Their best-known {s.rows.length} of {s.total}. &ldquo;Deal from {person.name}&rdquo; draws on all of them.
+            </p>
+          )}
+        </section>
+      ))}
+      {works.hiddenByLanguage.length > 0 && (
+        <p className="text-center text-sm text-muted">Not shown, by your language rules: {works.hiddenByLanguage.join(", ")}.</p>
+      )}
     </div>
   );
 }

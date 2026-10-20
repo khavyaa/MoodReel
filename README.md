@@ -33,6 +33,8 @@ Built for one person on an iPhone and a Mac. Sign-in is a passkey; there is no s
   top rated, and any film collection, with your progress; follow one to badge its titles in your
   decks, or deal straight from it.
 - **Books on screen**: films of books you've read come first, with the book on the card.
+- **Cover flow**: Saved, History, lists and people's pages show posters you swipe through, and
+  the page takes on the colour of the poster in front.
 - **Your library**: Saved and History a page at a time, Watching and Reading, a Details sheet for
   any title, and a way to add what you'd already seen or read: search, or rate a quick stack.
 

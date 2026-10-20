@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { E2E_SETUP_TOKEN } from "../../playwright.config";
 import { claimAccount, query, resetDatabase } from "./passkey";
+import { flow } from "./flow";
 
 test.describe.configure({ mode: "serial" });
 
@@ -34,14 +35,14 @@ test("a list fills itself, shows your progress, and you can mark titles seen and
   await expect(page.getByRole("heading", { name: "Worth getting through" })).toBeVisible();
   await page.getByRole("link", { name: /Oscar Best Picture winners/ }).click();
 
-  const titles = page.getByRole("list", { name: "Titles on this list" });
+  const titles = flow(page, "Titles on this list");
   await expect(titles.getByRole("listitem")).toHaveCount(3);
-  await expect(titles.getByText(/^Won 2020/)).toBeVisible();
+  // Newest win in front, its year on the poster.
+  await expect(titles.getByRole("listitem").first()).toContainText("Won 2020");
   await expect(page.getByRole("progressbar", { name: "0 of 3 seen" })).toBeVisible();
 
-  const first = titles.getByRole("listitem").filter({ hasText: "Won 2020" });
-  await first.getByRole("button", { name: "Seen it" }).click();
-  await expect(first.getByText("Seen", { exact: true })).toBeVisible();
+  await titles.getByRole("button", { name: "Seen it" }).click();
+  await expect(titles.getByText("Seen", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Follow" }).click();
   await expect(page.getByRole("button", { name: "Following" })).toBeVisible();
   await expect.poll(async () => (await query("select 1 from list_follows")).length).toBe(1);
@@ -86,7 +87,7 @@ test("find a film collection and browse it in order", async ({ page }) => {
   await page.getByRole("searchbox").fill("thriller");
   await page.getByRole("list", { name: "Collections found" }).getByRole("link", { name: "Thriller Trilogy" }).click();
   await expect(page.getByRole("heading", { name: "Thriller Trilogy" })).toBeVisible();
-  const titles = page.getByRole("list", { name: "Titles on this list" });
+  const titles = flow(page, "Titles on this list");
   await expect(titles.getByRole("listitem")).toHaveCount(3);
-  await expect(titles.getByText(/^Part 1/)).toBeVisible();
+  await expect(titles.getByRole("listitem").first()).toContainText("Part 1");
 });

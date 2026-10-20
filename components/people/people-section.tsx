@@ -6,6 +6,7 @@ import { personHref, personKey, type Person } from "@/lib/people/types";
 import { requireOwner } from "@/lib/session";
 import { PersonPrefButton } from "./people-buttons";
 import { Avatar } from "./avatar";
+import { CoverFlow } from "@/components/flow/cover-flow";
 
 const ROLE: Record<Person["role"], string> = {
   director: "Director",
@@ -33,25 +34,28 @@ export async function PeopleSection() {
       {following.length > 0 ? (
         <div className="flex flex-col gap-3 rounded-3xl bg-soft p-5 sm:p-7">
           <h3 className="font-black">Following · {following.length}</h3>
-          <ul className="grid gap-3 md:grid-cols-2">
-            {following.map((p) => (
-              <li key={personKey(p)} className="flex items-center justify-between gap-3">
-                <Link href={personHref(p)} className="flex min-w-0 items-center gap-3">
-                  <Avatar name={p.name} photo={photos.get(personKey(p)) ?? null} />
-                  <span className="min-w-0">
-                    <span className="block truncate font-bold">{p.name}</span>
-                    <span className="text-sm text-muted">{ROLE[p.role]}</span>
-                  </span>
-                </Link>
-                <Link
-                  href={dealHref(p)}
-                  className="h-9 shrink-0 rounded-full bg-fg px-4 text-sm leading-9 font-bold text-bg hover:opacity-90"
-                >
-                  Deal →
-                </Link>
-              </li>
+          <CoverFlow
+            label="People you follow"
+            items={following.map((p) => ({ key: personKey(p), title: p.name, image: photos.get(personKey(p)) ?? null, round: true }))}
+            infos={following.map((p) => (
+              <div key={personKey(p)} className="flex flex-col items-center gap-3 text-center">
+                <div>
+                  <Link href={personHref(p)} className="text-2xl leading-tight font-black underline-offset-4 hover:underline">
+                    {p.name}
+                  </Link>
+                  <p className="text-sm text-muted">{ROLE[p.role]}</p>
+                </div>
+                <div className="flex gap-2">
+                  <Link href={personHref(p)} className="h-10 rounded-full border-2 border-line px-4 text-sm leading-9 font-bold hover:bg-soft">
+                    Their work
+                  </Link>
+                  <Link href={dealHref(p)} className="h-10 rounded-full bg-fg px-4 text-sm leading-10 font-bold text-bg hover:opacity-90">
+                    Deal from them →
+                  </Link>
+                </div>
+              </div>
             ))}
-          </ul>
+          />
         </div>
       ) : (
         <p className="text-muted">
