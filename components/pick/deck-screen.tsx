@@ -543,9 +543,9 @@ function RateOverlay({ title, book, onRate }: { title: string; book: boolean; on
               setShown(n);
               setTimeout(() => onRate(n), 350);
             }}
-            className="p-1.5"
+            className="p-1 sm:p-1.5"
           >
-            <Star className={cn("size-8 transition-transform", n <= shown ? "scale-110 fill-current" : "opacity-60")} aria-hidden />
+            <Star className={cn("size-6 transition-transform sm:size-8", n <= shown ? "scale-110 fill-current" : "opacity-60")} aria-hidden />
           </button>
         ))}
       </div>
