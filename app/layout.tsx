@@ -1,26 +1,39 @@
 import type { Metadata, Viewport } from "next";
-import { Big_Shoulders, Instrument_Serif, JetBrains_Mono, Onest } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { ServiceWorker } from "@/components/shell/service-worker";
 
-const shoulders = Big_Shoulders({
-  subsets: ["latin"],
-  weight: ["700", "800", "900"],
+/*
+ * The four families live in app/fonts (from Google Fonts, each with its SIL
+ * Open Font License), so a build never has to download them: a hiccup fetching
+ * from Google once failed a CI build. Each file holds Latin plus the arrows and
+ * symbols the app uses (← → ↔ ★ ✓ ⌘ ₹); app/fonts/README.md says how to remake them.
+ */
+const shoulders = localFont({
+  // One variable file covers every weight used (700 to 900).
+  src: "./fonts/big-shoulders.woff2",
+  weight: "700 900",
   variable: "--font-shoulders",
-  // Next has no metrics to size-match a fallback for this family; use a condensed stack.
+  // There are no metrics to size-match a fallback for this family; use a condensed stack.
   adjustFontFallback: false,
   fallback: ["Arial Narrow", "Impact", "sans-serif"],
 });
-const instrument = Instrument_Serif({
-  subsets: ["latin"],
-  weight: "400",
-  style: ["normal", "italic"],
+const instrument = localFont({
+  src: [
+    { path: "./fonts/instrument-serif.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/instrument-serif-italic.woff2", weight: "400", style: "italic" },
+  ],
   variable: "--font-instrument",
+  adjustFontFallback: "Times New Roman",
 });
-const onest = Onest({ subsets: ["latin"], variable: "--font-onest" });
-// Variable font: one file covers every weight. Requesting fixed weights
-// ("400", "600") broke Turbopack's Google font loader in Next 16.4.
-const jetbrains = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains" });
+const onest = localFont({ src: "./fonts/onest.woff2", weight: "100 900", variable: "--font-onest" });
+const jetbrains = localFont({
+  src: "./fonts/jetbrains-mono.woff2",
+  weight: "100 800",
+  variable: "--font-jetbrains",
+  // A monospace face: size-matching to Arial would do more harm than good.
+  adjustFontFallback: false,
+});
 
 export const metadata: Metadata = {
   title: { default: "MoodReel", template: "%s · MoodReel" },
