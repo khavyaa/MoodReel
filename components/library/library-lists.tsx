@@ -1,20 +1,24 @@
 "use client";
 
 import { useOptimistic, useState, useTransition } from "react";
+import { ADVANCE_AFTER, CoverFlow } from "@/components/flow/cover-flow";
+import { StarPrompt } from "@/components/flow/star-prompt";
+import { Sheet } from "@/components/ui/sheet";
+import { useMore } from "./use-more";
 import { useRouter } from "next/navigation";
 import { Check, ExternalLink, Play, RotateCcw, Star, X } from "lucide-react";
-import { markSeen, rateTitle, removeSaved } from "@/app/(app)/library-actions";
+import { markSeen, morePicks, moreSaved, moreSeen, rateTitle, removeSaved } from "@/app/(app)/library-actions";
 import type { LibraryMovie } from "@/lib/library";
 import { MOODS, type MoodId } from "@/lib/moods";
 import { airingLabel, bestsellerLabel, cardMeta, makersLabel, ratingScale } from "@/lib/card-meta";
 import { whereTo } from "@/lib/watch";
 import { buttonClasses } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
-import { CoverFlow } from "@/components/flow/cover-flow";
 import { linkChip, linkLine } from "@/components/pick/title-link";
 import type { FollowUpAnswer, Media } from "@/lib/picks/server";
 import { CheckInAnswers, WatchAnswer } from "./watch-prompt";
 import { DetailsButton } from "./title-details";
+import { Poster } from "@/components/pick/poster";
 
 // You're in India; dates read the same on the server (UTC) and in the browser.
 const DATE = new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Kolkata" });
@@ -49,66 +53,100 @@ function WatchLinks({ movie }: { movie: LibraryMovie }) {
 
 /* ------------------------------------------------------------------ saved */
 
-export function SavedList({ movies }: { movies: LibraryMovie[] }) {
-  const [, startTransition] = useTransition();
-  const [gone, hide] = useOptimistic<string[], string>([], (keys, key) => [...keys, key]);
-
-  function act(m: LibraryMovie, action: (media: Media, id: number) => Promise<void>) {
-    startTransition(async () => {
-      hide(keyOf(m));
-      await action(m.media, m.id);
-    });
-  }
-
-  const shown = movies.filter((m) => !gone.includes(keyOf(m)));
-  if (shown.length === 0) return <p className="text-lg text-muted">All cleared.</p>;
-
+/**
+ * Every save, one continuous flow (more load as you near the end). Seen it /
+ * Read it asks for stars, then the card leaves and the next comes forward;
+ * Remove takes it out straight away.
+ */
+export function SavedList({
+  movies,
+  fetched,
+  total,
+  shown,
+  media,
+}: {
+  movies: LibraryMovie[];
+  /** Rows the first page took from the database (saved titles that didn't load are among them). */
+  fetched: number;
+  /** Saves in all. */
+  total: number;
+  /** How many of them are cards (those that didn't load are listed apart). */
+  shown: number;
+  /** The kind shown, or every kind. */
+  media: Media | null;
+}) {
+  const more = useMore(movies, fetched, total, (offset) => moreSaved(media, offset).then((r) => ({ list: r.movies, fetched: r.fetched })), shown);
+  if (more.list.length === 0) return <p className="text-lg text-muted">All cleared.</p>;
   return (
     <CoverFlow
       label="Saved titles"
-      items={shown.map((m) => ({ key: keyOf(m), title: m.title, image: m.posterPath }))}
-      infos={shown.map((m) => (
-        <div key={keyOf(m)} className="flex flex-col items-center gap-2 text-center">
-          <p className="label text-muted">{meta(m)}</p>
-          <h2 className="text-2xl leading-tight font-black">{m.title}</h2>
-          <p className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm">
-            <span className="inline-flex items-center gap-1 font-semibold">
-              <Star className="size-3.5 fill-current" aria-hidden /> {m.rating.toFixed(1)}
-              <span className="font-normal opacity-70">{ratingScale(m)}</span>
-            </span>
-            {m.streamingOn.map((s) => (
-              <span key={s} className="rounded-md bg-accent px-1.5 py-0.5 text-xs font-bold text-on-accent">
-                {s}
-              </span>
-            ))}
-            {airingLabel(m) && <span className="text-xs text-muted">{airingLabel(m)}</span>}
-            {bestsellerLabel(m) && <span className="text-xs text-muted">{bestsellerLabel(m)}</span>}
-          </p>
-          {m.book && makersLabel(m) && <p className="-mt-1 text-sm font-semibold">{makersLabel(m)}</p>}
-          {m.link && (
-            <span
-              className={cn(
-                "rounded-md px-2 py-0.5 text-xs font-bold",
-                m.link.known ? "bg-fg text-bg" : "shadow-[inset_0_0_0_1.5px_var(--fg)]",
-              )}
-            >
-              {linkChip(m.link)}
-            </span>
-          )}
-          {m.overview && <p className="line-clamp-2 max-w-[52ch] text-sm text-muted">{m.overview}</p>}
-          <WatchLinks movie={m} />
-          <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 pt-1 text-sm font-semibold">
-            <button type="button" onClick={() => act(m, markSeen)} className="inline-flex items-center gap-1 underline-offset-4 hover:underline">
-              <Check className="size-4" aria-hidden /> {m.media === "book" ? "Read it" : "Seen it"}
-            </button>
-            <button type="button" onClick={() => act(m, removeSaved)} className="inline-flex items-center gap-1 text-muted underline-offset-4 hover:underline">
-              <X className="size-4" aria-hidden /> Remove
-            </button>
-            <DetailsButton card={m} media={m.media} id={m.id} title={m.title} />
-          </div>
-        </div>
+      total={more.total}
+      onNearEnd={more.nearEnd}
+      items={more.list.map((m) => ({ key: keyOf(m), title: m.title, image: m.posterPath }))}
+      infos={more.list.map((m) => (
+        <SavedInfo key={keyOf(m)} movie={m} onGone={() => more.remove((x) => keyOf(x) === keyOf(m))} />
       ))}
     />
+  );
+}
+
+function SavedInfo({ movie: m, onGone }: { movie: LibraryMovie; onGone: () => void }) {
+  const [rating, setRating] = useState(false);
+  return (
+    <div className="flex flex-col items-center gap-2 text-center">
+      <p className="label text-muted">{meta(m)}</p>
+      <h2 className="text-2xl leading-tight font-black">{m.title}</h2>
+      <p className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm">
+        <span className="inline-flex items-center gap-1 font-semibold">
+          <Star className="size-3.5 fill-current" aria-hidden /> {m.rating.toFixed(1)}
+          <span className="font-normal opacity-70">{ratingScale(m)}</span>
+        </span>
+        {m.streamingOn.map((s) => (
+          <span key={s} className="rounded-md bg-accent px-1.5 py-0.5 text-xs font-bold text-on-accent">
+            {s}
+          </span>
+        ))}
+        {airingLabel(m) && <span className="text-xs text-muted">{airingLabel(m)}</span>}
+        {bestsellerLabel(m) && <span className="text-xs text-muted">{bestsellerLabel(m)}</span>}
+      </p>
+      {m.book && makersLabel(m) && <p className="-mt-1 text-sm font-semibold">{makersLabel(m)}</p>}
+      {m.link && (
+        <span className={cn("rounded-md px-2 py-0.5 text-xs font-bold", m.link.known ? "bg-fg text-bg" : "shadow-[inset_0_0_0_1.5px_var(--fg)]")}>
+          {linkChip(m.link)}
+        </span>
+      )}
+      {m.overview && <p className="line-clamp-2 max-w-[52ch] text-sm text-muted">{m.overview}</p>}
+      {rating ? (
+        <StarPrompt title={m.title} onRate={(n) => void rateTitle(m.media, m.id, n).catch(() => undefined)} onDone={() => setTimeout(onGone, ADVANCE_AFTER)} />
+      ) : (
+        <>
+          <WatchLinks movie={m} />
+          <div className="flex flex-wrap justify-center gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => {
+                setRating(true);
+                void markSeen(m.media, m.id).catch(() => setRating(false));
+              }}
+              className={buttonClasses("outline", "sm")}
+            >
+              <Check className="size-4" aria-hidden /> {m.media === "book" ? "Read it" : "Seen it"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onGone();
+                void removeSaved(m.media, m.id).catch(() => undefined);
+              }}
+              className={buttonClasses("ghost", "sm")}
+            >
+              <X className="size-4" aria-hidden /> Remove
+            </button>
+            <DetailsButton card={m} media={m.media} id={m.id} title={m.title} className={buttonClasses("ghost", "sm")} />
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -130,12 +168,15 @@ export type HistoryEntry = {
   movie: LibraryMovie;
 };
 
-export function HistoryList({ entries }: { entries: HistoryEntry[] }) {
+export function HistoryList({ entries, fetched, total }: { entries: HistoryEntry[]; fetched: number; total: number }) {
+  const more = useMore(entries, fetched, total, (offset) => morePicks(offset).then((r) => ({ list: r.entries, fetched: r.fetched })));
   return (
     <CoverFlow
       label="Your picks"
-      items={entries.map((e) => ({ key: e.sessionId, title: e.movie.title, image: e.movie.posterPath, done: e.seen }))}
-      infos={entries.map((e) => {
+      total={more.total}
+      onNearEnd={more.nearEnd}
+      items={more.list.map((e) => ({ key: e.sessionId, title: e.movie.title, image: e.movie.posterPath, done: e.seen }))}
+      infos={more.list.map((e) => {
         const mood = MOODS[e.mood as MoodId];
         return (
           <div key={e.sessionId} className="flex flex-col items-center gap-2 text-center">
@@ -190,16 +231,21 @@ export function HistoryList({ entries }: { entries: HistoryEntry[] }) {
   );
 }
 
-/** "Not watched yet": once you have, mark it here instead of hunting for it in Saved. */
+/** "Not watched yet": once you have, mark it here instead of hunting for it in Saved, then rate it. */
 function WatchedNow({ movie }: { movie: LibraryMovie }) {
-  const [pending, startTransition] = useTransition();
+  const [step, setStep] = useState<"ask" | "rate" | "done">("ask");
+  if (step === "rate")
+    return <StarPrompt title={movie.title} onRate={(n) => void rateTitle(movie.media, movie.id, n).catch(() => undefined)} onDone={() => setStep("done")} />;
+  if (step === "done") return <p className="text-sm font-semibold">Watched. It&apos;s in Seen &amp; read.</p>;
   return (
     <div className="flex flex-wrap items-center justify-center gap-3">
       <p className="text-sm text-muted">Not watched yet: it&apos;s in Saved.</p>
       <button
         type="button"
-        disabled={pending}
-        onClick={() => startTransition(() => markSeen(movie.media, movie.id))}
+        onClick={() => {
+          setStep("rate");
+          void markSeen(movie.media, movie.id).catch(() => setStep("ask"));
+        }}
         className={buttonClasses("outline", "sm")}
       >
         <Check className="size-3.5" aria-hidden /> Watched it
@@ -254,51 +300,48 @@ export type WatchingEntry = { since: string; show: LibraryMovie };
 
 const SHORT_DATE = new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", timeZone: "Asia/Kolkata" });
 
-/** Series or books you picked and are part-way through, with "finished" and "dropped" / "gave up". */
-export function WatchingList({ entries, media = "series" }: { entries: WatchingEntry[]; media?: "series" | "book" }) {
+/**
+ * Series or books you picked and are part-way through, as a thin shelf of
+ * covers: tap one to check in (finished, dropped / gave up, or not started yet).
+ */
+export function WatchingShelf({ entries, media = "series" }: { entries: WatchingEntry[]; media?: "series" | "book" }) {
+  const [open, setOpen] = useState<WatchingEntry | null>(null);
   const book = media === "book";
-  const id = book ? "reading" : "watching";
   return (
-    <section aria-labelledby={id} className="flex flex-col gap-4 rounded-3xl bg-soft p-5 sm:p-7">
-      <h2 id={id} className="text-2xl font-black">
-        {book ? "Reading" : "Watching"} · {entries.length}
-      </h2>
-      <CoverFlow
-        label={book ? "Books you're reading" : "Series you're watching"}
-        tint={false}
-        items={entries.map(({ show }) => ({ key: String(show.id), title: show.title, image: show.posterPath }))}
-        infos={entries.map(({ since, show }) => (
-          <div key={show.id} className="flex flex-col items-center gap-2 text-center">
-            <div>
-              <p className="text-xl font-black">{show.title}</p>
-              <p className="text-sm text-muted">
-                {(book
-                  ? [show.book?.authors[0], `started ${SHORT_DATE.format(new Date(since))}`, show.book?.pages ? `${show.book.pages} pages` : null]
-                  : [`Started ${SHORT_DATE.format(new Date(since))}`, show.streamingOn[0], cardMeta(show).split(" · ").slice(2, 3)[0]]
-                )
-                  .filter(Boolean)
-                  .join(" · ")}
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center justify-center gap-x-4">
-              <a
-                href={whereTo(show).href}
-                target="_blank"
-                rel="noreferrer noopener"
-                className="inline-flex items-center gap-1 text-sm font-bold underline underline-offset-4"
-              >
-                {whereTo(show).label} <ExternalLink className="size-3.5" aria-hidden />
-              </a>
-              <DetailsButton card={show} media={show.media} id={show.id} title={show.title} className="text-sm font-semibold" />
-            </div>
-            <CheckInAnswers media={media} seriesId={show.id} showStillWatching={false} />
-          </div>
-        ))}
-      />
-      <p className="text-sm text-muted">
-        Finished asks for stars, then it moves to History. {book ? "Gave up" : "Dropped"} counts like &ldquo;not for
-        me&rdquo;.
+    <section aria-label={book ? "Reading" : "Watching"} className="flex flex-col gap-2">
+      <p className="label text-muted">
+        {book ? "Reading" : "Watching"} · {entries.length} · tap to check in
       </p>
+      <ul className="flex gap-3 overflow-x-auto pb-1">
+        {entries.map((e) => (
+          <li key={e.show.id} className="w-16 shrink-0 sm:w-20">
+            <button type="button" onClick={() => setOpen(e)} aria-label={`Check in: ${e.show.title}`} className="block w-full">
+              <Poster title={e.show.title} path={e.show.posterPath} size="sm" sizes="80px" className="rounded-lg shadow-none" />
+            </button>
+          </li>
+        ))}
+      </ul>
+      {open && (
+        <Sheet title={open.show.title} onClose={() => setOpen(null)}>
+          <p className="text-sm text-muted">
+            {(book
+              ? [open.show.book?.authors[0], `started ${SHORT_DATE.format(new Date(open.since))}`, open.show.book?.pages ? `${open.show.book.pages} pages` : null]
+              : [`Started ${SHORT_DATE.format(new Date(open.since))}`, open.show.streamingOn[0], cardMeta(open.show).split(" · ").slice(2, 3)[0]]
+            )
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <WatchLinks movie={open.show} />
+            <DetailsButton card={open.show} media={open.show.media} id={open.show.id} title={open.show.title} className="text-sm font-semibold" />
+          </div>
+          <CheckInAnswers media={media} seriesId={open.show.id} showStillWatching={false} />
+          <p className="text-sm text-muted">
+            Finished asks for stars, then it moves to History. {book ? "Gave up" : "Dropped"} counts like &ldquo;not for me&rdquo;. Not
+            started yet puts it back among your saves.
+          </p>
+        </Sheet>
+      )}
     </section>
   );
 }
@@ -308,12 +351,15 @@ export function WatchingList({ entries, media = "series" }: { entries: WatchingE
 export type SeenEntry = { at: string; stars: number | null; movie: LibraryMovie };
 
 /** Everything you've watched or read, newest first, each with your stars. */
-export function SeenList({ entries }: { entries: SeenEntry[] }) {
+export function SeenList({ entries, fetched, total }: { entries: SeenEntry[]; fetched: number; total: number }) {
+  const more = useMore(entries, fetched, total, (offset) => moreSeen(offset).then((r) => ({ list: r.entries, fetched: r.fetched })));
   return (
     <CoverFlow
       label="Seen and read"
-      items={entries.map((e) => ({ key: keyOf(e.movie), title: e.movie.title, image: e.movie.posterPath }))}
-      infos={entries.map((e) => (
+      total={more.total}
+      onNearEnd={more.nearEnd}
+      items={more.list.map((e) => ({ key: keyOf(e.movie), title: e.movie.title, image: e.movie.posterPath }))}
+      infos={more.list.map((e) => (
         <div key={keyOf(e.movie)} className="flex flex-col items-center gap-1.5 text-center">
           <p className="label text-muted">
             {e.movie.media === "book" ? "Read" : "Seen"} · {DATE.format(new Date(e.at))}

@@ -6,9 +6,9 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { LibrarySkeleton } from "@/components/library/library-skeleton";
 import { SavedScreen } from "@/components/library/saved-screen";
 import { libraryKey, libraryTitles } from "@/lib/library";
-import { Pager, pageFrom } from "@/components/library/pager";
 import { withLinksByKey } from "@/lib/adaptations/server";
-import { LIST_PAGE, inProgress, providersFor, savedCounts, savedTitles } from "@/lib/picks/server";
+import { inProgress, providersFor, savedCounts } from "@/lib/picks/server";
+import { savedPage } from "@/lib/library-pages";
 import { requireOwner } from "@/lib/session";
 
 export const metadata = { title: "Saved" };
@@ -30,14 +30,11 @@ export default function SavedPage({ searchParams }: PageProps<"/saved">) {
 async function Saved({ searchParams }: { searchParams: PageProps<"/saved">["searchParams"] }) {
   const owner = await requireOwner();
   const params = await searchParams;
-  // A type filter (?type=movie) and a page (?page=2), both in the address so Back works.
+  // A type filter (?type=movie), in the address so Back works.
   const type = params.type === "movie" || params.type === "series" || params.type === "book" ? params.type : null;
-  const counts = await savedCounts(owner.id);
-  const inView = type ? counts[type] : counts.movie + counts.series + counts.book;
-  const pages = Math.max(1, Math.ceil(inView / LIST_PAGE));
-  const page = pageFrom(params.page, pages);
-  const [saved, watching, reading, providers] = await Promise.all([
-    savedTitles(owner.id, LIST_PAGE, type ?? undefined, (page - 1) * LIST_PAGE),
+  const [counts, first, watching, reading, providers] = await Promise.all([
+    savedCounts(owner.id),
+    savedPage(owner.id, type, 0),
     inProgress(owner.id, "series"),
     inProgress(owner.id, "book"),
     providersFor(owner.id),
@@ -60,14 +57,9 @@ async function Saved({ searchParams }: { searchParams: PageProps<"/saved">["sear
   }
 
   const cards = await libraryTitles(
-    [
-      ...saved,
-      ...watching.map((w) => ({ media: "series" as const, id: w.id })),
-      ...reading.map((r) => ({ media: "book" as const, id: r.id })),
-    ],
+    [...watching.map((w) => ({ media: "series" as const, id: w.id })), ...reading.map((r) => ({ media: "book" as const, id: r.id }))],
     providers,
   ).then((found) => withLinksByKey(owner.id, found));
-  const items = saved.flatMap((s) => cards.get(libraryKey(s.media, s.id)) ?? []);
   const entries = (media: "series" | "book", list: { id: number; since: Date }[]) =>
     list.flatMap((w) => {
       const show = cards.get(libraryKey(media, w.id));
@@ -75,20 +67,19 @@ async function Saved({ searchParams }: { searchParams: PageProps<"/saved">["sear
     });
   // Titles whose details couldn't be fetched just now stay listed, as placeholders.
   const unavailable = [
-    ...saved.filter((s) => !cards.has(libraryKey(s.media, s.id))).map((s) => ({ media: s.media, id: s.id, list: "saved" as const })),
+    ...first.unavailable,
     ...watching.filter((w) => !cards.has(libraryKey("series", w.id))).map((w) => ({ media: "series" as const, id: w.id, list: "watching" as const })),
     ...reading.filter((r) => !cards.has(libraryKey("book", r.id))).map((r) => ({ media: "book" as const, id: r.id, list: "reading" as const })),
   ];
-  const hrefFor = (n: number) => `/saved?${new URLSearchParams({ ...(type ? { type } : {}), ...(n > 1 ? { page: String(n) } : {}) })}`;
   return (
     <SavedScreen
-      items={items}
+      items={first.movies}
+      fetched={first.fetched}
       watching={entries("series", watching)}
       reading={entries("book", reading)}
       counts={counts}
       filter={type ?? "all"}
       unavailable={unavailable}
-      pager={<Pager page={page} pages={pages} href={hrefFor} label="Saved pages" />}
     />
   );
 }

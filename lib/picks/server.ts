@@ -580,11 +580,12 @@ export async function pendingCheckIn(userId: string, media: "series" | "book") {
   return row ? { id: Number(row.id) } : null;
 }
 
-export type CheckInAnswer = "watching" | "finished" | "dropped";
+export type CheckInAnswer = "watching" | "finished" | "dropped" | "not-started";
 
 /**
  * Still going: ask again later. Finished: seen (read), rated if you gave stars,
  * off the list. Dropped (or "gave up"): off the list, and it counts like "not for me".
+ * Not started yet: off the list and back in Saved, for another night; nothing learned.
  */
 export async function checkIn(
   userId: string,
@@ -603,6 +604,8 @@ export async function checkIn(
       checkedInAt: now,
       ...(stars ? { rating: stars * 2 } : {}),
     });
+  } else if (answer === "not-started") {
+    await updateTitleState(userId, media, id, null, { saved: true, watchingSince: null, checkedInAt: now });
   } else {
     await updateTitleState(userId, media, id, "dropped", { disliked: true, watchingSince: null, checkedInAt: now });
   }

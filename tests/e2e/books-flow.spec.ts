@@ -112,9 +112,10 @@ test("books: taps → deck → head-to-head → read next, on your Reading list"
 
 test("Saved shows Reading on top; a week later the books screen asks, and 'gave up' counts against it", async ({ page }) => {
   await page.goto("/saved");
-  await expect(page.getByRole("heading", { name: "Reading · 1" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Reading" }).getByText(/Reading · 1/)).toBeVisible();
   await expect(page.getByText("Saved · 3 books")).toBeVisible();
-  await expect(page.getByRole("link", { name: /Where to get it/ }).first()).toBeVisible();
+  await page.getByRole("region", { name: "Reading" }).getByRole("button", { name: /^Check in: / }).click();
+  await expect(page.getByRole("dialog").getByRole("link", { name: /Where to get it/ })).toBeVisible();
 
   // Not after three days (that's series); after eight it asks.
   await query("update title_states set watching_since = now() - interval '4 days' where media = 'book' and watching_since is not null");

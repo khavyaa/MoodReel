@@ -2,18 +2,17 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { AppFrame } from "@/components/shell/app-frame";
-import { CoverFlow } from "@/components/flow/cover-flow";
-import { FollowAvoid, TitleButtons } from "@/components/people/person-controls";
+import { MoreFlow } from "@/components/flow/more-flow";
+import { FollowAvoid } from "@/components/people/person-controls";
+import { personRows } from "@/components/people/person-rows";
+import { morePersonWork } from "@/app/(app)/flow-actions";
 import { Avatar } from "@/components/people/avatar";
-import { DetailsButton } from "@/components/library/title-details";
 import { buttonClasses } from "@/components/ui/button";
-import { PAGE_LIMIT, personWorks } from "@/lib/people/works";
+import { personPage } from "@/lib/people/works";
 import { peoplePrefsFor } from "@/lib/people/server";
 import { personKey, type PersonSource } from "@/lib/people/types";
-import { statesFor, type Media } from "@/lib/picks/server";
-import { bookTags } from "@/lib/books/rules";
+import { LIST_PAGE, type Media } from "@/lib/picks/server";
 import { requireOwner } from "@/lib/session";
-import type { MovieCandidate } from "@/lib/taste/types";
 
 export const metadata = { title: "Person" };
 
@@ -57,44 +56,23 @@ async function PersonFromParams({
   );
 }
 
-type Row = { media: Media; candidate: MovieCandidate; pages?: number | null; tags?: string[] };
-
 async function Person({ source, id, as }: { source: PersonSource; id: number; as: string | null }) {
   const owner = await requireOwner();
-  const [works, prefs] = await Promise.all([personWorks(source, id).catch(() => null), peoplePrefsFor(owner.id)]);
-  if (!works) notFound();
-  const { person } = works;
+  const [page, prefs] = await Promise.all([personPage(source, id).catch(() => null), peoplePrefsFor(owner.id)]);
+  if (!page) notFound();
+  const { person } = page;
   const pref = prefs.find((p) => personKey(p.person) === personKey(person))?.kind;
 
-  const sections: { title: string; media: Media; total: number; rows: Row[] }[] = [
-    {
-      title: "Films",
-      media: "movie" as const,
-      total: works.films.length,
-      rows: works.films.slice(0, PAGE_LIMIT).map((w) => ({ media: "movie" as const, candidate: w.candidate })),
-    },
-    {
-      title: "Series",
-      media: "series" as const,
-      total: works.series.length,
-      rows: works.series.slice(0, PAGE_LIMIT).map((w) => ({ media: "series" as const, candidate: w.candidate })),
-    },
-    {
-      title: "Books",
-      media: "book" as const,
-      total: works.books.length,
-      rows: works.books
-        .slice(0, PAGE_LIMIT)
-        .map((b) => ({ media: "book" as const, candidate: b, pages: b.pages, tags: bookTags(b.subjects) })),
-    },
-  ].filter((s) => s.rows.length > 0);
-
-  const states = new Map(
-    await Promise.all(
-      sections.map(async (s) => [s.media, await statesFor(owner.id, s.media, s.rows.map((r) => r.candidate.id))] as const),
-    ),
-  );
-  const count = sections.reduce((n, s) => n + s.total, 0);
+  const sections = (
+    [
+      { title: "Films", media: "movie", works: page.films },
+      { title: "Series", media: "series", works: page.series },
+      { title: "Books", media: "book", works: page.books },
+    ] as const
+  ).filter((s) => s.works.length > 0);
+  const firsts = await Promise.all(sections.map((s) => personRows(owner.id, s.works.slice(0, LIST_PAGE))));
+  const count = sections.reduce((n, s) => n + s.works.length, 0);
+  const outside = sections.reduce((n, s) => n + s.works.filter((w) => w.outside).length, 0);
   const dealHref = (media: Media) =>
     `/${media === "movie" ? "movies" : media === "series" ? "series" : "books"}?with=${personKey(person)}&name=${encodeURIComponent(person.name)}`;
 
@@ -106,12 +84,12 @@ async function Person({ source, id, as }: { source: PersonSource; id: number; as
         </Link>
         <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:gap-8">
           <div className="flex min-w-0 items-center gap-5">
-            <Avatar name={person.name} photo={works.photo} size="lg" />
+            <Avatar name={person.name} photo={page.photo} size="lg" />
             <div className="flex min-w-0 flex-col gap-2">
               <span className="label text-muted">
                 {ROLE[as ?? person.role] ?? "Person"}
                 {as && as !== person.role && ROLE[person.role] ? ` · also ${ROLE[person.role].toLowerCase()}` : ""} · {count}{" "}
-                {person.role === "author" ? (count === 1 ? "book" : "books") : count === 1 ? "title" : "titles"} for you
+                {person.role === "author" ? (count === 1 ? "book" : "books") : count === 1 ? "title" : "titles"}
               </span>
               {/* Sized to its column: a long name wraps rather than running under the posters. */}
               <h1 className="display text-[clamp(2.25rem,5vw,4.75rem)] [overflow-wrap:anywhere]">{person.name}</h1>
@@ -126,74 +104,30 @@ async function Person({ source, id, as }: { source: PersonSource; id: number; as
                 </Link>
               ))}
             </div>
-            <p className="max-w-[44ch] text-sm text-muted lg:text-right">
-              Mood and time as usual; only their work, and nothing you&apos;ve seen, saved or turned down.
+            <p className="max-w-[46ch] text-sm text-muted lg:text-right">
+              {outside > 0
+                ? `Everything they've made is here; ${outside} ${outside === 1 ? "is" : "are"} outside your rules, so a deal from them leaves ${outside === 1 ? "it" : "those"} out.`
+                : "A deal from them follows your mood and time, and skips what you've seen, saved or turned down."}
             </p>
           </div>
         </div>
       </header>
 
-      {sections.length === 0 && <p className="text-muted">Nothing of theirs fits your rules.</p>}
+      {sections.length === 0 && <p className="text-muted">Nothing of theirs on TMDb or Open Library yet.</p>}
       {sections.map((s, n) => (
         <section key={s.media} aria-labelledby={`works-${s.media}`} className="flex flex-col gap-2">
           <h2 id={`works-${s.media}`} className={sections.length > 1 ? "text-xl font-black" : "sr-only"}>
-            {s.title} · {s.total}
+            {s.title} · {s.works.length}
           </h2>
-          <CoverFlow
+          <MoreFlow
             label={`${person.name}: ${s.title.toLowerCase()}`}
             tint={n === 0}
-            items={s.rows.map((r) => {
-              const state = states.get(s.media)?.get(r.candidate.id);
-              return { key: String(r.candidate.id), title: r.candidate.title, image: r.candidate.posterPath, done: !!state?.seen };
-            })}
-            infos={s.rows.map((r) => {
-              const state = states.get(s.media)?.get(r.candidate.id);
-              const stars = state?.rating ? Math.round(state.rating / 2) : 0;
-              const status = state?.inProgress
-                ? s.media === "book"
-                  ? "Reading"
-                  : "Watching"
-                : state?.seen
-                  ? `${s.media === "book" ? "Read" : "Seen"}${stars ? ` ${"★".repeat(stars)}` : ""}`
-                  : state?.saved
-                    ? "Saved"
-                    : state?.disliked
-                      ? "Not for me"
-                      : null;
-              return (
-                <div key={r.candidate.id} className="flex flex-col items-center gap-3 text-center">
-                  <div className="flex flex-col items-center gap-0.5">
-                    <DetailsButton media={s.media} id={r.candidate.id} title={r.candidate.title} className="text-xl leading-tight font-black">
-                      {r.candidate.title}
-                    </DetailsButton>
-                    <p className="text-sm text-muted">
-                      {[r.candidate.year, r.pages ? `${r.pages} pages` : null, r.candidate.voteCount ? `★ ${r.candidate.voteAverage.toFixed(1)}` : null]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </p>
-                  </div>
-                  {status ? (
-                    <span className="rounded-md bg-soft px-2 py-1 text-xs font-bold shadow-[inset_0_0_0_1.5px_var(--line)]">{status}</span>
-                  ) : (
-                    <TitleButtons
-                      media={s.media}
-                      title={{ id: r.candidate.id, language: r.candidate.language, genreIds: r.candidate.genreIds, tags: r.tags }}
-                    />
-                  )}
-                </div>
-              );
-            })}
+            first={firsts[n]}
+            total={s.works.length}
+            load={morePersonWork.bind(null, source, id, s.media)}
           />
-          {s.total > s.rows.length && (
-            <p className="text-center text-sm text-muted">
-              Their best-known {s.rows.length} of {s.total}. &ldquo;Deal from {person.name}&rdquo; draws on all of them.
-            </p>
-          )}
         </section>
       ))}
-      {works.hiddenByLanguage.length > 0 && (
-        <p className="text-center text-sm text-muted">Not shown, by your language rules: {works.hiddenByLanguage.join(", ")}.</p>
-      )}
     </div>
   );
 }

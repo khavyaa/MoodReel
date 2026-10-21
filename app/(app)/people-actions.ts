@@ -7,7 +7,7 @@ import { setPersonPref } from "@/lib/people/server";
 import { searchTmdbPeople } from "@/lib/tmdb/people";
 import { searchAuthors } from "@/lib/books/openlibrary";
 import { authorPhoto, tmdbPhoto, type PhotoRef } from "@/lib/people/types";
-import { markSeenOutsideDeck, saveOutsideDeck } from "@/lib/picks/server";
+import { dislikeOutsideDeck, markSeenOutsideDeck, saveOutsideDeck } from "@/lib/picks/server";
 
 const personSchema = z.object({
   source: z.enum(["tmdb", "openlibrary"]),
@@ -59,4 +59,10 @@ export async function saveFromPage(media: "movie" | "series" | "book", title: un
 export async function seenFromPage(media: "movie" | "series" | "book", title: unknown) {
   const owner = await requireOwner();
   await markSeenOutsideDeck(owner.id, z.enum(["movie", "series", "book"]).parse(media), titleSchema.parse(title));
+}
+
+/** "Not for me" from a person's, a list's or a collection's page: the same as that swipe. */
+export async function notForMeFromPage(media: "movie" | "series" | "book", title: unknown) {
+  const owner = await requireOwner();
+  await dislikeOutsideDeck(owner.id, z.enum(["movie", "series", "book"]).parse(media), titleSchema.parse(title));
 }

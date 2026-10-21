@@ -2,8 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { KeyRound, LogOut, Trash2 } from "lucide-react";
-import { authClient, passkeyErrorMessage } from "@/lib/auth-client";
+import { LogOut, Trash2 } from "lucide-react";
+import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { forgetOfflinePages } from "@/components/shell/service-worker";
 
@@ -25,42 +25,6 @@ export function SignOutButton() {
       <LogOut className="size-4" aria-hidden />
       {pending ? "Signing out…" : "Sign out"}
     </Button>
-  );
-}
-
-export function AddPasskeyButton() {
-  const router = useRouter();
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  return (
-    <div className="flex flex-col gap-2">
-      <Button
-        variant="outline"
-        className="self-start"
-        disabled={pending}
-        onClick={async () => {
-          setPending(true);
-          setError(null);
-          try {
-            const result = await authClient.passkey.addPasskey();
-            if (result?.error) setError(passkeyErrorMessage(result.error));
-            else router.refresh();
-          } catch (err) {
-            setError(passkeyErrorMessage(err));
-          } finally {
-            setPending(false);
-          }
-        }}
-      >
-        <KeyRound className="size-4" aria-hidden />
-        {pending ? "Waiting for your passkey…" : "Add a passkey"}
-      </Button>
-      {error && (
-        <p role="alert" className="text-sm font-medium">
-          {error}
-        </p>
-      )}
-    </div>
   );
 }
 

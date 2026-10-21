@@ -36,15 +36,24 @@ test("taps → deck → head-to-head → tonight's pick, saved to the database",
   await expect(page.getByRole("button", { name: "Lean in" })).toHaveAttribute("aria-pressed", "true");
   await page.getByRole("button", { name: /Deal 15 films/ }).click();
 
-  // Deck: save, skip, save, seen, save, save → four saves end the deck early.
+  // Deck: save, skip, save, seen (rated on the card), save, save → four saves end the deck early.
   await expect(page.getByText("1/15")).toBeVisible();
   const handled: Record<string, string> = {};
   for (const action of ["Save", "Skip", "Save", "Seen it", "Save", "Save"] as const) {
     const title = await currentTitle(page);
     handled[title] = action;
     await page.getByRole("button", { name: action, exact: true }).click();
+    if (action === "Seen it") {
+      // The same card stays in front with stars over it; a star rates it and sends it off.
+      await expect(page.getByText(/^\d+\/15$/)).toHaveText("4/15");
+      await page.getByRole("group", { name: `Rate ${title}` }).getByRole("button", { name: "4 stars" }).click();
+      await expect(page.getByText("5/15")).toBeVisible();
+    }
   }
   expect(Object.keys(handled)).toHaveLength(6); // six different films
+  await expect
+    .poll(async () => (await query<{ rating: number | null }>("select rating from title_states where seen and media = 'movie' order by updated_at desc limit 1"))[0]?.rating)
+    .toBe(8);
 
   // Head-to-head: four saves → three rounds.
   await expect(page.getByRole("heading", { name: "This or that?" })).toBeVisible();
@@ -110,6 +119,7 @@ test("saved and history show the run, and you can tidy and rate them", async ({ 
   await flowed.getByRole("button", { name: "Remove" }).click();
   await expect(saved).toHaveCount(2);
   await flowed.getByRole("button", { name: "Seen it" }).click();
+  await flowed.getByRole("button", { name: "Skip" }).click();
   await expect(saved).toHaveCount(1);
   await expect
     .poll(async () => (await query<{ n: string }>("select count(*) as n from title_states where saved"))[0].n)
@@ -168,6 +178,13 @@ test("not for me, undo, and the full synopsis", async ({ page, isMobile }) => {
   // Two steps forward, two back (Z on a laptop, the button on a phone).
   await page.getByRole("button", { name: "Skip", exact: true }).click();
   await page.getByRole("button", { name: "Seen it", exact: true }).click();
+  // Seen it holds the card with stars; Undo first just closes them, leaving the card where it was.
+  await expect(page.getByRole("group", { name: /^Rate / })).toBeVisible();
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(page.getByRole("group", { name: /^Rate / })).toHaveCount(0);
+  await expect(page.getByText("2/15")).toBeVisible();
+  await page.getByRole("button", { name: "Seen it", exact: true }).click();
+  await page.getByRole("button", { name: "5 stars" }).click();
   await expect(page.getByText("3/15")).toBeVisible();
   for (const n of [2, 1]) {
     if (isMobile) await page.getByRole("button", { name: "Undo" }).click();
@@ -217,6 +234,7 @@ test("pick from saved: the best-fitting saves go straight to the head-to-head", 
 
   await page.goto("/saved");
   await expect(page.getByText("Saved · 3 films")).toBeVisible();
+  await page.getByRole("button", { name: "Pick from these" }).click();
   await page.getByRole("button", { name: "Pick from my saved" }).click();
   await expect(page.getByRole("heading", { name: "This or that?" })).toBeVisible();
   await expect(page.getByText(/From your saved list · Round 1 of 2/)).toBeVisible();
@@ -312,11 +330,17 @@ test("swipe gestures and keys work on the deck", async ({ page, isMobile }) => {
   await expect(page.getByRole("list", { name: "1 of 4 saved" })).toBeVisible();
 
   if (!isMobile) {
-    // Keyboard on a laptop: ← skip, ↑ seen.
+    // Keyboard on a laptop: ← skip, ↑ seen, then 1–5 to rate it.
     await page.keyboard.press("ArrowLeft");
     await expect(page.getByText("3/15")).toBeVisible();
+    const seen = await currentTitle(page);
     await page.keyboard.press("ArrowUp");
+    await expect(page.getByRole("group", { name: `Rate ${seen}` })).toBeVisible();
+    await page.keyboard.press("4");
     await expect(page.getByText("4/15")).toBeVisible();
+    await expect
+      .poll(async () => (await query<{ rating: number | null }>("select rating from title_states where seen and media = 'movie' order by updated_at desc limit 1"))[0]?.rating)
+      .toBe(8);
   }
 });
 

@@ -41,8 +41,13 @@ test("a list fills itself, shows your progress, and you can mark titles seen and
   await expect(titles.getByRole("listitem").first()).toContainText("Won 2020");
   await expect(page.getByRole("progressbar", { name: "0 of 3 seen" })).toBeVisible();
 
+  // Seen it asks for stars; rating moves the flow on to the next title.
   await titles.getByRole("button", { name: "Seen it" }).click();
-  await expect(titles.getByText("Seen", { exact: true })).toBeVisible();
+  await titles.getByRole("button", { name: "4 stars" }).click();
+  await expect(titles.getByText("2 of 3")).toBeVisible();
+  await expect
+    .poll(async () => (await query<{ rating: number }>("select rating from title_states where seen and media = 'movie'"))[0]?.rating)
+    .toBe(8);
   await page.getByRole("button", { name: "Follow" }).click();
   await expect(page.getByRole("button", { name: "Following" })).toBeVisible();
   await expect.poll(async () => (await query("select 1 from list_follows")).length).toBe(1);

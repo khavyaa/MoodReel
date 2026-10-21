@@ -24,9 +24,19 @@ export type FlowItem = {
   colour?: string;
 };
 
-/** Lets what's under a poster (its buttons) mark it done, so the tick shows on the poster too. */
-const MarkDone = createContext<((done: boolean) => void) | null>(null);
-export const useMarkDone = () => useContext(MarkDone);
+/**
+ * What's under a poster can reach its flow: mark the poster done (the tick
+ * shows on it too) and move the flow on to the next card once you've acted.
+ */
+type FlowItemControls = { markDone: (done: boolean) => void; advance: () => void };
+const FlowItemContext = createContext<FlowItemControls | null>(null);
+export const useMarkDone = () => useContext(FlowItemContext)?.markDone ?? null;
+export const useAdvance = () => useContext(FlowItemContext)?.advance ?? null;
+
+/** How long an action's result shows before the next card comes forward. */
+export const ADVANCE_AFTER = 450;
+/** Posters this far from the front load their images; the rest wait their turn. */
+const NEAR = 6;
 
 /** Springy: a little overshoot, then it settles. */
 const SPRING = { type: "spring", stiffness: 260, damping: 21, mass: 0.9 } as const;
@@ -48,6 +58,10 @@ const thumb = (item: FlowItem) =>
  * browse. The page takes the front poster's tint. Reduce Motion drops the
  * tilt and the springs for quick fades.
  *
+ * Long lists come a page at a time: `total` is how many there are in all,
+ * and `onNearEnd` asks for more as you near the end of what's loaded, so the
+ * flow (and the strip, "12 of 87") runs through everything with no page numbers.
+ *
  * The landing page uses it too: `faces` in place of posters, `autoplay` to
  * turn by itself (waiting a while after you touch it), and `fit` to size the
  * cards to the room there is, so the page never scrolls.
@@ -61,6 +75,8 @@ export function CoverFlow({
   autoplay,
   fit = false,
   loop = false,
+  total,
+  onNearEnd,
   className,
 }: {
   items: FlowItem[];
@@ -73,6 +89,10 @@ export function CoverFlow({
   fit?: boolean;
   /** Round and round: the last card sits before the first, so the front one always has neighbours both sides. */
   loop?: boolean;
+  /** How many there are in all, when only some are loaded. */
+  total?: number;
+  /** Called as you near the end of what's loaded (the caller loads more and passes them in). */
+  onNearEnd?: () => void;
   /** Names the list of posters ("Saved titles"). */
   label: string;
   /** Whether this flow tints the page before you touch it (the first flow on a page does). */
@@ -144,9 +164,13 @@ export function CoverFlow({
     if (!loop && last >= 0 && pos.get() > last) animate(pos, last, reduced ? GENTLE : SPRING);
   }, [last, pos, reduced, loop]);
 
-  // The page wears the front poster's colour.
+  useEffect(() => {
+    if (onNearEnd && items.length < (total ?? 0) && current >= items.length - NEAR) onNearEnd();
+  }, [onNearEnd, current, items.length, total]);
+
+  // The page wears the front poster's colour (not a person's photo: those stay in the brand tint).
   const front = items[current];
-  const src = front ? thumb(front) : null;
+  const src = front && !front.round ? thumb(front) : null;
   const given = front?.colour ?? null;
   useEffect(() => {
     if (!touched) return;
@@ -216,6 +240,7 @@ export function CoverFlow({
               done={done[item.key] ?? item.done ?? false}
               portraits={portraits}
               face={faces?.[i]}
+              near={Math.abs(i - current) <= NEAR || (loop && items.length - Math.abs(i - current) <= NEAR)}
               centred={fit}
               loop={loop ? items.length : 0}
               onSelect={() => !panned.current && i !== current && show(i)}
@@ -228,7 +253,14 @@ export function CoverFlow({
         <div ref={info} className="w-full">
           {items.map((item, i) => (
             <div key={item.key} hidden={i !== current} className="w-full">
-              <MarkDone value={(d: boolean) => setDone((all) => ({ ...all, [item.key]: d }))}>{infos[i]}</MarkDone>
+              <FlowItemContext
+                value={{
+                  markDone: (d: boolean) => setDone((all) => ({ ...all, [item.key]: d })),
+                  advance: () => setTimeout(() => move(1), ADVANCE_AFTER),
+                }}
+              >
+                {infos[i]}
+              </FlowItemContext>
             </div>
           ))}
         </div>
@@ -243,7 +275,7 @@ export function CoverFlow({
             >
               <ChevronLeft className="size-5" aria-hidden />
             </button>
-            <Strip count={items.length} current={current} onJump={show} />
+            <Strip count={total ?? items.length} loaded={items.length} current={current} onJump={show} />
             <button
               type="button"
               onClick={() => move(1)}
@@ -255,8 +287,9 @@ export function CoverFlow({
             </button>
           </div>
         )}
-        <p className="sr-only" aria-live="polite">
-          {current + 1} of {items.length}: {front?.title}
+        <p className="text-xs font-semibold text-muted" aria-live="polite">
+          {current + 1} of {(total ?? items.length).toLocaleString("en-IN")}
+          <span className="sr-only">: {front?.title}</span>
         </p>
       </div>
     </section>
@@ -276,6 +309,7 @@ function Card({
   face,
   centred,
   loop,
+  near,
   onSelect,
 }: {
   item: FlowItem;
@@ -288,6 +322,8 @@ function Card({
   done: boolean;
   portraits: boolean;
   face?: ReactNode;
+  /** Close enough to the front to load its image. */
+  near: boolean;
   /** Sit in the middle of the stage's height (a flow that fills the room) rather than at its top. */
   centred: boolean;
   /** Looping, how many cards go round (0 when not): each sits on whichever side of the front is nearer. */
@@ -341,7 +377,7 @@ function Card({
             className="block aspect-square h-auto w-full text-5xl shadow-[0_24px_48px_-24px_rgba(0,0,0,0.55)] sm:h-auto sm:w-full"
           />
         ) : (
-          <Poster title={item.title} path={item.image} size="md" sizes={`${width}px`} priority={i < 3} className="rounded-xl" />
+          <Poster title={item.title} path={near ? item.image : null} size="md" sizes={`${width}px`} priority={i < 3} className="rounded-xl" />
         )}
         {item.badge && (
           <span className="absolute top-2 left-2 rounded-full bg-raised px-2 py-0.5 text-[11px] font-bold text-fg">
@@ -365,8 +401,12 @@ function Card({
   );
 }
 
-/** Where you are in the flow; tap a mark to jump. Long flows are grouped so marks stay tappable. */
-function Strip({ count, current, onJump }: { count: number; current: number; onJump: (i: number) => void }) {
+/**
+ * Where you are in everything (not only what's loaded); tap a mark to jump.
+ * Long flows are grouped so marks stay tappable. A jump past what's loaded goes
+ * as far as there is, and the rest loads from there.
+ */
+function Strip({ count, loaded, current, onJump }: { count: number; loaded: number; current: number; onJump: (i: number) => void }) {
   const marks = Math.min(count, 30);
   const at = Math.round((current * (marks - 1)) / Math.max(1, count - 1));
   return (
@@ -374,7 +414,7 @@ function Strip({ count, current, onJump }: { count: number; current: number; onJ
       {Array.from({ length: marks }, (_, m) => (
         <span
           key={m}
-          onClick={() => onJump(Math.round((m * (count - 1)) / Math.max(1, marks - 1)))}
+          onClick={() => onJump(Math.min(loaded - 1, Math.round((m * (count - 1)) / Math.max(1, marks - 1))))}
           className={cn(
             "h-1.5 flex-1 cursor-pointer rounded-full bg-current transition-[opacity,height] duration-300",
             m === at ? "h-3 opacity-100" : "opacity-25 hover:opacity-50",

@@ -107,15 +107,16 @@ test("the People page: following with Deal, suggestions from what you love, and 
   const people = page.locator("#people");
   await expect(people.getByText("Following · 1")).toBeVisible();
   await expect(people.getByRole("link", { name: /Ben Director/ })).toBeVisible();
-  await expect(people.getByRole("link", { name: "Deal from them →" })).toHaveAttribute("href", /\/movies\?with=tmdb:701&name=Ben%20Director/);
+  await expect(people.getByRole("link", { name: "Deal from them →" }).first()).toHaveAttribute("href", /\/movies\?with=tmdb:701&name=Ben%20Director/);
 
+  await people.getByText(/^Suggested · \d/).click();
   await expect(people.getByText(/You've loved 3 titles with/).filter({ hasText: "Eli Director" })).toBeVisible();
   const eli = people.getByRole("listitem").filter({ hasText: "Eli Director" });
   await eli.getByRole("button", { name: "Not now" }).click();
   await expect(people.getByRole("listitem").filter({ hasText: /loved 3 titles with\s*Eli Director/ })).toHaveCount(0);
   expect((await query<{ kind: string }>("select kind from people_prefs where person_id = '704'"))[0].kind).toBe("dismissed");
 
-  await expect(people.getByText("Avoided · 1")).toBeVisible();
+  await people.getByText("Avoided · 1").click();
   await people.getByRole("button", { name: "Undo" }).click();
   await expect(people.getByText("Avoided · 1")).toHaveCount(0);
   expect(await query("select 1 from people_prefs where person_id = '700'")).toEqual([]);
@@ -142,16 +143,17 @@ test("People is in the navigation, and its search finds directors, actors and au
   await expect(page.getByRole("heading", { name: "Cara Director" })).toBeVisible();
 });
 
-test("a person's page marks a title seen, right there, without leaving your place", async ({ page }) => {
+test("a person's page marks a title seen, asks for stars, then moves on to the next", async ({ page }) => {
   await page.goto("/people/tmdb/702");
   const films = flow(page, /films/);
   await bringToFront(films, "English Thriller 3");
+  const at = await films.getByText(/^\d+ of \d+/).textContent();
   await films.getByRole("button", { name: "Seen it" }).click();
-  await expect(films.getByText("Seen", { exact: true })).toBeVisible();
-  // Still in front: marking it didn't reload the page or send you back to the start.
-  await expect(films.getByRole("button", { name: "Show English Thriller 3" })).toHaveAttribute("aria-current", "true");
-  // Browse away and back: it still says Seen.
-  await films.getByRole("button", { name: "Next" }).click();
+  await films.getByRole("button", { name: "Skip" }).click();
+  // On to the next title, without a reload or a jump back to the start…
+  await expect(films.getByRole("button", { name: "Show English Thriller 3" })).not.toHaveAttribute("aria-current", "true");
+  expect(Number((await films.getByText(/^\d+ of \d+/).textContent())!.split(" ")[0])).toBe(Number(at!.split(" ")[0]) + 1);
+  // …and back on it, it says Seen.
   await films.getByRole("button", { name: "Previous" }).click();
   await expect(films.getByText("Seen", { exact: true })).toBeVisible();
   await expect

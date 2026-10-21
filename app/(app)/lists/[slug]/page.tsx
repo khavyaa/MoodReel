@@ -2,40 +2,32 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { AppFrame } from "@/components/shell/app-frame";
-import { CoverFlow } from "@/components/flow/cover-flow";
-import { DetailsButton } from "@/components/library/title-details";
-import { Pager, pageFrom } from "@/components/library/pager";
-import { TitleButtons } from "@/components/people/person-controls";
+import { MoreFlow } from "@/components/flow/more-flow";
+import { listRows } from "@/components/lists/list-rows";
+import { moreListTitles } from "@/app/(app)/flow-actions";
 import { FollowListButton, Progress } from "@/components/lists/list-controls";
 import { buttonClasses } from "@/components/ui/button";
-import { libraryKey, libraryTitles } from "@/lib/library";
 import { followedListSlugs, listEntries, seenCount } from "@/lib/lists/server";
-import { LIST_PAGE, providersFor, statesFor } from "@/lib/picks/server";
 import { requireOwner } from "@/lib/session";
+import { LIST_PAGE } from "@/lib/picks/server";
 
 export const metadata = { title: "List" };
 
-export default function ListPage({ params, searchParams }: PageProps<"/lists/[slug]">) {
+export default function ListPage({ params }: PageProps<"/lists/[slug]">) {
   // Every list is a different URL, known only per request, so the whole page renders inside the boundary.
   return (
     <Suspense fallback={<div className="min-h-dvh bg-bg" />}>
-      <ListFromParams params={params} searchParams={searchParams} />
+      <ListFromParams params={params} />
     </Suspense>
   );
 }
 
-async function ListFromParams({
-  params,
-  searchParams,
-}: {
-  params: PageProps<"/lists/[slug]">["params"];
-  searchParams: PageProps<"/lists/[slug]">["searchParams"];
-}) {
-  const [{ slug }, query] = await Promise.all([params, searchParams]);
+async function ListFromParams({ params }: { params: PageProps<"/lists/[slug]">["params"] }) {
+  const { slug } = await params;
   return (
     <AppFrame>
       <Suspense fallback={<p className="text-muted">Loading the list…</p>}>
-        <List slug={slug} page={query.page} />
+        <List slug={slug} />
       </Suspense>
     </AppFrame>
   );
@@ -43,24 +35,18 @@ async function ListFromParams({
 
 const MEDIA_PATH = { movie: "movies", series: "series", book: "books" } as const;
 
-async function List({ slug, page: pageParam }: { slug: string; page: string | string[] | undefined }) {
+async function List({ slug }: { slug: string }) {
   const owner = await requireOwner();
   const list = await listEntries(slug).catch(() => null);
   if (!list) notFound();
   const { def, entries } = list;
-  const pages = Math.max(1, Math.ceil(entries.length / LIST_PAGE));
-  const page = pageFrom(pageParam, pages);
-  const slice = entries.slice((page - 1) * LIST_PAGE, page * LIST_PAGE);
   const ids = entries.map((e) => e.id);
-  const [seen, followed, cards, states] = await Promise.all([
+  const [seen, followed, first] = await Promise.all([
     seenCount(owner.id, def.media, ids),
     followedListSlugs(owner.id),
-    providersFor(owner.id).then((p) => libraryTitles(slice.map((e) => ({ media: def.media, id: e.id })), p)),
-    statesFor(owner.id, def.media, slice.map((e) => e.id)),
+    listRows(owner.id, def, entries.slice(0, LIST_PAGE), 0),
   ]);
   const word = def.media === "book" ? "read" : "seen";
-  const marker = (index: number, year: number | null) =>
-    def.source.kind === "wikidata" ? (year ? `Won ${year}` : null) : def.source.kind === "tmdb-top" ? `#${index + 1}` : `Part ${index + 1}`;
 
   return (
     <div className="flex flex-col gap-8">
@@ -90,51 +76,8 @@ async function List({ slug, page: pageParam }: { slug: string; page: string | st
       {entries.length === 0 ? (
         <p className="text-muted">This list hasn&apos;t loaded yet. Try again in a moment.</p>
       ) : (
-        <CoverFlow
-          label="Titles on this list"
-          items={slice.map((e, i) => {
-            const card = cards.get(libraryKey(def.media, e.id));
-            return {
-              key: String(e.id),
-              title: card?.title ?? `${def.media === "book" ? "A book" : "A title"} that didn't load just now`,
-              image: card?.posterPath ?? null,
-              badge: marker((page - 1) * LIST_PAGE + i, e.year),
-              done: !!states.get(e.id)?.seen,
-            };
-          })}
-          infos={slice.map((e, i) => {
-            const card = cards.get(libraryKey(def.media, e.id));
-            const state = states.get(e.id);
-            const status = state?.seen
-              ? `${def.media === "book" ? "Read" : "Seen"}${state.rating ? ` ${"★".repeat(Math.round(state.rating / 2))}` : ""}`
-              : state?.saved
-                ? "Saved"
-                : state?.disliked
-                  ? "Not for me"
-                  : null;
-            return (
-              <div key={e.id} className="flex flex-col items-center gap-3 text-center">
-                <div className="flex flex-col items-center gap-0.5">
-                  <p className="label text-muted">{[marker((page - 1) * LIST_PAGE + i, e.year), card?.year].filter(Boolean).join(" · ")}</p>
-                  {card ? (
-                    <DetailsButton card={card} media={def.media} id={e.id} title={card.title} className="text-xl leading-tight font-black">
-                      {card.title}
-                    </DetailsButton>
-                  ) : (
-                    <p className="text-sm text-muted">This one didn&apos;t load just now.</p>
-                  )}
-                </div>
-                {status ? (
-                  <span className="rounded-md bg-soft px-2 py-1 text-xs font-bold shadow-[inset_0_0_0_1.5px_var(--line)]">{status}</span>
-                ) : card ? (
-                  <TitleButtons media={def.media} title={{ id: e.id, language: card.language, genreIds: card.genreIds, tags: card.book?.tags }} />
-                ) : null}
-              </div>
-            );
-          })}
-        />
+        <MoreFlow label="Titles on this list" first={first} total={entries.length} load={moreListTitles.bind(null, def.slug)} />
       )}
-      <Pager page={page} pages={pages} href={(n) => `/lists/${def.slug}${n > 1 ? `?page=${n}` : ""}`} label="List pages" />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import "server-only";
 import { authorWithBooks, bookDescription } from "@/lib/books/openlibrary";
-import { bookGate, fitsLength, hasNeverSubject, scoreBook, type BookMood } from "@/lib/books/rules";
+import { bookGate, bookTags, fitsLength, hasNeverSubject, scoreBook, type BookMood } from "@/lib/books/rules";
 import type { DealResult, DeckCard } from "@/lib/deck/build-movies";
 import { detailsById, movieCard } from "@/lib/deck/build-movies";
 import { bookCard, withNytWeeks } from "@/lib/deck/build-books";
@@ -10,7 +10,7 @@ import { getSeriesDetails } from "@/lib/tmdb/series";
 import { getTmdbPerson, type PersonWork } from "@/lib/tmdb/people";
 import { fitsRuntime, isLanguage, passesGate, scoreMovie, type TasteProfile } from "@/lib/taste/rules";
 import { fitsCommitment, scoreSeries, seriesGate, shortEnoughForHindi, type SeriesMood } from "@/lib/taste/series-rules";
-import type { Taps } from "@/lib/taste/types";
+import type { MovieCandidate, Taps } from "@/lib/taste/types";
 import type { BookCandidate } from "@/lib/books/rules";
 import { authorPhoto, tmdbPhoto, type Person, type PersonSource, type PhotoRef } from "./types";
 
@@ -77,6 +77,43 @@ export async function personWorks(source: PersonSource, id: number): Promise<Per
     series,
     books: [],
     hiddenByLanguage: hidden.slice(0, 6),
+  };
+}
+
+/** A title on a person's page: their work, and whether your rules would keep it out of decks. */
+export type PageWork = { media: "movie" | "series" | "book"; candidate: MovieCandidate | BookCandidate; outside: boolean; pages?: number | null; tags?: string[] };
+
+/**
+ * Everything a person made, for their page: your rules don't hide anything
+ * here (Kamal Haasan is 210 films, not the 16 your Tamil rule lets into decks),
+ * they only mark it. Decks and "Deal from …" keep using `personWorks`.
+ */
+export async function personPage(
+  source: PersonSource,
+  id: number,
+): Promise<{ person: Person; photo: PhotoRef; films: PageWork[]; series: PageWork[]; books: PageWork[] } | null> {
+  if (source === "openlibrary") {
+    const works = await personWorks(source, id);
+    if (!works) return null;
+    return {
+      person: works.person,
+      photo: works.photo,
+      films: [],
+      series: [],
+      books: works.books.map((b) => ({ media: "book", candidate: b, outside: false, pages: b.pages, tags: bookTags(b.subjects) })),
+    };
+  }
+  const p = await getTmdbPerson(id);
+  return {
+    person: { source, id, name: p.name, role: p.role },
+    photo: tmdbPhoto(p.photo),
+    films: p.movies.map((w) => ({ media: "movie", candidate: w.candidate, outside: !isLanguage(w.candidate.language) || !passesGate(w.candidate).ok })),
+    series: p.series.map((w) => ({
+      media: "series",
+      candidate: w.candidate,
+      outside: (w.candidate.language !== "en" && w.candidate.language !== "hi") || !seriesGate(w.candidate).ok,
+    })),
+    books: [],
   };
 }
 
