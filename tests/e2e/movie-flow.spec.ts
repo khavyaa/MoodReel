@@ -52,7 +52,7 @@ test("taps → deck → head-to-head → tonight's pick, saved to the database",
   }
   expect(Object.keys(handled)).toHaveLength(6); // six different films
   await expect
-    .poll(async () => (await query<{ rating: number | null }>("select rating from title_states where seen and media = 'movie'"))[0]?.rating)
+    .poll(async () => (await query<{ rating: number | null }>("select rating from title_states where seen and media = 'movie' order by updated_at desc limit 1"))[0]?.rating)
     .toBe(8);
 
   // Head-to-head: four saves → three rounds.
@@ -339,7 +339,7 @@ test("swipe gestures and keys work on the deck", async ({ page, isMobile }) => {
     await page.keyboard.press("4");
     await expect(page.getByText("4/15")).toBeVisible();
     await expect
-      .poll(async () => (await query<{ rating: number | null }>("select rating from title_states where seen and media = 'movie'"))[0]?.rating)
+      .poll(async () => (await query<{ rating: number | null }>("select rating from title_states where seen and media = 'movie' order by updated_at desc limit 1"))[0]?.rating)
       .toBe(8);
   }
 });
