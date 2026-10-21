@@ -62,7 +62,8 @@ test("deal from someone with a long career: once their best-known titles are see
     );
   }
   await page.goto("/people/tmdb/780");
-  await expect(page.getByText(/Their best-known 24 of 35/)).toBeVisible();
+  // Every one of their films is on the page now, in one flow, loaded 24 at a time.
+  await expect(page.getByRole("region", { name: /films/ }).getByText(/^1 of 3\d\b/)).toBeVisible();
   await page.getByRole("link", { name: /Deal from Lead Actor/ }).click();
   await page.getByRole("button", { name: "Deal from Lead Actor" }).click();
   await expect(page.getByText("From Lead Actor", { exact: true }).first()).toBeVisible();

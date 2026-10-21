@@ -7,6 +7,7 @@ import { requireOwner } from "@/lib/session";
 import { PersonPrefButton } from "./people-buttons";
 import { Avatar } from "./avatar";
 import { CoverFlow } from "@/components/flow/cover-flow";
+import { buttonClasses } from "@/components/ui/button";
 
 const ROLE: Record<Person["role"], string> = {
   director: "Director",
@@ -30,10 +31,9 @@ export async function PeopleSection() {
 
   return (
     <section id="people" aria-label="Your people" className="flex flex-col gap-5">
-
       {following.length > 0 ? (
-        <div className="flex flex-col gap-3 rounded-3xl bg-soft p-5 sm:p-7">
-          <h3 className="font-black">Following · {following.length}</h3>
+        <div className="flex flex-col gap-2">
+          <h3 className="label text-muted">Following · {following.length}</h3>
           <CoverFlow
             label="People you follow"
             items={following.map((p) => ({ key: personKey(p), title: p.name, image: photos.get(personKey(p)) ?? null, round: true }))}
@@ -46,10 +46,10 @@ export async function PeopleSection() {
                   <p className="text-sm text-muted">{ROLE[p.role]}</p>
                 </div>
                 <div className="flex gap-2">
-                  <Link href={personHref(p)} className="h-10 rounded-full border-2 border-line px-4 text-sm leading-9 font-bold hover:bg-soft">
+                  <Link href={personHref(p)} className={buttonClasses("outline", "md")}>
                     Their work
                   </Link>
-                  <Link href={dealHref(p)} className="h-10 rounded-full bg-fg px-4 text-sm leading-10 font-bold text-bg hover:opacity-90">
+                  <Link href={dealHref(p)} className={buttonClasses("solid", "md")}>
                     Deal from them →
                   </Link>
                 </div>
@@ -58,44 +58,48 @@ export async function PeopleSection() {
           />
         </div>
       ) : (
-        <p className="text-muted">
-          Search above, or tap a name on any card, to follow someone: their work ranks higher everywhere.
-        </p>
+        <p className="text-muted">Search above, or tap a name on any card, to follow someone: their work ranks higher everywhere.</p>
       )}
 
-      <Suspense fallback={null}>
-        <Suggestions userId={owner.id} known={known} />
-      </Suspense>
+      <div className="flex flex-col gap-3">
+        <Suspense fallback={null}>
+          <Suggestions userId={owner.id} known={known} />
+        </Suspense>
 
-      {avoided.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <h3 className="font-black">Avoided · {avoided.length}</h3>
-          <ul className="flex flex-col gap-2">
-            {avoided.map((p) => (
-              <li key={personKey(p)} className="flex flex-wrap items-center gap-3 text-sm">
-                <Avatar name={p.name} photo={photos.get(personKey(p)) ?? null} className="size-9" />
-                <Link href={personHref(p)} className="font-bold">
-                  {p.name}
-                </Link>
-                <span className="text-muted">their work never comes up</span>
-                <PersonPrefButton person={p} kind={null} label="Undo" />
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+        {avoided.length > 0 && (
+          <details className="group">
+            <summary className={summary}>Avoided · {avoided.length}</summary>
+            <ul className="mt-3 flex flex-col gap-2">
+              {avoided.map((p) => (
+                <li key={personKey(p)} className="flex flex-wrap items-center gap-3 text-sm">
+                  <Avatar name={p.name} photo={photos.get(personKey(p)) ?? null} className="size-9" />
+                  <Link href={personHref(p)} className="font-bold">
+                    {p.name}
+                  </Link>
+                  <span className="text-muted">their work never comes up</span>
+                  <PersonPrefButton person={p} kind={null} label="Undo" />
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+      </div>
     </section>
   );
 }
+
+/** A small chip that opens a short list in place (Suggested, Avoided). */
+const summary =
+  "inline-flex h-10 cursor-pointer list-none items-center rounded-full border-2 border-line px-4 text-sm font-semibold hover:bg-soft group-open:border-fg [&::-webkit-details-marker]:hidden";
 
 async function Suggestions({ userId, known }: { userId: string; known: Set<string> }) {
   const suggestions = await peopleSuggestions(userId, known).catch(() => []);
   if (!suggestions.length) return null;
   const photos = await photosFor(suggestions.map((s) => s.person)).catch(() => new Map());
   return (
-    <div className="flex flex-col gap-3 rounded-3xl border-2 border-dashed border-line p-5 sm:p-7">
-      <h3 className="font-black">Suggested</h3>
-      <ul className="flex flex-col gap-4">
+    <details className="group">
+      <summary className={summary}>Suggested · {suggestions.length}</summary>
+      <ul className="mt-3 flex flex-col gap-4">
         {suggestions.map(({ person, count }) => (
           <li key={personKey(person)} className="flex items-start gap-3">
             <Avatar name={person.name} photo={photos.get(personKey(person)) ?? null} />
@@ -115,6 +119,6 @@ async function Suggestions({ userId, known }: { userId: string; known: Set<strin
           </li>
         ))}
       </ul>
-    </div>
+    </details>
   );
 }

@@ -40,7 +40,7 @@ sign-in is a passkey, and there is no sign-up page.
 - **Books on screen**: films of books you've read come first, with the book on the card.
 - **Cover flow**: Saved, History, lists and people's pages show posters you swipe through, and
   the page takes on the colour of the poster in front.
-- **Your library**: Saved and History a page at a time, Watching and Reading, a Details sheet for
+- **Your library**: Saved and History as one continuous flow each, Watching and Reading, a Details sheet for
   any title, and a way to add what you'd already seen or read: search, or rate a quick stack.
 
 ## The moods

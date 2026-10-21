@@ -65,7 +65,7 @@ test("Saved shows Watching on top, and a few days later the series screen asks h
   const watchingId = Number(title);
 
   await page.goto("/saved");
-  await expect(page.getByRole("heading", { name: "Watching · 1" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Watching" }).getByText(/Watching · 1/)).toBeVisible();
   await expect(page.getByText("Saved · 3 series")).toBeVisible();
 
   // Nothing to ask yet; then it's been four days.
@@ -101,6 +101,7 @@ test("Saved shows Watching on top, and a few days later the series screen asks h
 
 test("pick a series from Saved, drop it, and History tells them apart", async ({ page }) => {
   await page.goto("/saved");
+  await page.getByRole("button", { name: "Pick from these" }).click();
   await page.getByRole("button", { name: "Pick from my saved" }).click();
   await expect(page.getByText(/From your saved list · Round 1 of 2/)).toBeVisible();
   await page.getByRole("button", { name: /^Choose / }).first().click();
@@ -111,7 +112,7 @@ test("pick a series from Saved, drop it, and History tells them apart", async ({
     .toBe("1");
 
   await page.goto("/saved");
-  await expect(page.getByRole("heading", { name: "Watching · 1" })).toBeVisible();
+  await page.getByRole("region", { name: "Watching" }).getByRole("button", { name: /^Check in: / }).click();
   await page.getByRole("button", { name: "Dropped it" }).click();
   await expect
     .poll(async () => (await query<{ n: string }>("select count(*) as n from title_states where media = 'series' and disliked"))[0].n)

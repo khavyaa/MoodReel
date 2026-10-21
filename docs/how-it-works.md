@@ -68,7 +68,14 @@ unit, database and browser tests) runs on every PR.
    deployments 1 day, production 30 days); Neon deletes a preview's branch with its deployments.
 4. Open `/setup` on the production domain and save your passkey.
 
-Passkeys are bound to the domain they were created on. One made on production won't sign in on
+**Database connections.** Vercel freezes a function between requests with its connections still
+open, and Neon closes idle ones meanwhile; `lib/db` attaches the pool with `attachDatabasePool`
+(from `@vercel/functions`) so idle connections are closed properly, retries a query once on a
+dropped connection, and turns Neon's `sslmode=require` into an explicit `verify-full` (the same
+behaviour, without the driver's warning).
+
+Passkeys are bound to the domain they were created on. A device outside your iCloud Keychain gets
+a passkey from `/setup` with your setup token; Settings lists and removes them but doesn't add any. One made on production won't sign in on
 a preview deployment's own URL; previews are for checking builds.
 
 ## How a film deck is picked
@@ -173,15 +180,24 @@ Open Library author photos, initials when there's none), suggestions, and one se
 film and series people (TMDb) and authors (Open Library). People you follow or avoid come up
 from the first letter; each source's results show as soon as they arrive (TMDb answers in a
 fraction of a second, Open Library can take a few), and the last results stay up while you keep
-typing. On a person's page every title has Seen it / Read it beside Save.
+typing. Your people are a flow of portraits; Suggested and Avoided are chips that open in place.
+
+**A person's page** shows everything they made (lead roles, directing, writing; for authors,
+their books), not only what your rules allow: Kamal Haasan is 210 films, of which your Tamil rule
+lets 16 into decks. Titles your rules would keep out carry an "Outside your rules" badge, and
+"Deal from …" still leaves them out (`personPage` for the page, `personWorks` for decks, in
+`lib/people/works.ts`).
 
 **Lists.** Lists in the nav: award winners from Wikidata (Oscar Best Picture, Palme d'Or,
 National Film Award for Best Feature Film, Booker, International Booker, Pulitzer for Fiction,
 Hugo for Best Novel; P166 with TMDb or Open Library ids), synced weekly by the cron into
 `list_items` and filled on the spot the first time a list is opened; TMDb's top rated films and
 series (Discover by rating with a vote floor, since `/top_rated` lets in barely voted titles);
-and any TMDb film collection, found by search or from the films you've seen. Each shows your
-progress and pages of 24, with Seen / Save on every title. Follow a list and its unseen titles
+and any TMDb film collection, found by search, from the films you've seen, or among well-known
+ones (the collections of the most-watched English films). The Lists page is a flow of covers
+(each list's first poster, its size, your progress) with search at the top and chips for Films,
+Series, Books and Collections. A list's own page is one flow of its titles, with Seen it, Save
+and Not for me on each. Follow a list and its unseen titles
 join your decks like a followed person's work (a small boost, sharing the cap of three with books
 you've read) with an "On …" badge. "Deal from this list" makes a deck of only its titles you
 haven't seen, saved or turned down, within your time, best fit for the mood first; your language
@@ -194,9 +210,11 @@ search films, series or books and mark them seen with optional stars, or rate a 
 the most-watched films (English with Hindi, Tamil and Malayalam), series or books, swiping Seen,
 Not for me or Haven't seen. Both count like a seen title with its rating.
 
-**Library pages.** Saved and History show 24 titles a page with page numbers; Saved filters by
-films, series or books in the address, so Back returns to the same page. Rating a title updates
-it in place, without reloading the page.
+**Saved.** A "Pick from these" chip opens the head-to-head from your saves in a sheet; chips
+filter films, series or books (in the address, so Back works); Watching and Reading are a thin
+shelf of covers you tap to check in (Finished, Dropped / Gave up, or Not started yet, which puts it
+back among your saves); then every save in one flow. History has Picks and Seen & read the same
+way, with "+ Add" beside them.
 
 **Details.** Any title in Saved, History (Picks and Seen & read), Watching/Reading, the pick screen
 or a person's page opens a Details sheet: the full synopsis, length, rating and its scale (/10
@@ -224,11 +242,15 @@ pages, a person's page and the people you follow show titles as a cover flow
 (`components/flow/cover-flow.tsx`, built on Motion): one poster in front, neighbours tilted
 away, moved by swiping, the arrows, the arrow keys or tapping a side poster, with springy
 settling. What's under each poster stays mounted, so its buttons keep their state as you
-browse; the page numbers below a flow still move 24 at a time. The page takes a soft tint of the
-poster in front: its colour is sampled in the browser from a small copy of the image
+browse. Long lists come 24 at a time and the next 24 load as you near the end, so there are no
+page numbers: the strip and "12 of 87" cover everything. Acting on a title moves on to the next:
+Seen it / Read it asks for stars (or Skip) first, and Save, Not for me, Remove and Not started
+yet move on straight away. Every page except picking starts in the brand tint (a pale Gripping
+wash; a deep warm dark in cinematic) and takes a soft tint of the poster in front, never of a
+person's photo: its colour is sampled in the browser from a small copy of the image
 (`lib/tint.ts`; TMDb and Open Library allow it), made rich enough to tint with, and fed to
 `.tint-frame` in `globals.css`, which re-points the tokens (pale wash in playful, tinted dark
-in cinematic). If an image can't be read the page keeps its normal look. Picking keeps the mood
+in cinematic). If an image can't be read the page keeps the brand tint. Picking keeps the mood
 colour (the start screen, the deck and the head-to-head), with two touches of the poster: a soft
 glow of the top card's colour behind the deck, and tonight's pick, where the page fades from the
 mood into the winner's own colour while its poster settles in (the mood keeps a dot beside its
@@ -256,7 +278,7 @@ lib/adaptations/   book ↔ film/series links: Wikidata sync, ranking rules, lin
 lib/lists/         award lists, TMDb top rated and collections: catalogue, sync, progress, list decks
 lib/ai/            AI Gateway calls, each with a rule-based fallback
 components/pick/   the flow: taps, deck, head-to-head, pick, save status
-components/library/ Saved, History, pages, adding what you've seen, Details sheet
+components/library/ Saved, History, the Watching / Reading shelf, adding what you've seen, Details sheet
 components/people/ the People page, search, photos, follow / avoid / seen controls
 components/flow/   the cover flow and the poster tint behind it
 components/landing/ the landing page's story cards

@@ -110,6 +110,7 @@ test("saved and history show the run, and you can tidy and rate them", async ({ 
   await flowed.getByRole("button", { name: "Remove" }).click();
   await expect(saved).toHaveCount(2);
   await flowed.getByRole("button", { name: "Seen it" }).click();
+  await flowed.getByRole("button", { name: "Skip" }).click();
   await expect(saved).toHaveCount(1);
   await expect
     .poll(async () => (await query<{ n: string }>("select count(*) as n from title_states where saved"))[0].n)
@@ -217,6 +218,7 @@ test("pick from saved: the best-fitting saves go straight to the head-to-head", 
 
   await page.goto("/saved");
   await expect(page.getByText("Saved · 3 films")).toBeVisible();
+  await page.getByRole("button", { name: "Pick from these" }).click();
   await page.getByRole("button", { name: "Pick from my saved" }).click();
   await expect(page.getByRole("heading", { name: "This or that?" })).toBeVisible();
   await expect(page.getByText(/From your saved list · Round 1 of 2/)).toBeVisible();

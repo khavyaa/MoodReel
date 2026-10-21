@@ -4,7 +4,8 @@ import { Suspense } from "react";
 import { getAuthenticatorName } from "@better-auth/passkey";
 import { AppFrame } from "@/components/shell/app-frame";
 import { LookPicker } from "@/components/settings/look-picker";
-import { AddPasskeyButton, RemovePasskeyButton, SignOutButton } from "@/components/settings/account-actions";
+import { ChevronRight } from "lucide-react";
+import { RemovePasskeyButton, SignOutButton } from "@/components/settings/account-actions";
 import { auth } from "@/lib/auth";
 import { requireOwner } from "@/lib/session";
 import { providersFor } from "@/lib/picks/server";
@@ -24,7 +25,7 @@ export default function SettingsPage() {
         <h1 className="display text-[clamp(3rem,7vw,6rem)]">Settings</h1>
       </div>
 
-      <div className="flex flex-col gap-14">
+      <div className="flex flex-col gap-6">
         <Group title="Picking">
           <Section title="Look" note="This device only. Your other devices keep their own setting.">
             <LookPicker />
@@ -60,7 +61,7 @@ export default function SettingsPage() {
         <Group title="Account">
           <Section
             title="Passkeys"
-            note="Passkeys on iPhone and Mac sync through iCloud Keychain. Add one here for a device outside that, like a security key."
+            note="Your iPhone and Mac share one passkey through iCloud Keychain. A device outside that gets one from the setup page, with your setup token."
           >
             <Suspense fallback={<p className="text-muted">Loading your passkeys…</p>}>
               <PasskeyList />
@@ -68,35 +69,36 @@ export default function SettingsPage() {
           </Section>
 
           <Section title="Sign out">
-            <div className="flex flex-wrap items-center gap-3">
+            <div>
               <SignOutButton />
-              <Link href="/about" className="text-sm font-semibold underline underline-offset-4">
-                About &amp; credits
-              </Link>
             </div>
           </Section>
         </Group>
+
+        <Link href="/about" className="flex items-center justify-between gap-4 rounded-3xl border-2 border-line p-5 text-xl font-black hover:bg-soft sm:p-7">
+          About &amp; credits <ChevronRight className="size-5" aria-hidden />
+        </Link>
       </div>
     </AppFrame>
   );
 }
 
-/** A labelled pair of sections: side by side on a laptop, stacked on a phone. */
+/** A group in its own box: its sections side by side on a laptop, stacked on a phone. */
 function Group({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
   return (
-    <section aria-label={title} className="flex flex-col gap-4">
+    <section aria-label={title} className="flex flex-col gap-6 rounded-3xl border-2 border-line p-5 sm:p-7">
       <div className="flex flex-col gap-1">
-        <h2 className="label text-muted">{title}</h2>
+        <h2 className="text-xl font-black">{title}</h2>
         {note && <p className="max-w-[72ch] text-sm text-muted">{note}</p>}
       </div>
-      <div className="grid gap-x-16 gap-y-10 lg:grid-cols-2">{children}</div>
+      <div className="grid gap-x-16 gap-y-8 lg:grid-cols-2">{children}</div>
     </section>
   );
 }
 
 function Section({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
   return (
-    <section className="flex flex-col gap-4 border-t border-line pt-6">
+    <section className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
         <h3 className="text-lg font-bold">{title}</h3>
         {note && <p className="max-w-[56ch] text-sm text-muted">{note}</p>}
@@ -249,7 +251,6 @@ async function PasskeyList() {
           Your only passkey can&apos;t be removed. If you ever lose it, /setup with your setup token adds a new one.
         </p>
       )}
-      <AddPasskeyButton />
     </div>
   );
 }

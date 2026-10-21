@@ -1,5 +1,6 @@
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
+import { attachDatabasePool } from "@vercel/functions";
 import * as schema from "./schema";
 
 /*
@@ -27,15 +28,50 @@ export function getDb(): Database {
     );
   }
   pool = new Pool({
-    connectionString: url,
+    connectionString: explicitSsl(url),
     // Serverless functions are short-lived; keep each instance's footprint small.
     max: process.env.VERCEL ? 3 : 10,
     idleTimeoutMillis: 10_000,
     // Neon's first query after idle has to wake the compute; give it room.
     connectionTimeoutMillis: 15_000,
   });
+  // Vercel freezes an instance between requests with its connections still open, and
+  // Neon closes them meanwhile. This keeps the instance alive just long enough for idle
+  // connections to be closed properly, so a later request doesn't pick up a dead one.
+  attachDatabasePool(pool);
+  // A connection that dies while idle mustn't take the process down; the pool drops it.
+  pool.on("error", () => {});
+  retryOnceOnDroppedConnection(pool);
   db = drizzle(pool, { schema });
   return db;
+}
+
+/**
+ * Neon's URL says `sslmode=require`, which today's driver already treats as
+ * verify-full and warns that the next major version will weaken. Say verify-full
+ * outright: same behaviour now, and no surprise later.
+ */
+export function explicitSsl(url: string): string {
+  return url.replace(/([?&])sslmode=(?:prefer|require|verify-ca)(?=&|$)/, "$1sslmode=verify-full");
+}
+
+/** A dropped or timed-out connection, as opposed to a bad query: worth one more try. */
+export function isDroppedConnection(error: unknown): boolean {
+  const message = error instanceof Error ? `${error.message} ${error.cause instanceof Error ? error.cause.message : ""}` : "";
+  return /Connection terminated|timeout exceeded when trying to connect|ECONNRESET|connection timeout/i.test(message);
+}
+
+/** Reads and writes outside a transaction go through pool.query: retry those once on a fresh connection. */
+function retryOnceOnDroppedConnection(target: Pool) {
+  const query = target.query.bind(target) as (...args: unknown[]) => Promise<unknown>;
+  (target as unknown as { query: (...args: unknown[]) => Promise<unknown> }).query = async (...args: unknown[]) => {
+    try {
+      return await query(...args);
+    } catch (error) {
+      if (!isDroppedConnection(error)) throw error;
+      return query(...args);
+    }
+  };
 }
 
 /** For tests and scripts that need to release the connection. */

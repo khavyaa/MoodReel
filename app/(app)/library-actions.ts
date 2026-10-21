@@ -3,6 +3,7 @@
 import { refresh } from "next/cache";
 import { z } from "zod";
 import { requireOwner } from "@/lib/session";
+import { picksPage, savedPage, seenPage } from "@/lib/library-pages";
 import {
   answerFollowUp,
   checkIn,
@@ -46,14 +47,14 @@ const starsSchema = z.number().int().min(1).max(5).nullable();
 export async function removeSaved(media: Media, id: number) {
   const owner = await requireOwner();
   await updateTitleState(owner.id, mediaSchema.parse(media), titleId.parse(id), "unsaved", { saved: false });
-  refresh();
+  // No page refresh: the flow takes the card out itself and keeps your place.
 }
 
 /** Watched it: off the saved list, and it never comes back in a deck. */
 export async function markSeen(media: Media, id: number) {
   const owner = await requireOwner();
   await updateTitleState(owner.id, mediaSchema.parse(media), titleId.parse(id), "seen", { saved: false, seen: true });
-  refresh();
+  // No page refresh: the flow takes the card out itself and keeps your place.
 }
 
 /**
@@ -202,7 +203,7 @@ export async function answerCheckIn(
     owner.id,
     z.enum(["series", "book"]).parse(media),
     titleId.parse(id),
-    z.enum(["watching", "finished", "dropped"]).parse(answer),
+    z.enum(["watching", "finished", "dropped", "not-started"]).parse(answer),
     starsSchema.parse(stars),
   );
   if (options.refresh) refresh();
@@ -225,4 +226,26 @@ export async function titleDetails(media: Media, id: number): Promise<DeckCard |
   if (!card) return null;
   const [linked] = await withLinks(owner.id, [card]);
   return linked;
+}
+
+/* ------------------------------------------------- more for the long flows */
+
+const offsetSchema = z.number().int().min(0).max(10_000);
+
+/** The next page of Saved (all, or one kind), as you near the end of its flow. */
+export async function moreSaved(media: unknown, offset: unknown) {
+  const owner = await requireOwner();
+  return savedPage(owner.id, mediaSchema.nullable().parse(media), offsetSchema.parse(offset));
+}
+
+/** The next page of your picks. */
+export async function morePicks(offset: unknown) {
+  const owner = await requireOwner();
+  return picksPage(owner.id, offsetSchema.parse(offset));
+}
+
+/** The next page of what you've seen or read. */
+export async function moreSeen(offset: unknown) {
+  const owner = await requireOwner();
+  return seenPage(owner.id, offsetSchema.parse(offset));
 }

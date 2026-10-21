@@ -84,6 +84,7 @@ test("Saved shows the link, and the pick screen offers \"I've read it\" for the 
   const saved = flow(page, "Saved titles");
   await expect(saved.getByText("Also a book · Author 2")).toBeVisible();
 
+  await page.getByRole("button", { name: "Pick from these" }).click();
   await page.getByRole("button", { name: "Pick from my saved" }).click();
   await expect(page.getByText(/Tonight's pick/)).toBeVisible();
   await expect(page.getByText("Based on the book")).toBeVisible();

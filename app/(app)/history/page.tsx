@@ -3,19 +3,10 @@ import { Suspense } from "react";
 import { AppFrame } from "@/components/shell/app-frame";
 import { buttonClasses } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import {
-  HistoryList,
-  SeenList,
-  UnavailableList,
-  type HistoryEntry,
-  type SeenEntry,
-  type Unavailable,
-} from "@/components/library/library-lists";
+import { HistoryList, SeenList, UnavailableList } from "@/components/library/library-lists";
 import { LibrarySkeleton } from "@/components/library/library-skeleton";
-import { libraryKey, libraryTitles } from "@/lib/library";
-import { Pager, pageFrom } from "@/components/library/pager";
-import { withLinksByKey } from "@/lib/adaptations/server";
-import { LIST_PAGE, pickCount, pickHistory, providersFor, seenCount, seenTitles } from "@/lib/picks/server";
+import { picksPage, seenPage } from "@/lib/library-pages";
+import { pickCount, seenCount } from "@/lib/picks/server";
 import { requireOwner } from "@/lib/session";
 import { cn } from "@/lib/cn";
 
@@ -38,8 +29,6 @@ async function History({ searchParams }: { searchParams: PageProps<"/history">["
   const params = await searchParams;
   const tab: Tab = params.tab === "seen" ? "seen" : "picks";
   const [picks, seen] = await Promise.all([pickCount(owner.id), seenCount(owner.id)]);
-  const pages = Math.max(1, Math.ceil((tab === "picks" ? picks : seen) / LIST_PAGE));
-  const page = pageFrom(params.page, pages);
 
   if (picks === 0 && seen === 0) {
     return (
@@ -69,24 +58,18 @@ async function History({ searchParams }: { searchParams: PageProps<"/history">["
         </span>
         <h1 className="display text-[clamp(3rem,7vw,6rem)]">{tab === "picks" ? "What you picked" : "What you've seen"}</h1>
       </header>
-      <Link href="/add" className={buttonClasses("outline", "md", "self-start")}>
-        + Add what you&apos;ve already seen or read
-      </Link>
       <nav aria-label="History" className="flex flex-wrap gap-2">
         <TabLink tab="picks" current={tab} label={`Picks · ${picks}`} />
         <TabLink tab="seen" current={tab} label={`Seen & read · ${seen}`} />
+        <Link
+          href="/add"
+          aria-label="Add what you've already seen or read"
+          className="inline-flex h-11 items-center rounded-full border-2 border-line px-4 text-[15px] font-semibold transition-colors hover:bg-soft sm:px-5"
+        >
+          + Add
+        </Link>
       </nav>
-      {tab === "picks" ? (
-        <Picks userId={owner.id} page={page} />
-      ) : (
-        <Seen userId={owner.id} page={page} />
-      )}
-      <Pager
-        page={page}
-        pages={pages}
-        href={(n) => `/history?${new URLSearchParams({ ...(tab === "seen" ? { tab } : {}), ...(n > 1 ? { page: String(n) } : {}) })}`}
-        label="History pages"
-      />
+      {tab === "picks" ? <Picks userId={owner.id} total={picks} /> : <Seen userId={owner.id} total={seen} />}
     </div>
   );
 }
@@ -109,54 +92,24 @@ function TabLink({ tab, current, label }: { tab: Tab; current: Tab; label: strin
   );
 }
 
-async function Picks({ userId, page }: { userId: string; page: number }) {
-  const picks = await pickHistory(userId, LIST_PAGE, (page - 1) * LIST_PAGE);
-  if (picks.length === 0) return <p className="text-lg text-muted">No picks yet. Everything you&apos;ve seen or read is under Seen &amp; read.</p>;
-  const cards = await withLinksByKey(userId, await libraryTitles(picks, await providersFor(userId)));
-  const entries: HistoryEntry[] = [];
-  const unavailable: Unavailable[] = [];
-  for (const p of picks) {
-    const movie = cards.get(libraryKey(p.media, p.id));
-    if (!movie) {
-      unavailable.push({ media: p.media, id: p.id, list: "picked", at: p.pickedAt?.toISOString() });
-      continue;
-    }
-    entries.push({
-      sessionId: p.sessionId,
-      mood: p.mood,
-      why: p.why,
-      pickedAt: p.pickedAt?.toISOString() ?? null,
-      seen: p.seen,
-      watching: p.watching,
-      dropped: p.dropped,
-      followUp: p.followUp,
-      stars: p.rating === null ? null : Math.round(p.rating / 2),
-      movie,
-    });
-  }
+async function Picks({ userId, total }: { userId: string; total: number }) {
+  const first = await picksPage(userId, 0);
+  if (first.fetched === 0) return <p className="text-lg text-muted">No picks yet. Everything you&apos;ve seen or read is under Seen &amp; read.</p>;
   return (
     <>
-      <HistoryList entries={entries} />
-      <UnavailableList items={unavailable} />
+      <HistoryList entries={first.entries} fetched={first.fetched} total={total} />
+      <UnavailableList items={first.unavailable} />
     </>
   );
 }
 
-async function Seen({ userId, page }: { userId: string; page: number }) {
-  const seen = await seenTitles(userId, LIST_PAGE, (page - 1) * LIST_PAGE);
-  if (seen.length === 0) return <p className="text-lg text-muted">Nothing marked seen or read yet.</p>;
-  const cards = await libraryTitles(seen, await providersFor(userId));
-  const entries: SeenEntry[] = [];
-  const unavailable: Unavailable[] = [];
-  for (const s of seen) {
-    const movie = cards.get(libraryKey(s.media, s.id));
-    if (movie) entries.push({ at: s.at.toISOString(), stars: s.rating === null ? null : Math.round(s.rating / 2), movie });
-    else unavailable.push({ media: s.media, id: s.id, list: "seen", at: s.at.toISOString() });
-  }
+async function Seen({ userId, total }: { userId: string; total: number }) {
+  const first = await seenPage(userId, 0);
+  if (first.fetched === 0) return <p className="text-lg text-muted">Nothing marked seen or read yet.</p>;
   return (
     <>
-      <SeenList entries={entries} />
-      <UnavailableList items={unavailable} />
+      <SeenList entries={first.entries} fetched={first.fetched} total={total} />
+      <UnavailableList items={first.unavailable} />
     </>
   );
 }

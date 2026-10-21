@@ -208,6 +208,9 @@ export function CheckInAnswers({
       <AnswerButton onClick={() => answer("dropped")} disabled={pending}>
         {media === "book" ? "Gave up" : "Dropped it"}
       </AnswerButton>
+      <AnswerButton onClick={() => answer("not-started")} disabled={pending}>
+        Not started yet
+      </AnswerButton>
     </div>
   );
 }
@@ -233,7 +236,9 @@ export function CheckInPrompt({
           ? `Enjoy it. We'll ask again in ${book ? "a week" : "a few days"}.`
           : answered === "finished"
             ? `Nice. ${title} is in your history.`
-            : `${book ? "Put down" : "Dropped"}. ${title} won't come back.`}
+            : answered === "not-started"
+              ? `${title} is back in Saved for another night.`
+              : `${book ? "Put down" : "Dropped"}. ${title} won't come back.`}
       </p>
     );
   }
