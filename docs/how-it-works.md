@@ -97,7 +97,9 @@ a preview deployment's own URL; previews are for checking builds.
    runtime filter lets long films through, and followed people's or read books' films skip it).
    15 films, about two-thirds English, the rest spread through, with Hindi, Tamil and Malayalam
    taking turns for those slots when films in more than one fit. Swipe right to save,
-   left to skip, up for seen it, down for not for me; Undo steps back as far as you like. Four
+   left to skip, up for seen it, down for not for me; Undo steps back as far as you like. Seen it
+keeps the card in front with stars over it: a star (or 1–5 on a keyboard) rates it and sends it off, any other swipe
+sends it off unrated, and Undo just closes the stars. Four
    saves start the head-to-head.
 6. **After the pick.** About three hours later the films start screen asks "Did you watch it?":
    watched (with optional stars) counts as seen, "Not yet" puts it back in Saved, "Skipped it"
@@ -171,7 +173,7 @@ the novel's author ("Novel" job) but has no link is matched on Open Library by t
 and the link is kept. The pull is one way: a film or series of a book you've read ranks higher
 (more if you rated the book well, at most three per deck) with a "You've read the book" badge,
 while a book you know from the screen ranks well down. "Adaptations only" on the start screen
-deals only films or series based on a book. Cards, the pick screen ("I've read it"), Saved and
+deals only films or series based on a book. Cards, the pick screen ("I've read it", then stars), Saved and
 History show the link, and Settings → Background syncs shows the last sync. Rules:
 `lib/adaptations/rules.ts`.
 

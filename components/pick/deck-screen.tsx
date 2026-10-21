@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, animate, motion, useMotionValue, useReducedMotion, useTransform } from "motion/react";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Award, Check, Heart, Star, Undo2 } from "lucide-react";
 import { PeopleLine } from "@/components/people/people-line";
@@ -11,6 +11,7 @@ import { MAX_SAVES } from "@/lib/deck/finale";
 import { airingLabel, bestsellerLabel, cardMeta, makersLabel, ratingCountLabel, ratingScale } from "@/lib/card-meta";
 import { cn } from "@/lib/cn";
 import { Poster } from "./poster";
+import { rateTitle } from "@/app/(app)/library-actions";
 import { usePosterColour } from "@/components/flow/use-poster-colour";
 
 export type SwipeAction = "saved" | "skipped" | "seen" | "disliked";
@@ -73,6 +74,35 @@ export function DeckScreen({
   fromName?: string | null;
 }) {
   const card = cards[index];
+  // Seen it holds the card in front with stars over it: a star rates it and sends it off,
+  // any other action sends it off unrated, and Undo just closes the stars.
+  const [rating, setRating] = useState<number | null>(null);
+  const holding = rating !== null && rating === card?.id;
+  const swipe = useCallback(
+    (action: SwipeAction) => {
+      if (holding) {
+        setRating(null);
+        onSwipe("seen");
+        return;
+      }
+      if (action === "seen" && card) {
+        setRating(card.id);
+        return;
+      }
+      onSwipe(action);
+    },
+    [holding, card, onSwipe],
+  );
+  const undo = useMemo(() => (holding ? () => setRating(null) : onUndo), [holding, onUndo]);
+  const rate = useCallback(
+    (stars: number) => {
+      if (!card) return;
+      setRating(null);
+      onSwipe("seen");
+      void rateTitle(card.media, card.id, stars).catch(() => undefined);
+    },
+    [card, onSwipe],
+  );
 
   // Keys on a laptop: arrows to swipe, Z or ⌘Z to undo. Ignored while typing.
   useEffect(() => {
@@ -80,22 +110,28 @@ export function DeckScreen({
       const target = e.target as HTMLElement | null;
       if (target?.closest("input, textarea, select, [contenteditable]")) return;
       if (e.key.toLowerCase() === "z" && !e.altKey && !e.shiftKey) {
-        if (onUndo) {
+        if (undo) {
           e.preventDefault();
-          onUndo();
+          undo();
         }
         return;
       }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+      // Stars over a card just marked seen: 1 to 5 rate it.
+      if (holding && /^[1-5]$/.test(e.key)) {
+        e.preventDefault();
+        rate(Number(e.key));
+        return;
+      }
       const action = KEYS[e.key];
       if (action) {
         e.preventDefault();
-        onSwipe(action);
+        swipe(action);
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onSwipe, onUndo]);
+  }, [swipe, undo, holding, rate]);
 
   if (!card) return null;
 
@@ -131,7 +167,9 @@ export function DeckScreen({
                   card={c}
                   depth={depth}
                   returnFrom={returning?.id === c.id ? returning.action : null}
-                  onSwipe={onSwipe}
+                  onSwipe={swipe}
+                  rating={depth === 0 && holding}
+                  onRate={rate}
                 />
               ))
               .reverse()}
@@ -143,22 +181,22 @@ export function DeckScreen({
 
       <div className="mt-auto flex flex-col gap-2 lg:mt-0 lg:flex-row lg:items-center lg:gap-3">
         <div className="grid grid-cols-[1fr_1fr_1fr_1.25fr] gap-2 lg:flex lg:gap-3">
-          <ActionButton label="Skip" hint="←" icon={<ArrowLeft className="size-5" aria-hidden />} onClick={() => onSwipe("skipped")} />
-          <ActionButton label="Not for me" hint="↓" icon={<ArrowDown className="size-5" aria-hidden />} onClick={() => onSwipe("disliked")} />
+          <ActionButton label="Skip" hint="←" icon={<ArrowLeft className="size-5" aria-hidden />} onClick={() => swipe("skipped")} />
+          <ActionButton label="Not for me" hint="↓" icon={<ArrowDown className="size-5" aria-hidden />} onClick={() => swipe("disliked")} />
           <ActionButton
             label={card.media === "book" ? "Read it" : "Seen it"}
             hint="↑"
             icon={<ArrowUp className="size-5" aria-hidden />}
-            onClick={() => onSwipe("seen")}
+            onClick={() => swipe("seen")}
           />
-          <ActionButton label="Save" hint="→" icon={<ArrowRight className="size-5" aria-hidden />} onClick={() => onSwipe("saved")} primary />
+          <ActionButton label="Save" hint="→" icon={<ArrowRight className="size-5" aria-hidden />} onClick={() => swipe("saved")} primary />
         </div>
         <div className="flex min-h-9 items-center justify-between gap-4 lg:ml-auto">
           <p className="text-xs text-muted lg:hidden">Skip brings it back in a couple of months. Not for me never does.</p>
           <button
             type="button"
-            onClick={onUndo ?? undefined}
-            disabled={!onUndo}
+            onClick={undo ?? undefined}
+            disabled={!undo}
             aria-keyshortcuts="Z"
             className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm font-bold underline-offset-4 hover:underline disabled:invisible"
           >
@@ -179,11 +217,16 @@ function SwipeCard({
   depth,
   returnFrom,
   onSwipe,
+  rating,
+  onRate,
 }: {
   card: DeckCard;
   depth: number;
   returnFrom: SwipeAction | null;
   onSwipe: (a: SwipeAction) => void;
+  /** Marked seen: stars over the card until you rate it or move on. */
+  rating: boolean;
+  onRate: (stars: number) => void;
 }) {
   const reduce = useReducedMotion();
   const isTop = depth === 0;
@@ -236,7 +279,12 @@ function SwipeCard({
           else if (vertical && (offset.y > COMMIT || velocity.y > FLICK)) action = "disliked";
           else if (offset.x > COMMIT || velocity.x > FLICK) action = "saved";
           else if (offset.x < -COMMIT || velocity.x < -FLICK) action = "skipped";
-          if (action) {
+          if (action === "seen" && !rating) {
+            // Seen it keeps the card here, with stars over it.
+            animate(x, 0, SETTLE);
+            animate(y, 0, SETTLE);
+            onSwipe(action);
+          } else if (action) {
             committed.current = true;
             onSwipe(action);
           } else {
@@ -255,6 +303,7 @@ function SwipeCard({
             <Stamp label="Not for me" opacity={nopeHint} className="top-auto bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap" />
           </>
         )}
+        {rating && <RateOverlay title={card.title} book={card.media === "book"} onRate={onRate} />}
       </motion.div>
     </motion.div>
   );
@@ -469,5 +518,40 @@ function PosterGlow({ path }: { path: string | null }) {
       animate={{ backgroundColor: colour ?? "rgba(0,0,0,0)", opacity: colour ? 0.7 : 0 }}
       transition={{ duration: 0.7, ease: "easeOut" }}
     />
+  );
+}
+
+/** Over a card just marked seen: how was it? A star rates it (and sends it off); any other swipe moves on unrated. */
+function RateOverlay({ title, book, onRate }: { title: string; book: boolean; onRate: (stars: number) => void }) {
+  const [shown, setShown] = useState(0);
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-2xl bg-black/70 text-white"
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      <span className="label opacity-90">{book ? "Read" : "Seen"} · how was it?</span>
+      <div role="group" aria-label={`Rate ${title}`} className="flex">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button
+            key={n}
+            type="button"
+            aria-label={`${n} star${n > 1 ? "s" : ""}`}
+            disabled={shown > 0}
+            onClick={() => {
+              setShown(n);
+              setTimeout(() => onRate(n), 350);
+            }}
+            className="p-1.5"
+          >
+            <Star className={cn("size-8 transition-transform", n <= shown ? "scale-110 fill-current" : "opacity-60")} aria-hidden />
+          </button>
+        ))}
+      </div>
+      <span className="text-xs opacity-75">
+        or keep swiping<span className="hidden lg:inline"> · 1–5 on the keyboard</span>
+      </span>
+    </motion.div>
   );
 }

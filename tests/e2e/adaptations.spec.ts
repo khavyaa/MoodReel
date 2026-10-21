@@ -90,9 +90,12 @@ test("Saved shows the link, and the pick screen offers \"I've read it\" for the 
   await expect(page.getByText("Based on the book")).toBeVisible();
   await page.getByRole("button", { name: "I've read it" }).click();
   await expect(page.getByText("Read it", { exact: true })).toBeVisible();
+  // Stars for the book right there.
+  await page.getByRole("group", { name: /^Rate / }).getByRole("button", { name: "4 stars" }).click();
+  await expect(page.getByText("Read ★★★★")).toBeVisible();
   await expect
-    .poll(async () => (await query<{ seen: boolean }>("select seen from title_states where media = 'book' and external_id = '7001'"))[0]?.seen)
-    .toBe(true);
+    .poll(async () => (await query<{ seen: boolean; rating: number | null }>("select seen, rating from title_states where media = 'book' and external_id = '7001'"))[0])
+    .toEqual({ seen: true, rating: 8 });
 
   await page.goto("/history");
   await expect(page.getByText("Book: read it")).toBeVisible();

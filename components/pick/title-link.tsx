@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { StarPrompt } from "@/components/flow/star-prompt";
+import { rateTitle } from "@/app/(app)/library-actions";
 import { BookOpen, Check, Clapperboard } from "lucide-react";
 import type { TitleLink } from "@/lib/adaptations/rules";
 import { knowIt } from "@/app/(app)/[media]/actions";
@@ -68,14 +70,27 @@ export function LinkStrip({ link, className }: { link: TitleLink; className?: st
 
 /**
  * The pick screen's book panel: the book it's based on, and "I've read it"
- * when you haven't said so yet (it counts as a Read it swipe on the book).
+ * when you haven't said so yet (it counts as a Read it swipe on the book),
+ * then stars for it right there (or Skip).
  */
 export function PickBookPanel({ link }: { link: TitleLink }) {
   const [known, setKnown] = useState(link.known);
+  const [rating, setRating] = useState<"asking" | number | null>(null);
   const [pending, start] = useTransition();
   return (
     <section aria-label={linkHeading(link)} className="flex max-w-md flex-col gap-3">
       <LinkStrip link={{ ...link, known }} />
+      {rating === "asking" && (
+        <StarPrompt
+          title={link.title}
+          onRate={(n) => {
+            setRating(n);
+            void rateTitle("book", link.id, n).catch(() => setRating(null));
+          }}
+          onDone={() => setRating((r) => (r === "asking" ? null : r))}
+        />
+      )}
+      {typeof rating === "number" && <p className="text-sm font-bold">Read {"★".repeat(rating)}</p>}
       {link.media === "book" && !known && (
         <button
           type="button"
@@ -83,10 +98,12 @@ export function PickBookPanel({ link }: { link: TitleLink }) {
           onClick={() =>
             start(async () => {
               setKnown(true);
+              setRating("asking");
               try {
                 await knowIt("book", { id: link.id, language: link.language, genreIds: link.genreIds, tags: link.tags });
               } catch {
                 setKnown(false);
+                setRating(null);
               }
             })
           }

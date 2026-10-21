@@ -37,8 +37,12 @@ test("Seen & read lists everything you've watched, not only picks, and you can r
   await expect(page.getByText("1/15")).toBeVisible();
   const title = await page.getByRole("heading", { level: 2 }).first().textContent();
   await page.getByRole("button", { name: "Seen it", exact: true }).click();
+  // Stars come up on the card; any other action moves on without a rating (and is not itself recorded).
+  await expect(page.getByRole("group", { name: `Rate ${title!.trim()}` })).toBeVisible();
+  await page.getByRole("button", { name: "Skip", exact: true }).click();
   await expect(page.getByText("2/15")).toBeVisible();
   await expect.poll(async () => (await query("select 1 from title_states where seen")).length).toBe(1);
+  expect(await query("select 1 from title_actions where action = 'skipped'")).toEqual([]);
 
   await page.goto("/history");
   await expect(page.getByRole("link", { name: "Picks · 0" })).toBeVisible();
