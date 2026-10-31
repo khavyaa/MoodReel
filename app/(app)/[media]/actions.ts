@@ -31,7 +31,7 @@ import { adaptFilterFor, screenCandidates, withLinks } from "@/lib/adaptations/s
 import { libraryKey, libraryTitles } from "@/lib/library";
 import { listBySlug } from "@/lib/lists/catalog";
 import { followedListTitles } from "@/lib/lists/server";
-import { buildListDeck } from "@/lib/lists/deck";
+import { buildListDeck, ListNotLoaded } from "@/lib/lists/deck";
 import { booksByWork } from "@/lib/books/openlibrary";
 
 /** A title on a list you follow ranks this much higher (and skips the "everyone has seen it" markdown). */
@@ -122,6 +122,9 @@ export async function deal(
     return { ok: true, sessionId, cards, missingLanguages };
   } catch (error) {
     if (error instanceof z.ZodError) throw error;
+    if (error instanceof ListNotLoaded) {
+      return { ok: false, error: "That list hasn't loaded yet, so there's nothing to deal from it. Try again in a moment, or deal without it." };
+    }
     console.error("[moodreel] deal failed", error);
     if (error instanceof TmdbError && error.status === 0 && !error.retryable) {
       return { ok: false, error: "Movie and series data isn't set up on the server (TMDb token missing)." };

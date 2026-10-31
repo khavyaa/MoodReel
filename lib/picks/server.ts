@@ -3,7 +3,7 @@ import { and, desc, eq, gt, inArray, isNotNull, isNull, lt, or, sql } from "driz
 import { getDb } from "@/lib/db";
 import { pickSessions, preferences, titleActions, titleStates } from "@/lib/db/schema";
 import { buildTasteProfile, type ActionKind } from "@/lib/taste/profile";
-import { foldActions } from "./state";
+import { foldActions, type TitleFlags } from "./state";
 import type { TasteProfile } from "@/lib/taste/rules";
 
 /*
@@ -328,6 +328,88 @@ export async function updateTitleState(
       .set({ ...state, updatedAt: new Date() })
       .where(titleKey(userId, media, id));
   });
+}
+
+/**
+ * Takes back what you did to a title outside a deck: the most recent of these
+ * actions (or every one of them, `all`), with the taste it taught, then
+ * rebuilds the title's flags from what's left in its log. `extra` restores
+ * what the action changed beyond the flags (a cleared rating, the day you
+ * started watching). Restore and "Not seen" come here like that. An undo
+ * passes `only` instead: just those flags change (worked out from what's
+ * left), since some states (back in Saved after "not yet", stars) aren't in
+ * the log and a full rebuild would lose them.
+ */
+export async function takeBack(
+  userId: string,
+  media: Media,
+  id: number,
+  kinds: ActionKind[],
+  { all = false, extra = {}, only }: { all?: boolean; extra?: StateChange; only?: (left: TitleFlags) => StateChange } = {},
+) {
+  const db = getDb();
+  const externalId = String(id);
+  const sameTitle = actionKey(userId, media, externalId);
+  const stateKey = titleKey(userId, media, externalId);
+  await db.transaction(async (tx) => {
+    const matching = await tx
+      .select({ id: titleActions.id })
+      .from(titleActions)
+      .where(and(sameTitle, inArray(titleActions.action, kinds)))
+      .orderBy(desc(titleActions.createdAt))
+      .limit(all ? 1000 : 1);
+    if (matching.length) await tx.delete(titleActions).where(inArray(titleActions.id, matching.map((m) => m.id)));
+    const rest = await tx
+      .select({ action: titleActions.action, createdAt: titleActions.createdAt })
+      .from(titleActions)
+      .where(sameTitle)
+      .orderBy(titleActions.createdAt);
+    await tx
+      .update(titleStates)
+      .set({ ...(only ? only(foldActions(rest)) : foldActions(rest)), ...extra, updatedAt: new Date() })
+      .where(stateKey);
+  });
+}
+
+/** What you turned down (Not for me, Gave up, Dropped), newest first, and how. */
+export async function turnedDownTitles(userId: string, limit = LIST_PAGE, offset = 0) {
+  const db = getDb();
+  const rows = await db
+    .select({ id: titleStates.externalId, media: titleStates.media, at: titleStates.updatedAt })
+    .from(titleStates)
+    .where(and(eq(titleStates.userId, userId), eq(titleStates.disliked, true)))
+    .orderBy(desc(titleStates.updatedAt))
+    .limit(limit)
+    .offset(offset);
+  if (!rows.length) return [];
+  const how = await db
+    .select({ id: titleActions.externalId, media: titleActions.media, action: titleActions.action })
+    .from(titleActions)
+    .where(
+      and(
+        eq(titleActions.userId, userId),
+        inArray(titleActions.externalId, rows.map((r) => r.id)),
+        inArray(titleActions.action, ["disliked", "dropped"]),
+      ),
+    )
+    .orderBy(desc(titleActions.createdAt));
+  const latest = new Map<string, ActionKind>();
+  for (const h of how) if (!latest.has(`${h.media}:${h.id}`)) latest.set(`${h.media}:${h.id}`, h.action as ActionKind);
+  return rows.map((r) => ({
+    media: r.media as Media,
+    id: Number(r.id),
+    at: r.at,
+    how: latest.get(`${r.media}:${r.id}`) === "dropped" ? ("dropped" as const) : ("disliked" as const),
+  }));
+}
+
+/** How many titles you've turned down. */
+export async function turnedDownCount(userId: string): Promise<number> {
+  const [row] = await getDb()
+    .select({ n: sql<number>`count(*)` })
+    .from(titleStates)
+    .where(and(eq(titleStates.userId, userId), eq(titleStates.disliked, true)));
+  return Number(row?.n ?? 0);
 }
 
 /** Titles per page in Saved and History. */

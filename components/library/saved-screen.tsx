@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { Shuffle } from "lucide-react";
 import { pickFromSaved } from "@/app/(app)/library-actions";
 import type { LibraryMovie } from "@/lib/library";
@@ -47,7 +47,19 @@ export function SavedScreen({
 }) {
   const [start, setStart] = useState<(FlowStart & { media: Kind }) | null>(null);
   const [picking, setPicking] = useState(false);
-  if (start) return <PickFlow media={start.media} start={start} onExit={() => setStart(null)} />;
+  // A head-to-head from Saved is its own step in the browser's history, so Back returns to Saved.
+  useEffect(() => {
+    if (!start) return;
+    window.history.pushState({ moodreelPick: true }, "");
+    const onPop = () => setStart(null);
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [start]);
+  const leave = () => {
+    if (window.history.state?.moodreelPick) window.history.back();
+    else setStart(null);
+  };
+  if (start) return <PickFlow media={start.media} start={start} onExit={leave} />;
 
   const films = counts.movie;
   const shows = counts.series;
@@ -87,7 +99,7 @@ export function SavedScreen({
             (
               [
                 ["all", `All · ${total}`],
-                ...(films ? ([["movie", `Movies · ${films}`]] as const) : []),
+                ...(films ? ([["movie", `Films · ${films}`]] as const) : []),
                 ...(shows ? ([["series", `Series · ${shows}`]] as const) : []),
                 ...(books ? ([["book", `Books · ${books}`]] as const) : []),
               ] as const

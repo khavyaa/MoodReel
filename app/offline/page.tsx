@@ -1,5 +1,3 @@
-import { RetryButton } from "./retry-button";
-
 export const metadata = { title: "Offline" };
 
 /**
@@ -25,7 +23,10 @@ export default function OfflinePage() {
         <a href="/history" className="rounded-full border-2 border-line px-5 py-3 font-bold hover:bg-soft">
           History
         </a>
-        <RetryButton />
+        {/* A link to this same address reloads it: no script needed, so it works on the kept copy alone. */}
+        <a href="" className="rounded-full bg-accent px-5 py-3 font-bold text-on-accent hover:opacity-90">
+          Try again
+        </a>
       </nav>
     </main>
   );

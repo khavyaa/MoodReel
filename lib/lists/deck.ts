@@ -13,6 +13,13 @@ import type { Taps } from "@/lib/taste/types";
 import { detailsToCandidate } from "@/lib/library";
 import { listEntries } from "./server";
 
+/** A list whose titles haven't loaded (Wikidata or TMDb didn't answer): nothing to deal from yet. */
+export class ListNotLoaded extends Error {
+  constructor() {
+    super("That list hasn't loaded yet.");
+  }
+}
+
 /** How many of a list's unseen titles are looked at for one deal (each needs its details). */
 const LOOK_AT = 100;
 
@@ -37,6 +44,7 @@ export async function buildListDeck(
 ): Promise<DealResult & { listName: string }> {
   const list = await listEntries(slug);
   if (!list || list.def.media !== media) throw new Error("That list couldn't be found.");
+  if (list.entries.length === 0) throw new ListNotLoaded();
   const open = list.entries.filter((e) => !exclude.has(e.id)).slice(0, LOOK_AT).map((e) => e.id);
   let cards: DeckCard[] = [];
 

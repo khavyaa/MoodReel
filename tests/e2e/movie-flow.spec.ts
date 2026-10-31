@@ -158,10 +158,19 @@ test("not for me, undo, and the full synopsis", async ({ page, isMobile }) => {
   await expect(page.getByText("1/15")).toBeVisible();
   const before = Number((await query<{ n: string }>("select count(*) as n from title_actions"))[0].n);
 
-  // The synopsis is clipped, with More to read the rest.
-  await page.getByRole("button", { name: "More" }).click();
-  await expect(page.getByText(/The end\./)).toBeVisible();
-  await expect(page.getByRole("button", { name: "Less" })).toBeVisible();
+  if (isMobile) {
+    // A phone card keeps the synopsis behind More about it, so the card and its buttons fit the screen.
+    await page.getByRole("button", { name: "More about it" }).click();
+    const sheet = page.getByRole("dialog");
+    await expect(sheet.getByText(/The end\./)).toBeVisible();
+    await sheet.getByRole("button", { name: "Close" }).click();
+    await expect(sheet).toHaveCount(0);
+  } else {
+    // The synopsis is clipped, with More to read the rest.
+    await page.getByRole("button", { name: "More", exact: true }).click();
+    await expect(page.getByText(/The end\./)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Less" })).toBeVisible();
+  }
 
   // Not for me, then undo: the same card is back and nothing was kept.
   const first = await currentTitle(page);
@@ -336,6 +345,15 @@ test("swipe gestures and keys work on the deck", async ({ page, isMobile }) => {
     const seen = await currentTitle(page);
     await page.keyboard.press("ArrowUp");
     await expect(page.getByRole("group", { name: `Rate ${seen}` })).toBeVisible();
+    // Hold the seen back a moment: its stars must still land after it, not be lost racing ahead.
+    let held = false;
+    await page.route("**/movies", async (route) => {
+      if (route.request().method() === "POST" && !held) {
+        held = true;
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+      await route.continue();
+    });
     await page.keyboard.press("4");
     await expect(page.getByText("4/15")).toBeVisible();
     await expect

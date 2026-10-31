@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState, useTransition } from "react";
 import { Check, Search, Star, X } from "lucide-react";
 import { findTitles, haveYouSeen, markKnown, type AddCandidate } from "@/app/(app)/add-actions";
+import { undoLibrary } from "@/app/(app)/library-actions";
+import { useToast } from "@/components/ui/toast";
 import type { Media } from "@/lib/picks/server";
 import { Poster } from "@/components/pick/poster";
 import { buttonClasses } from "@/components/ui/button";
@@ -60,27 +62,48 @@ function Tab({ active, onClick, children }: { active: boolean; onClick: () => vo
   );
 }
 
-/** One title's answer: stars (seen, rated), seen without a rating, or not for me. */
-function useAnswer(item: AddCandidate) {
+/**
+ * One title's answer: stars (seen, rated), seen without a rating, or not for
+ * me. Each answer offers Undo for a few seconds; `onUndo` puts the title back
+ * in front of you (the stack brings it back to the top).
+ */
+function useAnswer(item: AddCandidate, onUndo?: () => void) {
   const [state, setState] = useState<AddCandidate["state"]>(item.state);
   const [stars, setStars] = useState<number | null>(item.stars);
   const [pending, startTransition] = useTransition();
+  const toast = useToast();
   const answer = useCallback(
     (kind: "seen" | "disliked", rating: number | null, after?: () => void) => {
       const before = { state, stars };
       setState(kind);
       setStars(rating);
       after?.();
+      const sent = markKnown(item.media, { id: item.id, language: item.language, genreIds: item.genreIds, tags: item.tags }, kind, rating);
+      sent.catch(() => undefined);
+      toast({
+        message:
+          kind === "disliked"
+            ? `Not for me: ${item.title}`
+            : `${item.media === "book" ? "Read" : "Seen"}${rating ? ` ${"★".repeat(rating)}` : ""}: ${item.title}`,
+        undone: `${item.title} is back as it was`,
+        undo: async () => {
+          await sent.catch(() => undefined);
+          await undoLibrary({ media: item.media, id: item.id, kind });
+          setState(before.state);
+          setStars(before.stars);
+          onUndo?.();
+        },
+      });
       startTransition(async () => {
         try {
-          await markKnown(item.media, { id: item.id, language: item.language, genreIds: item.genreIds, tags: item.tags }, kind, rating);
+          await sent;
         } catch {
           setState(before.state);
           setStars(before.stars);
         }
       });
     },
-    [item, state, stars],
+    [item, state, stars, toast, onUndo],
   );
   return { state, stars, pending, answer };
 }
@@ -89,7 +112,7 @@ function StarRow({ title, value, onPick }: { title: string; value: number | null
   return (
     <div role="group" aria-label={`Rate ${title}`} className="flex">
       {[1, 2, 3, 4, 5].map((n) => (
-        <button key={n} type="button" onClick={() => onPick(n)} aria-label={`${n} star${n > 1 ? "s" : ""}`} className="-m-0.5 p-1.5">
+        <button key={n} type="button" onClick={() => onPick(n)} aria-label={`${n} star${n > 1 ? "s" : ""}`} className="-m-0.5 p-2.5">
           <Star className={cn("size-6", value !== null && n <= value ? "fill-current" : "opacity-35")} aria-hidden />
         </button>
       ))}
@@ -225,13 +248,21 @@ function Stack({ media }: { media: Media }) {
   return (
     <div className="flex flex-col gap-3">
       <p className="label text-muted">{done > 0 ? `${done} answered` : "One at a time: answer and the next one comes up"}</p>
-      <StackCard key={`${current.media}:${current.id}`} item={current} onAnswered={next} />
+      <StackCard
+        key={`${current.media}:${current.id}`}
+        item={current}
+        onAnswered={next}
+        onUndo={(item) => {
+          setDone((d) => Math.max(0, d - 1));
+          setQueue((q) => [item, ...q.filter((x) => x.id !== item.id)]);
+        }}
+      />
     </div>
   );
 }
 
-function StackCard({ item, onAnswered }: { item: AddCandidate; onAnswered: () => void }) {
-  const { answer } = useAnswer(item);
+function StackCard({ item, onAnswered, onUndo }: { item: AddCandidate; onAnswered: () => void; onUndo: (item: AddCandidate) => void }) {
+  const { answer } = useAnswer(item, () => onUndo(item));
   const word = item.media === "book" ? "read" : "seen";
   return (
     <section

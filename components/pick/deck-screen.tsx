@@ -11,7 +11,7 @@ import { MAX_SAVES } from "@/lib/deck/finale";
 import { airingLabel, bestsellerLabel, cardMeta, makersLabel, ratingCountLabel, ratingScale } from "@/lib/card-meta";
 import { cn } from "@/lib/cn";
 import { Poster } from "./poster";
-import { rateTitle } from "@/app/(app)/library-actions";
+import { DetailsButton } from "@/components/library/title-details";
 import { usePosterColour } from "@/components/flow/use-poster-colour";
 
 export type SwipeAction = "saved" | "skipped" | "seen" | "disliked";
@@ -68,7 +68,8 @@ export function DeckScreen({
   /** A card coming back after an undo, and the way it had gone. */
   returning: { id: number; action: SwipeAction } | null;
   missingLanguages: string[];
-  onSwipe: (action: SwipeAction) => void;
+  /** A swipe, and for Seen it the stars, if you gave any. */
+  onSwipe: (action: SwipeAction, stars?: number) => void;
   onUndo: (() => void) | null;
   /** Dealt from one person's work. */
   fromName?: string | null;
@@ -98,8 +99,7 @@ export function DeckScreen({
     (stars: number) => {
       if (!card) return;
       setRating(null);
-      onSwipe("seen");
-      void rateTitle(card.media, card.id, stars).catch(() => undefined);
+      onSwipe("seen", stars);
     },
     [card, onSwipe],
   );
@@ -136,7 +136,7 @@ export function DeckScreen({
   if (!card) return null;
 
   return (
-    <div className="flex flex-1 flex-col gap-4 lg:gap-8">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 lg:gap-6">
       {fromName && <p className="label -mb-2 text-muted">From {fromName}</p>}
       <Progress total={cards.length} index={index} saves={saves} />
       {index === 0 && cards.length < DECK_SIZE && (
@@ -151,12 +151,13 @@ export function DeckScreen({
         </p>
       )}
 
-      <div className="grid flex-1 items-center gap-6 lg:grid-cols-[minmax(280px,380px)_minmax(0,1fr)] lg:gap-14">
+      {/* The card is sized from the screen's height, so card, details and buttons fit one screen. */}
+      <div className="grid min-h-0 flex-1 content-center items-center gap-4 lg:grid-cols-[auto_minmax(0,1fr)] lg:gap-14">
         {/*
           The pile: the next two cards sit underneath, already loaded. When the
           top card leaves, they slide forward instead of a new card popping in.
         */}
-        <div className="relative isolate mx-auto aspect-[2/3] w-[min(50vw,240px)] lg:w-full lg:max-w-[380px]">
+        <div className="relative isolate mx-auto aspect-[2/3] w-[min(72vw,280px,calc((100dvh-26rem)*2/3))] lg:mx-0 lg:w-[min(380px,calc((100dvh-19rem)*2/3))]">
           <PosterGlow path={card.posterPath} />
           <AnimatePresence custom={exitAs} initial={false}>
             {cards
@@ -192,7 +193,7 @@ export function DeckScreen({
           <ActionButton label="Save" hint="→" icon={<ArrowRight className="size-5" aria-hidden />} onClick={() => swipe("saved")} primary />
         </div>
         <div className="flex min-h-9 items-center justify-between gap-4 lg:ml-auto">
-          <p className="text-xs text-muted lg:hidden">Skip brings it back in a couple of months. Not for me never does.</p>
+          <p className="hidden text-xs text-muted sm:block lg:hidden">Skip brings it back in a couple of months. Not for me never does.</p>
           <button
             type="button"
             onClick={undo ?? undefined}
@@ -337,14 +338,20 @@ function CardInfo({ card }: { card: DeckCard }) {
   const airing = airingLabel(card);
   const bestseller = bestsellerLabel(card);
   return (
-    <div className="flex min-w-0 flex-col gap-3 lg:gap-4">
-      <p className="label text-muted">{cardMeta(card)}</p>
-      <h2 className="display text-[clamp(2.25rem,6vw,5.5rem)]">{card.title}</h2>
-      {card.book && card.people.length > 0 && <PeopleLine people={card.people} followedName={card.followedName} className="-mt-1" />}
-      {card.book && !card.people.length && people && <p className="-mt-1 font-bold lg:text-lg">{people}</p>}
-      {!card.book && card.originalTitle !== card.title && <p className="-mt-1 text-sm text-muted">{card.originalTitle}</p>}
+    // A phone shows the essentials (facts, title, badges) and keeps the synopsis and people behind More,
+    // so the card and its buttons fit one screen; a laptop shows everything beside the card.
+    <div className="flex min-w-0 flex-col gap-2 lg:gap-4">
+      <p className="label truncate text-muted">{cardMeta(card)}</p>
+      <h2 className="display line-clamp-2 text-[clamp(1.9rem,min(8vw,5dvh),2.75rem)] lg:line-clamp-none lg:text-[clamp(2.25rem,min(6vw,9dvh),5.5rem)]">
+        {card.title}
+      </h2>
+      {card.book && card.people.length > 0 && (
+        <PeopleLine people={card.people} followedName={card.followedName} className="-mt-1 hidden lg:flex" />
+      )}
+      {card.book && people && <p className={cn("-mt-1 truncate font-bold lg:text-lg", card.people.length > 0 && "lg:hidden")}>{people}</p>}
+      {!card.book && card.originalTitle !== card.title && <p className="-mt-1 hidden text-sm text-muted lg:block">{card.originalTitle}</p>}
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex max-h-[4.25rem] flex-wrap gap-2 overflow-hidden lg:max-h-none">
         <Badge>
           <Star className="size-3.5 fill-current" aria-hidden />
           {card.rating.toFixed(1)}
@@ -372,19 +379,16 @@ function CardInfo({ card }: { card: DeckCard }) {
           </Badge>
         )}
       </div>
-      {card.link && <LinkStrip link={card.link} />}
-
-      {card.genres.length > 0 && <p className="hidden text-sm text-muted sm:block">{card.genres.slice(0, 4).join(" · ")}</p>}
-      <Overview text={card.overview} />
-      {card.series?.firstSeasonEpisodes ? (
-        <p className="hidden text-sm text-muted sm:block">Season 1: {card.series.firstSeasonEpisodes} episodes</p>
-      ) : null}
-      {!card.book && card.people.length > 0 && (
-        <>
-          <PeopleLine people={card.people} followedName={card.followedName} compact className="sm:hidden" />
-          <PeopleLine people={card.people} followedName={card.followedName} className="hidden sm:flex" />
-        </>
-      )}
+      <DetailsButton card={card} media={card.media} id={card.id} title={card.title} className="self-start text-sm font-bold underline underline-offset-4 lg:hidden">
+        More about it
+      </DetailsButton>
+      <div className="hidden min-w-0 flex-col gap-4 lg:flex">
+        {card.link && <LinkStrip link={card.link} />}
+        {card.genres.length > 0 && <p className="text-sm text-muted">{card.genres.slice(0, 4).join(" · ")}</p>}
+        <Overview text={card.overview} />
+        {card.series?.firstSeasonEpisodes ? <p className="text-sm text-muted">Season 1: {card.series.firstSeasonEpisodes} episodes</p> : null}
+        {!card.book && card.people.length > 0 && <PeopleLine people={card.people} followedName={card.followedName} />}
+      </div>
     </div>
   );
 }

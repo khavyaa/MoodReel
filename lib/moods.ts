@@ -23,7 +23,7 @@ export const ENERGY = ["Lean back", "In between", "Lean in"] as const;
 export const MEDIA = {
   movies: {
     media: "movie",
-    label: "Movies",
+    label: "Films",
     ask: "What kind of night is it?",
     result: "Tonight's pick",
     time: ["Under 100 min", "Around 2 hours", "Long is fine"],

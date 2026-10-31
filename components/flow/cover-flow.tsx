@@ -183,6 +183,13 @@ export function CoverFlow({
     };
   }, [src, given, touched, setTint]);
 
+  // Moving with the keyboard: focus follows the poster in front, not the one that just slid aside.
+  useEffect(() => {
+    const posters = stage.current;
+    if (!posters || !posters.contains(document.activeElement)) return;
+    posters.querySelector<HTMLButtonElement>('button[aria-current="true"]')?.focus({ preventScroll: true });
+  }, [current]);
+
   useEffect(() => {
     if (!info.current || reduced) return;
     animateInfo(info.current, { opacity: [0.25, 1], y: [6, 0] }, { duration: 0.28, ease: "easeOut" });
@@ -271,7 +278,7 @@ export function CoverFlow({
               onClick={() => move(-1)}
               disabled={!loop && current === 0}
               aria-label="Previous"
-              className="grid size-10 shrink-0 place-items-center rounded-full border-2 border-line hover:bg-soft disabled:opacity-30"
+              className="grid size-11 shrink-0 place-items-center rounded-full border-2 border-line hover:bg-soft disabled:opacity-30"
             >
               <ChevronLeft className="size-5" aria-hidden />
             </button>
@@ -281,7 +288,7 @@ export function CoverFlow({
               onClick={() => move(1)}
               disabled={!loop && current === last}
               aria-label="Next"
-              className="grid size-10 shrink-0 place-items-center rounded-full border-2 border-line hover:bg-soft disabled:opacity-30"
+              className="grid size-11 shrink-0 place-items-center rounded-full border-2 border-line hover:bg-soft disabled:opacity-30"
             >
               <ChevronRight className="size-5" aria-hidden />
             </button>

@@ -13,7 +13,7 @@ function nextPath() {
   return next && next.startsWith("/") && !next.startsWith("//") ? next : "/movies";
 }
 
-export function PasskeySignIn({ label = "Sign in with passkey", centred = false }: { label?: string; centred?: boolean } = {}) {
+export function PasskeySignIn({ label = "Sign in with your passkey", centred = false }: { label?: string; centred?: boolean } = {}) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);

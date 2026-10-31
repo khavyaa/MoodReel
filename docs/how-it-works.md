@@ -99,8 +99,13 @@ a preview deployment's own URL; previews are for checking builds.
    taking turns for those slots when films in more than one fit. Swipe right to save,
    left to skip, up for seen it, down for not for me; Undo steps back as far as you like. Seen it
 keeps the card in front with stars over it: a star (or 1–5 on a keyboard) rates it and sends it off, any other swipe
-sends it off unrated, and Undo just closes the stars. Four
-   saves start the head-to-head.
+sends it off unrated, and Undo just closes the stars. The stars are saved after the seen they
+   rate, in the same queue as the swipes. Four saves start the head-to-head, whose Back goes a
+   round back, and from the first round back to the deck (from Saved: back to Saved, as does the
+   browser's Back). The deck and the head-to-head fill the screen with no scrolling on an iPhone
+   SE as on a laptop: the tab bar steps aside, the card is sized from the screen's height, and a
+   phone card shows its facts, title and badges, with the synopsis, people and linked book behind
+   "More about it" (`tests/e2e/fit.spec.ts` checks five screen sizes).
 6. **After the pick.** About three hours later the films start screen asks "Did you watch it?":
    watched (with optional stars) counts as seen, "Not yet" puts it back in Saved, "Skipped it"
    stops asking. Only your latest unanswered pick is asked about. The start screen checks for a
@@ -216,7 +221,15 @@ Not for me or Haven't seen. Both count like a seen title with its rating.
 filter films, series or books (in the address, so Back works); Watching and Reading are a thin
 shelf of covers you tap to check in (Finished, Dropped / Gave up, or Not started yet, which puts it
 back among your saves); then every save in one flow. History has Picks and Seen & read the same
-way, with "+ Add" beside them.
+way, with "+ Add" beside them, and Turned down (everything you said Not for me to, dropped or gave
+up on) once there's any, where Restore lets a title come up again. Seen & read has "Not seen" for
+a mis-tapped Seen it.
+
+**Undo.** Remove, Seen it / Read it, Not for me, a check-in answer and an Add answer each show a
+toast for five seconds with Undo. An undo deletes the action from the log (so its taste goes
+too) and reverses only the flags that action changed (`takeBack` in `lib/picks/server.ts`): some
+states aren't in the log (back in Saved after "Not yet", stars), so the title isn't rebuilt
+from the log alone.
 
 **Details.** Any title in Saved, History (Picks and Seen & read), Watching/Reading, the pick screen
 or a person's page opens a Details sheet: the full synopsis, length, rating and its scale (/10
@@ -226,7 +239,14 @@ TMDb, /5 Open Library), people, the linked book or film, and where to watch or g
 (Next's `useOffline`), and a banner says so. A save that fails for another reason says so, with
 Retry. A service worker (`public/sw.js`, production only) lets the home-screen app open with no
 connection: Saved, History and the start screens open from your last visit, anything else shows
-`/offline`. Kept pages live on the device only and are deleted on sign-out.
+`/offline`. The worker keeps `/offline` and the scripts and styles it needs when it installs, so
+the offline page works even if you never opened it online; bump `VERSION` when that changes. Kept
+pages live on the device only and are deleted on sign-out.
+
+**When a page fails.** A signed-in page that throws shows "That didn't load" inside the app,
+with Try again and links to Saved and History (`app/(app)/error.tsx`); a failure in the root
+layout shows the same in the brand tint (`app/global-error.tsx`). A list Wikidata or TMDb didn't
+answer for says so, with Retry, instead of an empty page.
 
 **Landing page.** Signed out, `/` is one screen with nothing to scroll: the story told as a
 looping cover flow of seven cards, one per mood colour (Gripping first, as the app opens), with
@@ -237,7 +257,11 @@ cards shrink to fit short screens rather than being cut off. There's no sign-up:
 link stays on the sign-in page only.
 
 **Looks.** Bold & playful in light mode, cinematic dark in dark mode, following the device. An
-override is stored per device in the browser and applied before the first paint.
+override is stored per device in the browser and applied before the first paint. Secondary text
+on a mood colour is 95% of the mood's ink, the least that keeps 4.5:1 contrast on all seven moods;
+labels are at least 12px, inactive tabs are full ink, and buttons and tabs are 44px tall.
+Sheets are native `<dialog>`s (`components/ui/modal.tsx`): focus stays inside, Escape or a tap
+outside closes them, and focus goes back to what opened them.
 
 **Cover flow and poster tint.** Saved, Watching/Reading, History (Picks and Seen & read), list
 pages, a person's page and the people you follow show titles as a cover flow

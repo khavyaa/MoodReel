@@ -2,7 +2,7 @@ import "server-only";
 import type { HistoryEntry, SeenEntry, Unavailable } from "@/components/library/library-lists";
 import { withLinksByKey } from "@/lib/adaptations/server";
 import { libraryKey, libraryTitles, type LibraryMovie } from "@/lib/library";
-import { LIST_PAGE, pickHistory, providersFor, savedTitles, seenTitles, type Media } from "@/lib/picks/server";
+import { LIST_PAGE, pickHistory, providersFor, savedTitles, seenTitles, turnedDownTitles, type Media } from "@/lib/picks/server";
 
 /*
  * One page (LIST_PAGE titles from `offset`) of Saved, of your picks, and of
@@ -70,4 +70,17 @@ export async function seenPage(userId: string, offset: number) {
     else unavailable.push({ media: s.media, id: s.id, list: "seen", at: s.at.toISOString() });
   }
   return { entries, unavailable, fetched: seen.length };
+}
+
+/** A title you turned down: when, and how (Not for me, or Gave up / Dropped). */
+export type TurnedDownEntry = { at: string; how: "disliked" | "dropped"; movie: LibraryMovie };
+
+export async function turnedDownPage(userId: string, offset: number) {
+  const rows = await turnedDownTitles(userId, LIST_PAGE, offset);
+  const cards = await libraryTitles(rows, await providersFor(userId));
+  const entries: TurnedDownEntry[] = rows.flatMap((r) => {
+    const movie = cards.get(libraryKey(r.media, r.id));
+    return movie ? [{ at: r.at.toISOString(), how: r.how, movie }] : [];
+  });
+  return { entries, fetched: rows.length };
 }

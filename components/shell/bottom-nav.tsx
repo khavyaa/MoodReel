@@ -26,8 +26,9 @@ export function BottomNav() {
               href={href}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "flex flex-col items-center gap-1 py-2.5 text-[11px] font-semibold",
-                active ? "opacity-100" : "opacity-60",
+                "flex min-h-14 flex-col items-center justify-center gap-1 py-2 text-xs",
+                // Inactive places stay in full ink (readable on every mood colour); the current one is bolder.
+                active ? "font-black" : "font-medium",
               )}
             >
               <Icon className="size-5" strokeWidth={active ? 2.4 : 1.8} aria-hidden />

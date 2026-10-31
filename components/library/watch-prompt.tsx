@@ -2,7 +2,9 @@
 
 import { useState, useTransition } from "react";
 import { Star } from "lucide-react";
-import { answerCheckIn, answerWatched } from "@/app/(app)/library-actions";
+import { useRouter } from "next/navigation";
+import { answerCheckIn, answerWatched, undoLibrary } from "@/app/(app)/library-actions";
+import { useToast } from "@/components/ui/toast";
 import type { CheckInAnswer, FollowUpAnswer } from "@/lib/picks/server";
 import { cn } from "@/lib/cn";
 
@@ -145,23 +147,47 @@ export function WatchPrompt({
 export function CheckInAnswers({
   media = "series",
   seriesId,
+  title,
+  since,
   onDone,
   quiet = false,
   showStillWatching = true,
 }: {
   media?: "series" | "book";
   seriesId: number;
+  /** For the Undo toast. */
+  title?: string;
+  /** When it went on Watching / Reading, so Undo puts it back from then. */
+  since?: string | null;
   onDone?: (answer: CheckInAnswer) => void;
   quiet?: boolean;
   showStillWatching?: boolean;
 }) {
   const [rating, setRating] = useState(false);
   const [pending, startTransition] = useTransition();
+  const toast = useToast();
+  const router = useRouter();
+  const book = media === "book";
 
   function answer(a: CheckInAnswer, stars: number | null = null) {
     startTransition(async () => {
       await answerCheckIn(media, seriesId, a, stars, { refresh: !quiet });
       onDone?.(a);
+      if (a === "watching") return;
+      const name = title ?? (book ? "That book" : "That series");
+      toast({
+        message:
+          a === "finished"
+            ? `Finished: ${name}`
+            : a === "dropped"
+              ? `${book ? "Gave up on" : "Dropped"} ${name}`
+              : `${name} is back in Saved`,
+        undone: `${name} is back on your ${book ? "Reading" : "Watching"} list`,
+        undo: async () => {
+          await undoLibrary({ media, id: seriesId, kind: a, watchingSince: since ?? new Date().toISOString() });
+          router.refresh();
+        },
+      });
     });
   }
 
@@ -252,7 +278,7 @@ export function CheckInPrompt({
         <p className="font-bold">
           {book ? "Still reading" : "Still watching"} <span className="italic">{title}</span>?
         </p>
-        <CheckInAnswers media={media} seriesId={seriesId} onDone={setAnswered} quiet />
+        <CheckInAnswers media={media} seriesId={seriesId} title={title} onDone={setAnswered} quiet />
       </div>
     </section>
   );

@@ -41,7 +41,7 @@ const lastDeck = async () =>
   );
 const ownerId = async () => (await query<{ id: string }>('select id from "user" limit 1'))[0].id;
 
-test("a film of a book you've read ranks first, with a badge and the book on its card", async ({ page }) => {
+test("a film of a book you've read ranks first, with a badge and the book on its card", async ({ page, isMobile }) => {
   // You've read Thriller Book 1 (a Read it swipe on it).
   await query(
     `insert into title_states (user_id, media, source, external_id, seen) values ('${await ownerId()}', 'book', 'openlibrary', '7000', true)`,
@@ -53,8 +53,11 @@ test("a film of a book you've read ranks first, with a badge and the book on its
   // Every fake English film scores the same, so only the boost puts this one first.
   expect((await lastDeck())[0]).toBe(1003);
   await expect(page.getByText("You've read the book")).toBeVisible();
-  await expect(page.getByText("Based on the book")).toBeVisible();
-  await expect(page.getByText(/^Thriller Book 1 · Author 1, 2018$/)).toBeVisible();
+  // On a phone the book sits behind More about it, with the synopsis.
+  if (isMobile) await page.getByRole("button", { name: "More about it" }).click();
+  const where = isMobile ? page.getByRole("dialog") : page;
+  await expect(where.getByText("Based on the book")).toBeVisible();
+  await expect(where.getByText(/^Thriller Book 1 · Author 1, 2018$/)).toBeVisible();
 });
 
 test("adaptations only: every film dealt is based on a book, and credits fill in a missing link", async ({ page }) => {

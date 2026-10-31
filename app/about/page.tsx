@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { TintFrame } from "@/components/flow/tint-frame";
+import { BackLink } from "@/components/shell/back-link";
 
 export const metadata = { title: "About & credits" };
 
@@ -36,9 +37,7 @@ export default function AboutPage() {
     <TintFrame className="flex min-h-dvh flex-1 flex-col">
       <main className="mx-auto flex w-full max-w-[1440px] flex-1 flex-col gap-12 px-5 pt-[max(2rem,env(safe-area-inset-top))] pb-16 sm:px-8 lg:px-12 lg:pt-14">
         <div className="flex items-center justify-between gap-4">
-          <Link href="/settings" className="text-sm font-bold text-muted hover:text-fg">
-            ← Settings
-          </Link>
+          <BackLink className="-my-2 inline-flex min-h-11 items-center text-sm font-bold text-muted hover:text-fg" />
           <Link href="/movies" className="display text-[26px] leading-none">
             MoodReel
           </Link>
@@ -53,7 +52,7 @@ export default function AboutPage() {
         <ul className="grid gap-6 md:grid-cols-3">
           {CREDITS.map((credit) => (
             <li key={credit.name} className="flex flex-col gap-2 border-t-2 border-line pt-4">
-              <a href={credit.href} target="_blank" rel="noreferrer noopener" className="font-bold underline underline-offset-4">
+              <a href={credit.href} target="_blank" rel="noreferrer noopener" className="-my-2 inline-flex min-h-11 items-center font-bold underline underline-offset-4">
                 {credit.name}
               </a>
               <p className="text-sm text-muted">{credit.body}</p>

@@ -12,6 +12,7 @@ import { PeopleLine } from "@/components/people/people-line";
 import { LinkStrip } from "@/components/pick/title-link";
 import { Poster } from "@/components/pick/poster";
 import { cn } from "@/lib/cn";
+import { Modal } from "@/components/ui/modal";
 
 /**
  * "Details": everything about one title in a sheet, from any list: full
@@ -42,7 +43,7 @@ export function DetailsButton({
         type="button"
         onClick={() => setOpen(true)}
         aria-label={children ? undefined : `Details: ${title}`}
-        className={cn(!children && "inline-flex items-center gap-1", "underline-offset-4 hover:underline", className)}
+        className={cn(!children && "inline-flex min-h-11 items-center gap-1", "underline-offset-4 hover:underline", className)}
       >
         {children ?? (
           <>
@@ -86,27 +87,11 @@ function TitleSheet({
     };
   }, [initial, media, id]);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 text-left sm:items-center"
-      onClick={onClose}
-    >
-      <div
-        className="flex max-h-[88dvh] w-full max-w-2xl flex-col gap-5 overflow-y-auto rounded-t-3xl bg-raised p-6 text-fg shadow-xl sm:rounded-3xl sm:p-8"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <Modal label={title} onClose={onClose} className="max-w-2xl">
         <div className="flex items-start justify-between gap-4">
           <p className="label text-muted">{media === "book" ? "Book" : media === "series" ? "Series" : "Film"}</p>
-          <button type="button" onClick={onClose} aria-label="Close" className="-m-2 p-2">
+          <button type="button" onClick={onClose} aria-label="Close" className="-m-2 grid size-11 place-items-center">
             <X className="size-5" aria-hidden />
           </button>
         </div>
@@ -121,8 +106,7 @@ function TitleSheet({
             Loading {title}…
           </p>
         )}
-      </div>
-    </div>
+    </Modal>
   );
 }
 

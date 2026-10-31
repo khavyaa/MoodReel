@@ -28,6 +28,7 @@ import { usePosterColour } from "@/components/flow/use-poster-colour";
 import { PickScreen } from "./pick-screen";
 import { TapsScreen, type TapsValue } from "./taps-screen";
 import { SaveStatusBar, useSaveQueue } from "./save-queue";
+import { rateTitle } from "@/app/(app)/library-actions";
 
 /** A new deal waits this long at most for earlier saves, so it doesn't deal what you just swiped. */
 const DEAL_WAITS_FOR_SAVES_MS = 8000;
@@ -49,6 +50,8 @@ type Step =
       saves: DeckCard[];
       /** The deck it came from, so "Back to the deck" can undo the last save. Null when picking from Saved. */
       deck: DeckStep | null;
+      /** Earlier rounds, so Back can step through them. */
+      earlier?: Finale<DeckCard>[];
     }
   | {
       kind: "pick";
@@ -196,11 +199,13 @@ export function PickFlow({
   );
 
   const onSwipe = useCallback(
-    (action: SwipeAction) => {
+    (action: SwipeAction, stars?: number) => {
       if (step.kind !== "deck") return;
       const card = step.cards[step.actions.length];
       if (!card) return;
       enqueue(() => swipe(step.sessionId, titleRef(card), action));
+      // The stars go after the seen they rate: before it, the title isn't in your library yet.
+      if (stars) enqueue(() => rateTitle(card.media, card.id, stars));
       const next: DeckStep = { ...step, actions: [...step.actions, action], exitAs: action, returning: null };
       if (deckIsDone(next.actions.length, next.cards.length, savesOf(next).length)) finishDeck(next);
       else setStep(next);
@@ -268,7 +273,7 @@ export function PickFlow({
       if (step.kind !== "finale") return;
       const result = choose(step.finale, side);
       if (result.done) reveal(step.sessionId, result.winner, step.saves);
-      else setStep({ ...step, finale: result.finale });
+      else setStep({ ...step, finale: result.finale, earlier: [...(step.earlier ?? []), step.finale] });
     },
     [reveal, step],
   );
@@ -299,7 +304,7 @@ export function PickFlow({
   }, [onExit, router]);
 
   return (
-    <FlowFrame mood={taps.mood} tint={pickTint}>
+    <FlowFrame mood={taps.mood} tint={pickTint} immersive={step.kind === "deck" || step.kind === "finale"}>
       <SaveStatusBar status={saveStatus} onRetry={() => void retry()} />
       {step.kind === "taps" && (
         <>
@@ -345,7 +350,15 @@ export function PickFlow({
         <FinaleScreen
           finale={step.finale}
           onChoose={onChoose}
-          onBack={step.deck ? () => undo(step.deck!) : null}
+          onBack={
+            step.earlier?.length
+              ? { label: "Back a round", go: () => setStep({ ...step, finale: step.earlier!.at(-1)!, earlier: step.earlier!.slice(0, -1) }) }
+              : step.deck
+                ? { label: "Back to the deck", go: () => undo(step.deck!) }
+                : onExit
+                  ? { label: "Back to Saved", go: onExit }
+                  : null
+          }
           fromSaved={!step.deck}
         />
       )}
@@ -447,26 +460,22 @@ function ResumeCard({
   onStartAgain: () => void;
 }) {
   const mood = MOODS[offer.mood as MoodId]?.label ?? offer.mood;
+  // One slim line, so with a "Did you watch it?" card above it the moods still start on the first screen.
   return (
     <section
       aria-label="Unfinished deck"
-      className="mb-6 flex flex-wrap items-center gap-x-6 gap-y-3 rounded-2xl bg-soft px-5 py-4 shadow-[inset_0_0_0_1.5px_var(--line)]"
+      className="mb-5 flex items-center gap-2 rounded-full bg-soft py-1 pr-1 pl-4 shadow-[inset_0_0_0_1.5px_var(--line)]"
     >
-      <div className="flex min-w-0 grow basis-60 flex-col gap-0.5">
-        <p className="font-bold">Pick up where you left off</p>
-        <p className="text-sm text-muted">
-          {mood} {noun} · card {Math.min(offer.dealt + 1, offer.total)} of {offer.total}
-          {offer.saves > 0 ? ` · ${offer.saves} saved` : ""}
-        </p>
-      </div>
-      <div className="flex gap-2">
-        <button type="button" onClick={onResume} className={buttonClasses("solid", "md")}>
-          Resume
-        </button>
-        <button type="button" onClick={onStartAgain} className={buttonClasses("ghost", "md")}>
-          Start again
-        </button>
-      </div>
+      <p className="min-w-0 flex-1 truncate text-sm">
+        <span className="font-bold">Unfinished:</span> {mood} {noun} · card {Math.min(offer.dealt + 1, offer.total)} of {offer.total}
+        {offer.saves > 0 ? ` · ${offer.saves} saved` : ""}
+      </p>
+      <button type="button" onClick={onStartAgain} className={buttonClasses("ghost", "sm", "shrink-0 px-3")}>
+        Start again
+      </button>
+      <button type="button" onClick={onResume} className={buttonClasses("solid", "sm", "shrink-0")}>
+        Resume →
+      </button>
     </section>
   );
 }

@@ -27,8 +27,8 @@ export function AppHeader() {
                 href={m.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "rounded-full px-2.5 py-1.5 text-[13px] font-semibold transition-colors sm:px-4 sm:text-sm",
-                  active ? "bg-soft shadow-[inset_0_0_0_1.5px_var(--line)]" : "opacity-70 hover:opacity-100",
+                  "inline-flex min-h-11 items-center rounded-full px-2.5 text-[13px] font-semibold transition-colors sm:px-4 sm:text-sm",
+                  active ? "bg-soft font-bold shadow-[inset_0_0_0_1.5px_var(--line)]" : "font-medium hover:bg-soft",
                 )}
               >
                 {m.label}
@@ -43,8 +43,8 @@ export function AppHeader() {
           aria-label="Settings"
           aria-current={pathname.startsWith(SETTINGS_HREF) ? "page" : undefined}
           className={cn(
-            "flex size-9 shrink-0 items-center justify-center rounded-full lg:hidden",
-            pathname.startsWith(SETTINGS_HREF) ? "bg-soft" : "opacity-70 hover:opacity-100",
+            "flex size-11 shrink-0 items-center justify-center rounded-full lg:hidden",
+            pathname.startsWith(SETTINGS_HREF) ? "bg-soft" : "hover:bg-soft",
           )}
         >
           <Settings className="size-5" aria-hidden />
@@ -60,7 +60,7 @@ export function AppHeader() {
                 aria-current={active ? "page" : undefined}
                 className={cn(
                   "flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-colors",
-                  active ? "bg-soft" : "opacity-70 hover:bg-soft hover:opacity-100",
+                  active ? "bg-soft font-bold" : "font-medium hover:bg-soft",
                 )}
               >
                 <Icon className="size-4" aria-hidden />

@@ -89,10 +89,27 @@ export function TapsScreen({
   const series = kind === "series";
   const book = kind === "book";
   const timeLabel = series ? "Commitment" : book ? "Length" : "Time";
+  const dealButton = (
+    <button
+      type="button"
+      onClick={onDeal}
+      className="inline-flex h-14 w-full items-center justify-center gap-3 rounded-full bg-accent px-8 text-lg font-bold text-on-accent transition-opacity hover:opacity-90"
+    >
+      {person
+        ? `Deal from ${person.name}`
+        : listName
+          ? `Deal from ${listName}`
+          : adaptations && !book
+            ? `Deal ${DECK_SIZE} adaptations`
+            : `Deal ${DECK_SIZE} ${series ? "series" : book ? "books" : "films"}`}
+      <ArrowRight className="size-5" aria-hidden />
+    </button>
+  );
+
   return (
     <div className="grid flex-1 gap-10 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:gap-16">
       <div className="flex flex-col gap-7">
-        <h1 className="display text-[clamp(3.25rem,8.5vw,7.5rem)]">{media.ask}</h1>
+        <h1 className="display text-[clamp(2.75rem,min(8.5vw,10dvh),7.5rem)]">{media.ask}</h1>
 
         {listName ? (
           <p className="flex flex-wrap items-center gap-2 text-sm">
@@ -154,27 +171,17 @@ export function TapsScreen({
           <AdaptationsSwitch on={adaptations} onChange={onAdaptations} noun={series ? "Series" : "Films"} />
         )}
 
-        <button
-          type="button"
-          onClick={onDeal}
-          className="mt-2 inline-flex h-14 w-full items-center justify-center gap-3 rounded-full bg-accent px-8 text-lg font-bold text-on-accent transition-opacity hover:opacity-90 sm:w-auto sm:self-start"
-        >
-          {person
-            ? `Deal from ${person.name}`
-            : listName
-              ? `Deal from ${listName}`
-            : adaptations && !book
-              ? `Deal ${DECK_SIZE} adaptations`
-              : `Deal ${DECK_SIZE} ${series ? "series" : book ? "books" : "films"}`}
-          <ArrowRight className="size-5" aria-hidden />
-        </button>
+        {/* Phone: Deal stays in reach at the bottom, above the tab bar. On a laptop it lives in the panel. */}
+        <div className="sticky bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-30 -mx-5 bg-[linear-gradient(transparent,var(--surface)_40%)] px-5 pt-6 pb-2 sm:-mx-8 sm:px-8 lg:hidden">
+          {dealButton}
+        </div>
       </div>
 
-      {/* Laptop only: a big read-back of what you're asking for. */}
-      <aside className="hidden flex-col justify-between rounded-3xl bg-soft p-8 lg:flex">
+      {/* Laptop only: a read-back of what you're asking for, and Deal, held in view beside the choices. */}
+      <aside className="sticky top-8 hidden max-h-[calc(100dvh-8rem)] flex-col gap-6 self-start overflow-hidden rounded-3xl bg-soft p-8 lg:flex">
         <div className="flex flex-col gap-3">
-          <span className="label text-muted">Tonight feels</span>
-          <p className="display text-[clamp(4rem,7vw,7.5rem)]">{MOODS[value.mood].label}</p>
+          <span className="label text-muted">{book ? "Your next read feels" : "Tonight feels"}</span>
+          <p className="display text-[clamp(3rem,min(7vw,11dvh),7.5rem)]">{MOODS[value.mood].label}</p>
           <p className="max-w-[34ch] text-lg">
             {(series && SERIES_LINES[value.mood]) || (book && BOOK_LINES[value.mood]) || MOOD_LINES[value.mood]}
           </p>
@@ -186,7 +193,11 @@ export function TapsScreen({
           <dd>{media.time[value.time]}</dd>
           <dt className="label pt-0.5 text-muted">Deck</dt>
           <dd>
-            {book ? (
+            {person ? (
+              <>Only {person.name}&apos;s work you haven&apos;t seen, saved or turned down, for this mood and time.</>
+            ) : listName ? (
+              <>Only titles on {listName} you haven&apos;t seen, saved or turned down, for this mood and time.</>
+            ) : book ? (
               <>
                 {DECK_SIZE} books in English. No children&apos;s or young adult, romance, self-help or comics. Mostly
                 the last 30 years, with the odd classic.
@@ -204,6 +215,7 @@ export function TapsScreen({
             )}
           </dd>
         </dl>
+        {dealButton}
       </aside>
     </div>
   );

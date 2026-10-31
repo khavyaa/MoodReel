@@ -89,7 +89,7 @@ test("books: taps → deck → head-to-head → read next, on your Reading list"
   expect(session.deck.every((e) => e.source === "openlibrary")).toBe(true);
 
   // A book card: author, pages, "Read it" instead of "Seen it".
-  await expect(page.getByText(/^by Author \d+$|^by Nyt Author$/).first()).toBeVisible();
+  await expect(page.getByText(/^by Author \d+$|^by Nyt Author$/).filter({ visible: true }).first()).toBeVisible();
   await expect(page.getByText(/2018 · 340 pages · Medium/).first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Read it", exact: true })).toBeVisible();
 
@@ -99,7 +99,7 @@ test("books: taps → deck → head-to-head → read next, on your Reading list"
 
   await expect(page.getByText(/Read next · Gripping/)).toBeVisible();
   await expect(page.getByText("340 pages", { exact: true })).toBeVisible();
-  await expect(page.getByText(/on your Reading list/)).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "On your Reading list" })).toBeVisible();
   await expect(page.getByRole("link", { name: /Where to get it/ })).toHaveAttribute("href", /^https:\/\/www\.amazon\.in\/s\?k=.+&i=stripbooks$/);
 
   await expect

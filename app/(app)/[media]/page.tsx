@@ -21,7 +21,17 @@ export default async function MediaPage({ params }: PageProps<"/[media]">) {
   const check = media === "movies" ? <WatchCheck /> : media === "series" ? <SeriesCheck /> : <ReadingCheck />;
   // The flow reads "?with=" (deal from a person), so it renders per request.
   return (
-    <Suspense fallback={<AppFrame mood={MEDIA[media].moods[0]}>{null}</AppFrame>}>
+    <Suspense
+      fallback={
+        // The question shows at once (it never changes); the choices follow a moment later.
+        <AppFrame mood={MEDIA[media].moods[0]}>
+          <h1 className="display text-[clamp(2.75rem,min(8.5vw,10dvh),7.5rem)]">{MEDIA[media].ask}</h1>
+          <p role="status" className="mt-6 text-muted">
+            Getting your moods ready…
+          </p>
+        </AppFrame>
+      }
+    >
       <PickFlow media={MEDIA[media].media} notice={<Suspense fallback={null}>{check}</Suspense>} />
     </Suspense>
   );
