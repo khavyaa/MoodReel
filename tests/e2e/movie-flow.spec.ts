@@ -266,18 +266,21 @@ test("a picked film goes on Tonight, and a few hours later the start screen asks
   await expect(page.getByText(/Still on for/)).toHaveCount(0);
 
   // Hours later you come back to the app, which resumes instead of reloading: it asks.
+  // Retried: the page is server-rendered, so it can show before it listens.
   await query("update title_states set watching_since = now() - interval '4 hours' where media = 'movie' and watching_since is not null");
-  await page.evaluate(() => {
-    const set = (state: string) => {
-      Object.defineProperty(document, "visibilityState", { configurable: true, get: () => state });
-      document.dispatchEvent(new Event("visibilitychange"));
-    };
-    set("hidden");
-    const now = Date.now;
-    Date.now = () => now() + 2 * 60_000;
-    set("visible");
-  });
-  await expect(page.getByText(/Still on for/)).toBeVisible();
+  await expect(async () => {
+    await page.evaluate(() => {
+      const set = (state: string) => {
+        Object.defineProperty(document, "visibilityState", { configurable: true, get: () => state });
+        document.dispatchEvent(new Event("visibilitychange"));
+      };
+      set("hidden");
+      const now = Date.now;
+      Date.now = () => now() + 2 * 60_000;
+      set("visible");
+    });
+    await expect(page.getByText(/Still on for/)).toBeVisible({ timeout: 2_000 });
+  }).toPass();
 
   // Not yet: asked again tomorrow, not before.
   await page.getByRole("button", { name: "Not yet" }).click();
