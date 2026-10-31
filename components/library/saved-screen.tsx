@@ -21,12 +21,13 @@ const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : 
 
 /**
  * Saved: a "Pick from these" chip (the head-to-head from your saves, in a
- * sheet), the kind filter, a thin shelf of what you're watching and reading,
+ * sheet), the kind filter, a thin shelf of what's on tonight, watching and reading,
  * then every save in one continuous flow.
  */
 export function SavedScreen({
   items,
   fetched,
+  tonight,
   watching,
   reading,
   counts,
@@ -36,13 +37,14 @@ export function SavedScreen({
   items: LibraryMovie[];
   /** Rows the first page took from the database. */
   fetched: number;
+  tonight: WatchingEntry[];
   watching: WatchingEntry[];
   reading: WatchingEntry[];
   /** Everything saved, by kind: not only what's loaded. */
   counts: Record<Kind, number>;
   /** Which kind the flow shows: everything, or one kind (from `?type=`). */
   filter: Filter;
-  /** Saved, watching or reading titles whose details couldn't load just now. */
+  /** Saved, tonight, watching or reading titles whose details couldn't load just now. */
   unavailable: Unavailable[];
 }) {
   const [start, setStart] = useState<(FlowStart & { media: Kind }) | null>(null);
@@ -115,8 +117,9 @@ export function SavedScreen({
             ))}
         </div>
 
-        {(reading.length > 0 || watching.length > 0) && (
+        {(tonight.length > 0 || reading.length > 0 || watching.length > 0) && (
           <div className="flex flex-wrap gap-x-10 gap-y-4">
+            {tonight.length > 0 && <WatchingShelf media="movie" entries={tonight} />}
             {watching.length > 0 && <WatchingShelf entries={watching} />}
             {reading.length > 0 && <WatchingShelf media="book" entries={reading} />}
           </div>

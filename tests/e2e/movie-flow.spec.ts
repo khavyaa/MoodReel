@@ -127,15 +127,16 @@ test("saved and history show the run, and you can tidy and rate them", async ({ 
   await page.reload();
   await expect(page.getByText("Saved · 1 film")).toBeVisible();
 
-  // History: the pick, its mood and reason. It isn't watched until you say so.
+  // History: the pick, its mood and reason. It's on Tonight, not watched, until you say so.
   await page.goto("/history");
   await expect(page.getByText("History · 1 pick")).toBeVisible();
   await expect(page.getByText(/beat 3 other saves/)).toBeVisible();
-  await page.getByRole("button", { name: "Yes, watched it" }).click();
+  await expect(page.getByText("On your Tonight list. Watched it?")).toBeVisible();
+  await page.getByRole("button", { name: "Watched it", exact: true }).click();
   await page.getByRole("button", { name: "4 stars" }).click();
   await expect
-    .poll(async () => (await query<{ rating: number | null; seen: boolean }>("select rating, seen from title_states where picked_at is not null"))[0])
-    .toEqual({ rating: 8, seen: true });
+    .poll(async () => (await query<{ rating: number | null; seen: boolean; tonight: boolean }>("select rating, seen, watching_since is not null as tonight from title_states where picked_at is not null"))[0])
+    .toEqual({ rating: 8, seen: true, tonight: false });
   await page.reload();
   await expect(page.getByRole("button", { name: "4 stars" })).toHaveAttribute("aria-pressed", "true");
 
@@ -145,11 +146,9 @@ test("saved and history show the run, and you can tidy and rate them", async ({ 
     .poll(async () => (await query<{ rating: number }>("select rating from title_states where picked_at is not null"))[0].rating)
     .toBe(10);
   const [{ actions }] = await query<{ actions: string }>(
-    "select count(*) as actions from title_actions where action in ('unsaved', 'seen') and pick_session_id is null",
+    "select count(*) as actions from title_actions where action in ('unsaved', 'seen', 'finished') and pick_session_id is null",
   );
   expect(actions).toBe("3"); // remove, seen, and "watched it"; ratings are not logged
-  const [{ follow_up }] = await query<{ follow_up: string }>("select follow_up from pick_sessions where status = 'picked'");
-  expect(follow_up).toBe("watched");
 });
 
 test("not for me, undo, and the full synopsis", async ({ page, isMobile }) => {
@@ -258,14 +257,16 @@ test("pick from saved: the best-fitting saves go straight to the head-to-head", 
   expect(n).toBe("2"); // the winner moved to history; the others stay saved
 });
 
-test("a few hours after a pick, the start screen asks if you watched it", async ({ page }) => {
-  // The pick is fresh: nothing to ask yet.
+test("a picked film goes on Tonight, and a few hours later the start screen asks about it", async ({ page }) => {
+  // The pick is on your Tonight list, but fresh: nothing to ask yet.
+  await page.goto("/saved");
+  await expect(page.getByText("Tonight · 1 · tap to check in")).toBeVisible();
   await page.goto("/movies");
   await expect(page.getByRole("heading", { name: "What kind of night is it?" })).toBeVisible();
-  await expect(page.getByText(/Did you watch/)).toHaveCount(0);
+  await expect(page.getByText(/Still on for/)).toHaveCount(0);
 
-  // Hours later you come back to the app, which resumes instead of reloading: it still asks.
-  await query("update pick_sessions set completed_at = now() - interval '4 hours' where status = 'picked' and follow_up is null");
+  // Hours later you come back to the app, which resumes instead of reloading: it asks.
+  await query("update title_states set watching_since = now() - interval '4 hours' where media = 'movie' and watching_since is not null");
   await page.evaluate(() => {
     const set = (state: string) => {
       Object.defineProperty(document, "visibilityState", { configurable: true, get: () => state });
@@ -276,15 +277,23 @@ test("a few hours after a pick, the start screen asks if you watched it", async 
     Date.now = () => now() + 2 * 60_000;
     set("visible");
   });
-  await expect(page.getByText(/Did you watch/)).toBeVisible();
+  await expect(page.getByText(/Still on for/)).toBeVisible();
+
+  // Not yet: asked again tomorrow, not before.
   await page.getByRole("button", { name: "Not yet" }).click();
-  await expect(page.getByText(/is back in Saved/)).toBeVisible();
-  await expect
-    .poll(async () => (await query<{ follow_up: string | null }>("select follow_up from pick_sessions where origin = 'saved'"))[0].follow_up)
-    .toBe("later");
+  await expect(page.getByText("We'll ask again tomorrow.")).toBeVisible();
   await page.reload();
   await expect(page.getByRole("heading", { name: "What kind of night is it?" })).toBeVisible();
-  await expect(page.getByText(/Did you watch/)).toHaveCount(0);
+  await expect(page.getByText(/Still on for/)).toHaveCount(0);
+
+  // A day on: not tonight after all puts it back in Saved.
+  await query("update title_states set checked_in_at = now() - interval '25 hours' where media = 'movie' and watching_since is not null");
+  await page.reload();
+  await page.getByRole("button", { name: "Not tonight after all" }).click();
+  await expect(page.getByText(/is back in Saved for another night/)).toBeVisible();
+  await expect
+    .poll(async () => (await query<{ n: string }>("select count(*) as n from title_states where media = 'movie' and watching_since is not null"))[0].n)
+    .toBe("0");
   const [{ n }] = await query<{ n: string }>("select count(*) as n from title_states where saved");
   expect(n).toBe("3");
 });

@@ -106,12 +106,16 @@ sends it off unrated, and Undo just closes the stars. The stars are saved after 
    SE as on a laptop: the tab bar steps aside, the card is sized from the screen's height, and a
    phone card shows its facts, title and badges, with the synopsis, people and linked book behind
    "More about it" (`tests/e2e/fit.spec.ts` checks five screen sizes).
-6. **After the pick.** About three hours later the films start screen asks "Did you watch it?":
-   watched (with optional stars) counts as seen, "Not yet" puts it back in Saved, "Skipped it"
-   stops asking. Only your latest unanswered pick is asked about. The start screen checks for a
-   due question when it loads, when you come back to the app after a minute or more (the
-   home-screen app resumes rather than reloads), and on "Start again"; series and book check-ins
-   work the same way.
+6. **After the pick.** The pick goes on your Tonight list (series: Watching; books: Reading),
+   shown as a shelf on Saved. About three hours later the films start screen asks "Still on for …?":
+   Watched it (with optional stars) counts as seen, Not yet asks again a day later, Didn't finish
+   counts like "not for me", and Not tonight after all puts it back in Saved. You can answer any
+   time from the Tonight shelf or the pick in History. The start screen checks for a due question
+   when it loads, when you come back to the app after a minute or more (the home-screen app
+   resumes rather than reloads), and on "Start again"; series and book check-ins work the same
+   way, every 3 and 7 days (`CHECK_IN_HOURS` in `lib/picks/server.ts`). Film picks from before
+   the Tonight list that were never answered joined it once (`drizzle/0009_films_tonight.sql`);
+   older answers to the one-off "Did you watch it?" still show in History.
 
 The rules live in `lib/taste/rules.ts`, each with a unit test, and their thresholds came from
 probing real TMDb data.
@@ -220,7 +224,7 @@ the most-watched films (English with Hindi, Tamil and Malayalam), series or book
 Not for me or Haven't seen. Both count like a seen title with its rating.
 
 **Saved.** A "Pick from these" chip opens the head-to-head from your saves in a sheet; chips
-filter films, series or books (in the address, so Back works); Watching and Reading are a thin
+filter films, series or books (in the address, so Back works); Tonight, Watching and Reading are a thin
 shelf of covers you tap to check in (Finished, Dropped / Gave up, or Not started yet, which puts it
 back among your saves); then every save in one flow. History has Picks and Seen & read the same
 way, with "+ Add" beside them, and Turned down (everything you said Not for me to, dropped or gave
@@ -306,7 +310,7 @@ lib/adaptations/   book ↔ film/series links: Wikidata sync, ranking rules, lin
 lib/lists/         award lists, TMDb top rated and collections: catalogue, sync, progress, list decks
 lib/ai/            AI Gateway calls, each with a rule-based fallback
 components/pick/   the flow: taps, deck, head-to-head, pick, save status
-components/library/ Saved, History, the Watching / Reading shelf, adding what you've seen, Details sheet
+components/library/ Saved, History, the Tonight / Watching / Reading shelf, adding what you've seen, Details sheet
 components/people/ the People page, search, photos, follow / avoid / seen controls
 components/flow/   the cover flow and the poster tint behind it
 components/landing/ the landing page's story cards

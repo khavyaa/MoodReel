@@ -1,22 +1,23 @@
 import "server-only";
 import { getMovieDetails } from "@/lib/tmdb/movies";
-import { pendingCheckIn, pendingFollowUp } from "@/lib/picks/server";
+import { pendingCheckIn } from "@/lib/picks/server";
 import { getSeriesDetails } from "@/lib/tmdb/series";
 import { booksByWork } from "@/lib/books/openlibrary";
 import { getOwner } from "@/lib/session";
-import { CheckInPrompt, WatchPrompt } from "./watch-prompt";
+import { CheckInPrompt } from "./watch-prompt";
 
-/** Asks about your last pick, a few hours after you made it, until you answer. Renders nothing otherwise. */
-export async function WatchCheck() {
+/** "Still on for …?" for the film on your Tonight list you've gone longest without being asked about. */
+export async function MovieCheck() {
   const owner = await getOwner();
   if (!owner) return null;
-  const pending = await pendingFollowUp(owner.id);
+  const pending = await pendingCheckIn(owner.id, "movie");
   if (!pending) return null;
-  const movie = await getMovieDetails(pending.movieId).catch(() => null);
+  const movie = await getMovieDetails(pending.id).catch(() => null);
   if (!movie) return null;
   return (
-    <WatchPrompt
-      sessionId={pending.sessionId}
+    <CheckInPrompt
+      media="movie"
+      seriesId={movie.id}
       title={movie.title}
       posterUrl={movie.posterPath ? `https://image.tmdb.org/t/p/w185${movie.posterPath}` : null}
     />
