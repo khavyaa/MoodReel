@@ -92,7 +92,8 @@ export async function searchTmdbPeople(query: string): Promise<{ id: number; nam
     }[];
   }>("/search/person", { query, language: "en-US", include_adult: false }, 60 * 60);
   return data.results.slice(0, 8).map((p) => {
-    const known = p.known_for?.map((k) => k.title ?? k.name).filter(Boolean)[0];
+    // Up to three titles, so two people with the same name can be told apart.
+    const known = p.known_for?.map((k) => k.title ?? k.name).filter(Boolean).slice(0, 3).join(", ");
     const dept = p.known_for_department === "Directing" ? "director" : p.known_for_department === "Writing" ? "writer" : "actor";
     return { id: p.id, name: p.name, detail: known ? `${dept} · ${known}` : dept, photo: p.profile_path ?? null };
   });

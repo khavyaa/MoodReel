@@ -168,7 +168,9 @@ tappable on every card. Follow someone and their unseen work joins your decks (s
 "everyone has seen it" markdown, at most two per person and four per deck) with a badge; avoid
 someone and nothing of theirs is dealt. "Deal from …" (a person's page, the start screen's
 search, or the People page) makes a deck from all of their work, not only the best-known titles
-their page lists. People you keep loving (three titles, four for actors) are suggested. Rules:
+their page lists. The start screen's search shows three matches first, each with a photo and up to
+three known titles to tell same-name people apart (the rest behind "Show N more"); arrow keys and
+Enter pick one. People you keep loving (three titles, four for actors) are suggested. Rules:
 `lib/people/rules.ts`.
 
 **Books on screen.** Which films and series are based on which books comes from Wikidata (TMDb ids
