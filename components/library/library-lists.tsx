@@ -1,13 +1,26 @@
 "use client";
 
-import { useOptimistic, useState, useTransition } from "react";
+import { useOptimistic, useRef, useState, useTransition } from "react";
 import { ADVANCE_AFTER, CoverFlow } from "@/components/flow/cover-flow";
 import { StarPrompt } from "@/components/flow/star-prompt";
 import { Sheet } from "@/components/ui/sheet";
 import { useMore } from "./use-more";
 import { useRouter } from "next/navigation";
 import { Check, ExternalLink, Play, RotateCcw, Star, X } from "lucide-react";
-import { markSeen, morePicks, moreSaved, moreSeen, rateTitle, removeSaved } from "@/app/(app)/library-actions";
+import {
+  markSeen,
+  morePicks,
+  moreSaved,
+  moreSeen,
+  moreTurnedDown,
+  notSeen,
+  rateTitle,
+  removeSaved,
+  restoreTurnedDown,
+  undoLibrary,
+} from "@/app/(app)/library-actions";
+import type { TurnedDownEntry } from "@/lib/library-pages";
+import { useToast } from "@/components/ui/toast";
 import type { LibraryMovie } from "@/lib/library";
 import { MOODS, type MoodId } from "@/lib/moods";
 import { airingLabel, bestsellerLabel, cardMeta, makersLabel, ratingScale } from "@/lib/card-meta";
@@ -76,6 +89,7 @@ export function SavedList({
   media: Media | null;
 }) {
   const more = useMore(movies, fetched, total, (offset) => moreSaved(media, offset).then((r) => ({ list: r.movies, fetched: r.fetched })), shown);
+  const toast = useToast();
   if (more.list.length === 0) return <p className="text-lg text-muted">All cleared.</p>;
   return (
     <CoverFlow
@@ -83,15 +97,39 @@ export function SavedList({
       total={more.total}
       onNearEnd={more.nearEnd}
       items={more.list.map((m) => ({ key: keyOf(m), title: m.title, image: m.posterPath }))}
-      infos={more.list.map((m) => (
-        <SavedInfo key={keyOf(m)} movie={m} onGone={() => more.remove((x) => keyOf(x) === keyOf(m))} />
+      infos={more.list.map((m, at) => (
+        <SavedInfo
+          key={keyOf(m)}
+          movie={m}
+          onGone={(undo, done) => {
+            more.remove((x) => keyOf(x) === keyOf(m));
+            toast({
+              message: undo === "unsaved" ? `Removed ${m.title} from Saved` : `${m.media === "book" ? "Read" : "Seen"}: ${m.title}`,
+              undone: `${m.title} is back in Saved`,
+              undo: async () => {
+                // The change itself may still be on its way: take it back only once it's landed.
+                await done.catch(() => undefined);
+                await undoLibrary({ media: m.media, id: m.id, kind: undo, wasSaved: true });
+                more.putBack(m, at);
+              },
+            });
+          }}
+        />
       ))}
     />
   );
 }
 
-function SavedInfo({ movie: m, onGone }: { movie: LibraryMovie; onGone: () => void }) {
+function SavedInfo({
+  movie: m,
+  onGone,
+}: {
+  movie: LibraryMovie;
+  /** The card leaves; `done` settles once the change has reached the server. */
+  onGone: (undo: "unsaved" | "seen", done: Promise<unknown>) => void;
+}) {
   const [rating, setRating] = useState(false);
+  const seen = useRef<Promise<unknown>>(Promise.resolve());
   return (
     <div className="flex flex-col items-center gap-2 text-center">
       <p className="label text-muted">{meta(m)}</p>
@@ -117,7 +155,7 @@ function SavedInfo({ movie: m, onGone }: { movie: LibraryMovie; onGone: () => vo
       )}
       {m.overview && <p className="line-clamp-2 max-w-[52ch] text-sm text-muted">{m.overview}</p>}
       {rating ? (
-        <StarPrompt title={m.title} onRate={(n) => void rateTitle(m.media, m.id, n).catch(() => undefined)} onDone={() => setTimeout(onGone, ADVANCE_AFTER)} />
+        <StarPrompt title={m.title} onRate={(n) => void rateTitle(m.media, m.id, n).catch(() => undefined)} onDone={() => setTimeout(() => onGone("seen", seen.current), ADVANCE_AFTER)} />
       ) : (
         <>
           <WatchLinks movie={m} />
@@ -126,7 +164,8 @@ function SavedInfo({ movie: m, onGone }: { movie: LibraryMovie; onGone: () => vo
               type="button"
               onClick={() => {
                 setRating(true);
-                void markSeen(m.media, m.id).catch(() => setRating(false));
+                seen.current = markSeen(m.media, m.id);
+                seen.current.catch(() => setRating(false));
               }}
               className={buttonClasses("outline", "sm")}
             >
@@ -135,8 +174,9 @@ function SavedInfo({ movie: m, onGone }: { movie: LibraryMovie; onGone: () => vo
             <button
               type="button"
               onClick={() => {
-                onGone();
-                void removeSaved(m.media, m.id).catch(() => undefined);
+                const done = removeSaved(m.media, m.id);
+                done.catch(() => undefined);
+                onGone("unsaved", done);
               }}
               className={buttonClasses("ghost", "sm")}
             >
@@ -199,7 +239,7 @@ export function HistoryList({ entries, fetched, total }: { entries: HistoryEntry
               e.watching ? (
                 <div className="flex flex-col items-center gap-2">
                   <p className="text-sm font-semibold">{e.movie.media === "book" ? "Reading." : "Watching."} Done with it?</p>
-                  <CheckInAnswers media={e.movie.media} seriesId={e.movie.id} showStillWatching={false} />
+                  <CheckInAnswers media={e.movie.media} seriesId={e.movie.id} title={e.movie.title} since={e.pickedAt} showStillWatching={false} />
                 </div>
               ) : (
                 <p className="text-sm text-muted">
@@ -257,6 +297,7 @@ function WatchedNow({ movie }: { movie: LibraryMovie }) {
 function Stars({ media, id, stars, title }: { media: Media; id: number; stars: number | null; title: string }) {
   // Held here, not refreshed from the server, so rating never re-renders the list (and loses your place).
   const [shown, setShown] = useState(stars);
+  const [failed, setFailed] = useState(false);
   const [, startTransition] = useTransition();
 
   function rate(value: number) {
@@ -264,11 +305,13 @@ function Stars({ media, id, stars, title }: { media: Media; id: number; stars: n
     const previous = shown;
     const next = value === shown ? null : value;
     setShown(next);
+    setFailed(false);
     startTransition(async () => {
       try {
         await rateTitle(media, id, next);
       } catch {
         setShown(previous);
+        setFailed(true);
       }
     });
   }
@@ -283,13 +326,15 @@ function Stars({ media, id, stars, title }: { media: Media; id: number; stars: n
             onClick={() => rate(n)}
             aria-label={`${n} star${n > 1 ? "s" : ""}`}
             aria-pressed={shown !== null && n <= shown}
-            className="-m-0.5 p-1.5"
+            className="-m-0.5 p-2.5"
           >
             <Star className={cn("size-6", shown !== null && n <= shown ? "fill-current" : "opacity-35")} aria-hidden />
           </button>
         ))}
       </div>
-      <span className="text-sm text-muted">{shown === null ? (media === "movie" ? "Watched. Rate it?" : "Finished. Rate it?") : "Your rating"}</span>
+      <span className={cn("text-sm", failed ? "font-semibold" : "text-muted")} role={failed ? "alert" : undefined}>
+        {failed ? "Couldn't save that. Try again." : shown === null ? (media === "movie" ? "Watched. Rate it?" : "Finished. Rate it?") : "Your rating"}
+      </span>
     </div>
   );
 }
@@ -335,7 +380,7 @@ export function WatchingShelf({ entries, media = "series" }: { entries: Watching
             <WatchLinks movie={open.show} />
             <DetailsButton card={open.show} media={open.show.media} id={open.show.id} title={open.show.title} className="text-sm font-semibold" />
           </div>
-          <CheckInAnswers media={media} seriesId={open.show.id} showStillWatching={false} />
+          <CheckInAnswers media={media} seriesId={open.show.id} title={open.show.title} since={open.since} showStillWatching={false} />
           <p className="text-sm text-muted">
             Finished asks for stars, then it moves to History. {book ? "Gave up" : "Dropped"} counts like &ldquo;not for me&rdquo;. Not
             started yet puts it back among your saves.
@@ -353,13 +398,29 @@ export type SeenEntry = { at: string; stars: number | null; movie: LibraryMovie 
 /** Everything you've watched or read, newest first, each with your stars. */
 export function SeenList({ entries, fetched, total }: { entries: SeenEntry[]; fetched: number; total: number }) {
   const more = useMore(entries, fetched, total, (offset) => moreSeen(offset).then((r) => ({ list: r.entries, fetched: r.fetched })));
+  const toast = useToast();
+  /** "Not seen", for a mis-tapped Seen it: off the list, rating and all, with Undo. */
+  function unsee(e: SeenEntry, at: number) {
+    const done = notSeen(e.movie.media, e.movie.id);
+    done.catch(() => undefined);
+    more.remove((x) => keyOf(x.movie) === keyOf(e.movie));
+    toast({
+      message: `Not ${e.movie.media === "book" ? "read" : "seen"}: ${e.movie.title}`,
+      undone: `${e.movie.title} is back in Seen & read`,
+      undo: async () => {
+        await done.catch(() => undefined);
+        await (e.stars ? rateTitle(e.movie.media, e.movie.id, e.stars) : markSeen(e.movie.media, e.movie.id));
+        more.putBack(e, at);
+      },
+    });
+  }
   return (
     <CoverFlow
       label="Seen and read"
       total={more.total}
       onNearEnd={more.nearEnd}
       items={more.list.map((e) => ({ key: keyOf(e.movie), title: e.movie.title, image: e.movie.posterPath }))}
-      infos={more.list.map((e) => (
+      infos={more.list.map((e, at) => (
         <div key={keyOf(e.movie)} className="flex flex-col items-center gap-1.5 text-center">
           <p className="label text-muted">
             {e.movie.media === "book" ? "Read" : "Seen"} · {DATE.format(new Date(e.at))}
@@ -367,7 +428,53 @@ export function SeenList({ entries, fetched, total }: { entries: SeenEntry[]; fe
           <h2 className="text-2xl leading-tight font-black">{e.movie.title}</h2>
           <p className="text-sm text-muted">{meta(e.movie)}</p>
           <Stars media={e.movie.media} id={e.movie.id} stars={e.stars} title={e.movie.title} />
-          <DetailsButton card={e.movie} media={e.movie.media} id={e.movie.id} title={e.movie.title} className="text-sm font-semibold" />
+          <div className="flex flex-wrap justify-center gap-2">
+            <DetailsButton card={e.movie} media={e.movie.media} id={e.movie.id} title={e.movie.title} className={buttonClasses("ghost", "sm", "min-h-11")} />
+            <button type="button" onClick={() => unsee(e, at)} className={buttonClasses("ghost", "sm", "min-h-11")}>
+              Not {e.movie.media === "book" ? "read" : "seen"}
+            </button>
+          </div>
+        </div>
+      ))}
+    />
+  );
+}
+
+/* ----------------------------------------------------------- turned down */
+
+/** Everything you turned down (Not for me, Gave up, Dropped), newest first, with Restore. */
+export function TurnedDownList({ entries, fetched, total }: { entries: TurnedDownEntry[]; fetched: number; total: number }) {
+  const more = useMore(entries, fetched, total, (offset) => moreTurnedDown(offset).then((r) => ({ list: r.entries, fetched: r.fetched })));
+  const toast = useToast();
+  if (more.list.length === 0) return <p className="text-lg text-muted">Nothing turned down. Everything can still come up.</p>;
+  return (
+    <CoverFlow
+      label="Turned down"
+      total={more.total}
+      onNearEnd={more.nearEnd}
+      items={more.list.map((e) => ({ key: keyOf(e.movie), title: e.movie.title, image: e.movie.posterPath, done: true }))}
+      infos={more.list.map((e) => (
+        <div key={keyOf(e.movie)} className="flex flex-col items-center gap-2 text-center">
+          <p className="label text-muted">
+            {e.how === "dropped" ? (e.movie.media === "book" ? "Gave up" : "Dropped") : "Not for me"} · {DATE.format(new Date(e.at))}
+          </p>
+          <h2 className="text-2xl leading-tight font-black">{e.movie.title}</h2>
+          <p className="text-sm text-muted">{meta(e.movie)}</p>
+          <div className="flex flex-wrap justify-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                const done = restoreTurnedDown(e.movie.media, e.movie.id);
+                done.catch(() => undefined);
+                more.remove((x) => keyOf(x.movie) === keyOf(e.movie));
+                toast({ message: `Restored: ${e.movie.title} can come up again` });
+              }}
+              className={buttonClasses("solid", "sm", "min-h-11")}
+            >
+              Restore
+            </button>
+            <DetailsButton card={e.movie} media={e.movie.media} id={e.movie.id} title={e.movie.title} className={buttonClasses("ghost", "sm", "min-h-11")} />
+          </div>
         </div>
       ))}
     />

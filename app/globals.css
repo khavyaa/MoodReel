@@ -112,7 +112,7 @@ body {
 
 .label {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -130,7 +130,8 @@ body {
   --on-accent: var(--m);
   --line: color-mix(in srgb, var(--mi) 26%, transparent);
   --soft: color-mix(in srgb, var(--mi) 9%, transparent);
-  --muted: color-mix(in srgb, var(--mi) 72%, transparent);
+  /* 95%, not lighter: dimmed text must still read at 4.5:1 on every mood colour (Mind-bending is the tightest). */
+  --muted: color-mix(in srgb, var(--mi) 95%, transparent);
   transition:
     background-color 0.45s ease,
     color 0.45s ease;
@@ -173,7 +174,7 @@ body {
   --bg: color-mix(in oklab, var(--t) 22%, #f6f5f9);
   --surface: var(--bg);
   --fg: color-mix(in oklab, var(--t) 34%, #101014);
-  --muted: color-mix(in oklab, var(--fg) 74%, transparent);
+  --muted: color-mix(in oklab, var(--fg) 88%, transparent);
   --line: color-mix(in oklab, var(--fg) 22%, transparent);
   --soft: color-mix(in oklab, var(--fg) 8%, transparent);
   --raised: color-mix(in oklab, var(--t) 8%, #ffffff);

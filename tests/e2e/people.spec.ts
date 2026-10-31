@@ -25,16 +25,21 @@ const lastDeck = async () =>
     (e) => Number(e.externalId),
   );
 
-test("tap a name on a card to follow them; their films then rank first, with a badge", async ({ page }) => {
+test("tap a name on a card to follow them; their films then rank first, with a badge", async ({ page, isMobile }) => {
   await page.goto("/movies");
   await page.getByRole("button", { name: /Deal 15 films/ }).click();
   await expect(page.getByText("1/15")).toBeVisible();
 
-  // The sheet: follow without leaving the deck. (Every fake film has "Lead Actor".)
-  await page.getByRole("button", { name: "Lead Actor" }).first().click();
+  // The sheet: follow without leaving the deck. (Every fake film has "Lead Actor".) A phone card keeps
+  // the names behind More about it, so there the person's sheet opens over the title's.
+  if (isMobile) await page.getByRole("button", { name: "More about it" }).click();
+  await page.getByRole("button", { name: "Lead Actor" }).filter({ visible: true }).first().click();
   const sheet = page.getByRole("dialog", { name: "Lead Actor" });
   await expect(sheet.getByRole("link", { name: /See all their work/ })).toBeVisible();
-  await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
+  await sheet.getByRole("button", { name: "Close" }).click();
+  await expect(sheet).toHaveCount(0);
+  if (isMobile) await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByText("1/15")).toBeVisible();
 
   await page.goto("/people/tmdb/701");
@@ -110,10 +115,10 @@ test("the People page: following with Deal, suggestions from what you love, and 
   await expect(people.getByRole("link", { name: "Deal from them →" }).first()).toHaveAttribute("href", /\/movies\?with=tmdb:701&name=Ben%20Director/);
 
   await people.getByText(/^Suggested · \d/).click();
-  await expect(people.getByText(/You've loved 3 titles with/).filter({ hasText: "Eli Director" })).toBeVisible();
+  await expect(people.getByText(/You've saved or rated 3 titles with/).filter({ hasText: "Eli Director" })).toBeVisible();
   const eli = people.getByRole("listitem").filter({ hasText: "Eli Director" });
   await eli.getByRole("button", { name: "Not now" }).click();
-  await expect(people.getByRole("listitem").filter({ hasText: /loved 3 titles with\s*Eli Director/ })).toHaveCount(0);
+  await expect(people.getByRole("listitem").filter({ hasText: /rated 3 titles with\s*Eli Director/ })).toHaveCount(0);
   expect((await query<{ kind: string }>("select kind from people_prefs where person_id = '704'"))[0].kind).toBe("dismissed");
 
   await people.getByText("Avoided · 1").click();

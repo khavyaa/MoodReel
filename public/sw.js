@@ -11,7 +11,7 @@
  * Everything lives on this device only. Signing out deletes the kept pages.
  */
 
-const VERSION = "v1";
+const VERSION = "v2";
 const STATIC = `moodreel-static-${VERSION}`;
 const PAGES = "moodreel-pages";
 const IMAGES = "moodreel-images";
@@ -24,10 +24,27 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     caches
       .open(STATIC)
-      .then((cache) => cache.addAll([OFFLINE_URL, "/icons/icon-192.png", "/manifest.webmanifest"]))
+      .then(async (cache) => {
+        await cache.addAll(["/icons/icon-192.png", "/manifest.webmanifest"]);
+        await keepOfflinePage(cache);
+      })
       .then(() => self.skipWaiting()),
   );
 });
+
+/**
+ * The offline page, and every script and stylesheet it loads: with only its
+ * HTML kept, it showed for a moment and then broke into an error screen when
+ * its scripts couldn't load.
+ */
+async function keepOfflinePage(cache) {
+  const response = await fetch(OFFLINE_URL, { cache: "reload" });
+  if (!response.ok) throw new Error(`/offline answered ${response.status}`);
+  const html = await response.clone().text();
+  await cache.put(OFFLINE_URL, response);
+  const assets = new Set(html.match(/\/_next\/static\/[^"'\\\s)>]+/g) ?? []);
+  await cache.addAll([...assets]);
+}
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(

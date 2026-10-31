@@ -51,7 +51,7 @@ test("on a person's page, a title opens its details, fetched there and then", as
       for (let i = 1; i < 6; i++)
         for (let j = 1; j < 6; j++) {
           const el = document.elementFromPoint(x + (width * i) / 6, y + (height * j) / 6);
-          if (el && !el.closest('[role="dialog"]')) misses.push(el.outerHTML.slice(0, 60));
+          if (el && !el.closest("dialog")) misses.push(el.outerHTML.slice(0, 60));
         }
       return misses;
     },

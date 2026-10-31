@@ -1,8 +1,9 @@
 "use client";
 
-import { useOptimistic, useState, useTransition } from "react";
+import { useOptimistic, useRef, useState, useTransition } from "react";
 import { notForMeFromPage, saveFromPage, seenFromPage, setPerson } from "@/app/(app)/people-actions";
-import { rateTitle } from "@/app/(app)/library-actions";
+import { rateTitle, undoLibrary } from "@/app/(app)/library-actions";
+import { useToast } from "@/components/ui/toast";
 import { StarPrompt } from "@/components/flow/star-prompt";
 import type { Person } from "@/lib/people/types";
 import { cn } from "@/lib/cn";
@@ -29,7 +30,8 @@ export function FollowAvoid({ person, initial }: { person: Person; initial: "fol
         onClick={() => choose("follow")}
         className={cn(
           "h-11 rounded-full border-2 px-5 font-bold",
-          state === "follow" ? "border-accent bg-accent text-on-accent" : "border-line hover:bg-soft",
+          // Following is a state, not the page's main action (Deal is): outlined, with a tick.
+          state === "follow" ? "border-fg" : "border-line hover:bg-soft",
         )}
       >
         {state === "follow" ? "✓ Following" : "Follow"}
@@ -60,15 +62,35 @@ export function TitleButtons({ media, title, label }: { media: "movie" | "series
   const [pending, startTransition] = useTransition();
   const markDone = useMarkDone();
   const advance = useAdvance();
+  const toast = useToast();
+  const sent = useRef<Promise<unknown>>(Promise.resolve());
   const book = media === "book";
+
+  /** The Undo toast after Seen it / Read it or Not for me: back to how it was, buttons and all. */
+  function offerUndo(kind: "seen" | "disliked") {
+    toast({
+      message: kind === "seen" ? `${book ? "Read" : "Seen"}: ${label}` : `Not for me: ${label}`,
+      undone: `${label} is back as it was`,
+      undo: async () => {
+        await sent.current.catch(() => undefined);
+        await undoLibrary({ media, id: title.id, kind });
+        setState(null);
+        setStars(0);
+        if (kind === "seen") markDone?.(false);
+      },
+    });
+  }
 
   function act(next: "saved" | "seen" | "disliked") {
     setState(next === "seen" ? "rating" : next);
     if (next === "seen") markDone?.(true);
     else advance?.();
+    const call = next === "saved" ? saveFromPage(media, title) : next === "seen" ? seenFromPage(media, title) : notForMeFromPage(media, title);
+    sent.current = call;
+    if (next === "disliked") offerUndo("disliked");
     startTransition(async () => {
       try {
-        await (next === "saved" ? saveFromPage(media, title) : next === "seen" ? seenFromPage(media, title) : notForMeFromPage(media, title));
+        await call;
       } catch {
         setState(null);
         if (next === "seen") markDone?.(false);
@@ -82,10 +104,11 @@ export function TitleButtons({ media, title, label }: { media: "movie" | "series
         title={label}
         onRate={(n) => {
           setStars(n);
-          void rateTitle(media, title.id, n).catch(() => setStars(0));
+          void sent.current.then(() => rateTitle(media, title.id, n)).catch(() => setStars(0));
         }}
         onDone={() => {
           setState("seen");
+          offerUndo("seen");
           advance?.();
         }}
       />
@@ -98,7 +121,7 @@ export function TitleButtons({ media, title, label }: { media: "movie" | "series
       </span>
     );
   }
-  const button = "h-9 rounded-full border-2 border-line px-3 text-sm font-bold hover:bg-soft disabled:opacity-60 sm:px-4";
+  const button = "min-h-11 rounded-full border-2 border-line px-4 text-sm font-bold hover:bg-soft disabled:opacity-60";
   return (
     <div className="flex flex-wrap justify-center gap-1.5">
       <button type="button" disabled={pending} onClick={() => act("seen")} className={cn(button, "border-accent bg-accent text-on-accent")}>

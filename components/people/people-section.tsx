@@ -105,7 +105,7 @@ async function Suggestions({ userId, known }: { userId: string; known: Set<strin
             <Avatar name={person.name} photo={photos.get(personKey(person)) ?? null} />
             <div className="flex flex-col gap-2">
             <p>
-              You&apos;ve loved {count} {person.role === "author" ? "books" : "titles"} with{" "}
+              You&apos;ve saved or rated {count} {person.role === "author" ? "books" : "titles"} with{" "}
               <Link href={personHref(person)} className="font-bold underline underline-offset-4">
                 {person.name}
               </Link>

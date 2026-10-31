@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { connection } from "next/server";
 import { Suspense } from "react";
 import { AppFrame } from "@/components/shell/app-frame";
 import { MoreFlow } from "@/components/flow/more-flow";
@@ -14,7 +15,15 @@ import { personKey, type PersonSource } from "@/lib/people/types";
 import { LIST_PAGE, type Media } from "@/lib/picks/server";
 import { requireOwner } from "@/lib/session";
 
-export const metadata = { title: "Person" };
+/** The tab and history say whose page it is. */
+export async function generateMetadata({ params }: PageProps<"/people/[source]/[id]">) {
+  // Fetched per request, like the page itself.
+  await connection();
+  const { source, id } = await params;
+  const src: PersonSource | null = source === "tmdb" ? "tmdb" : source === "ol" ? "openlibrary" : null;
+  const page = src && Number(id) > 0 ? await personPage(src, Number(id)).catch(() => null) : null;
+  return { title: page?.person.name ?? "Person" };
+}
 
 const ROLE: Record<string, string> = {
   director: "Director",
@@ -79,7 +88,7 @@ async function Person({ source, id, as }: { source: PersonSource; id: number; as
   return (
     <div className="flex flex-col gap-10">
       <header className="flex flex-col gap-5">
-        <Link href="/people" className="self-start text-sm font-bold text-muted hover:text-fg">
+        <Link href="/people" className="self-start -my-2 inline-flex min-h-11 items-center self-start text-sm font-bold text-muted hover:text-fg">
           ← People
         </Link>
         <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:gap-8">

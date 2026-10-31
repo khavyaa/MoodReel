@@ -12,14 +12,21 @@ const SHOWN = 12;
 
 export function ServicesPicker({ providers, selected }: { providers: Provider[]; selected: number[] }) {
   const [showAll, setShowAll] = useState(false);
-  const [, startTransition] = useTransition();
+  const [pending, startTransition] = useTransition();
   const [mine, setMine] = useOptimistic(selected);
+  const [saved, setSaved] = useState<"saved" | "failed" | null>(null);
 
   function toggle(id: number) {
     const next = mine.includes(id) ? mine.filter((p) => p !== id) : [...mine, id];
+    setSaved(null);
     startTransition(async () => {
       setMine(next);
-      await saveServices(next);
+      try {
+        await saveServices(next);
+        setSaved("saved");
+      } catch {
+        setSaved("failed");
+      }
     });
   }
 
@@ -63,7 +70,10 @@ export function ServicesPicker({ providers, selected }: { providers: Provider[];
       <p className="text-sm text-muted">
         {mine.length === 0
           ? "None ticked: decks draw from everything, with nothing marked as on your services."
-          : `${mine.length} ticked. Films on these come first and get an "On …" badge.`}
+          : `${mine.length} ticked. Films on these come first and get an "On …" badge.`}{" "}
+        <span role="status" className="font-semibold text-fg">
+          {pending ? "Saving…" : saved === "saved" ? "Saved." : saved === "failed" ? "Couldn't save that. Try again." : ""}
+        </span>
       </p>
     </div>
   );

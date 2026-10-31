@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Check } from "lucide-react";
 import { followList } from "@/app/(app)/list-actions";
 import { cn } from "@/lib/cn";
@@ -60,5 +61,21 @@ export function Progress({ seen, total, word }: { seen: number; total: number; w
         {total ? `${seen} of ${total} ${word}` : "Fills in when you open it"}
       </span>
     </div>
+  );
+}
+
+/** Ask for the page again (a list that didn't load). */
+export function RetryButton() {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  return (
+    <button
+      type="button"
+      disabled={pending}
+      onClick={() => startTransition(() => router.refresh())}
+      className="inline-flex min-h-11 items-center rounded-full border-2 border-line px-5 font-bold hover:bg-soft disabled:opacity-60"
+    >
+      {pending ? "Trying…" : "Try again"}
+    </button>
   );
 }

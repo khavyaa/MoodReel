@@ -57,7 +57,7 @@ test("first run: claim the account with the setup token and a passkey, then sign
   await expect(page).toHaveURL(/\/sign-in$/);
   await page.goto("/saved");
   await expect(page).toHaveURL(/\/sign-in\?next=%2Fsaved$/);
-  await page.getByRole("button", { name: "Sign in with passkey" }).click();
+  await page.getByRole("button", { name: "Sign in with your passkey" }).click();
   await expect(page).toHaveURL(/\/saved$/);
   await expect(page.getByRole("heading", { name: "Nothing saved yet" })).toBeVisible();
 });

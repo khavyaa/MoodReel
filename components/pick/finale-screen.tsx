@@ -16,8 +16,11 @@ export function FinaleScreen({
 }: {
   finale: Finale<DeckCard>;
   onChoose: (side: "champion" | "challenger") => void;
-  /** Undo the save that ended the deck and go back to it. Only before the first round is chosen. */
-  onBack: (() => void) | null;
+  /**
+   * Back: an earlier round, or before the first, the deck (undoing the save
+   * that ended it) or Saved when the head-to-head started there.
+   */
+  onBack: { label: string; go: () => void } | null;
   fromSaved: boolean;
 }) {
   const left = finale.champion;
@@ -50,13 +53,13 @@ export function FinaleScreen({
       </div>
       <div className="flex items-center justify-between gap-4">
         <p className="hidden text-sm text-muted lg:block">Keys: ← for the left, → for the right.</p>
-        {onBack && finale.round === 1 && (
+        {onBack && (
           <button
             type="button"
-            onClick={onBack}
-            className="inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-sm font-bold underline-offset-4 hover:underline"
+            onClick={onBack.go}
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 text-sm font-bold underline-offset-4 hover:underline"
           >
-            <Undo2 className="size-4" aria-hidden /> Back to the deck
+            <Undo2 className="size-4" aria-hidden /> {onBack.label}
           </button>
         )}
       </div>

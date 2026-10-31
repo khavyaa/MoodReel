@@ -25,7 +25,7 @@ export function StarPrompt({ title, onRate, onDone }: { title: string; onRate: (
               onRate(n);
               onDone();
             }}
-            className="p-1.5"
+            className="p-2"
           >
             <Star className={cn("size-7 transition-transform", n <= shown ? "scale-110 fill-current" : "opacity-40")} aria-hidden />
           </button>

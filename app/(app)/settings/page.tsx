@@ -21,7 +21,6 @@ export default function SettingsPage() {
   return (
     <AppFrame>
       <div className="flex flex-col gap-2 pb-8">
-        <span className="label text-muted">Settings</span>
         <h1 className="display text-[clamp(3rem,7vw,6rem)]">Settings</h1>
       </div>
 

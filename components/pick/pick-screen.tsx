@@ -116,11 +116,15 @@ export function PickScreen({
 
         {savedForLater.length > 0 && (
           <div className="flex flex-col gap-2 border-t border-line pt-5">
-            <p className="text-sm font-semibold">Also saved for another night</p>
+            <p className="text-sm font-semibold">{pick.media === "book" ? "Also saved for later" : "Also saved for another night"}</p>
             <ul className="flex gap-2">
               {savedForLater.map((c) => (
-                <li key={c.id} className="w-12" title={c.title}>
-                  <Poster title={c.title} path={c.posterPath} size="sm" sizes="48px" className="rounded-lg shadow-none" />
+                <li key={c.id} className="w-12">
+                  {/* Each opens its details: a name, a synopsis, where to watch. */}
+                  <DetailsButton card={c} media={c.media} id={c.id} title={c.title} className="block w-full">
+                    <span className="sr-only">Details: {c.title}</span>
+                    <Poster title={c.title} path={c.posterPath} size="sm" sizes="48px" className="rounded-lg shadow-none" />
+                  </DetailsButton>
                 </li>
               ))}
             </ul>
@@ -129,7 +133,8 @@ export function PickScreen({
         <p role="status" className="inline-flex items-center gap-1.5 text-sm font-semibold">
           {recorded ? (
             <>
-              <Check className="size-4" aria-hidden /> Saved to your History
+              <Check className="size-4" aria-hidden />{" "}
+              {pick.media === "series" ? "On your Watching list" : pick.media === "book" ? "On your Reading list" : "Saved to your History"}
             </>
           ) : saveFailed ? (
             "Not saved yet"
@@ -138,10 +143,10 @@ export function PickScreen({
           )}
         </p>
         {recorded && pick.media === "series" && (
-          <p className="text-sm">It&apos;s on your Watching list. Every few days MoodReel asks how it&apos;s going.</p>
+          <p className="text-sm">Every few days MoodReel asks how it&apos;s going; it&apos;s in your History too.</p>
         )}
         {recorded && pick.media === "book" && (
-          <p className="text-sm">It&apos;s on your Reading list. About once a week MoodReel asks how it&apos;s going.</p>
+          <p className="text-sm">About once a week MoodReel asks how it&apos;s going; it&apos;s in your History too.</p>
         )}
         <p className="text-xs text-muted">
           {pick.media === "book"

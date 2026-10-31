@@ -45,5 +45,12 @@ export function useMore<T>(
     setList((all) => all.filter((item) => !isIt(item)));
   }, []);
 
-  return { list, nearEnd, remove, total: Math.max(0, shown - gone) };
+  /** Put a card back where it was (Undo). */
+  const putBack = useCallback((item: T, at: number) => {
+    left.current -= 1;
+    setGone((n) => n - 1);
+    setList((all) => [...all.slice(0, at), item, ...all.slice(at)]);
+  }, []);
+
+  return { list, nearEnd, remove, putBack, total: Math.max(0, shown - gone) };
 }

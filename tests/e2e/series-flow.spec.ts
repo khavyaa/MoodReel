@@ -48,7 +48,7 @@ test("series: taps → deck → head-to-head → a pick that goes on your Watchi
 
   await expect(page.getByText(/Tonight's pick · Gripping/)).toBeVisible();
   await expect(page.getByText("Start with Season 1")).toBeVisible();
-  await expect(page.getByText(/on your Watching list/)).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "On your Watching list" })).toBeVisible();
   await expect(page.getByRole("link", { name: /Where to watch/ })).toHaveAttribute("href", /series%20where%20to%20watch/);
 
   await expect

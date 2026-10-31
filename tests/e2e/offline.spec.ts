@@ -80,6 +80,10 @@ test("the home-screen app opens offline: Saved from your last visit, anything el
   await page.goto("/about");
   await expect(page.getByRole("heading", { name: "You're offline" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Saved" })).toBeVisible();
+  // It stays: the page's own scripts were kept with it, so it doesn't break into an error screen once it loads.
+  await page.waitForTimeout(2500);
+  await expect(page.getByRole("heading", { name: "You're offline" })).toBeVisible();
+  await expect(page.getByText(/couldn't load/i)).toHaveCount(0);
   await context.setOffline(false);
 });
 

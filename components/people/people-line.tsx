@@ -6,6 +6,7 @@ import { X } from "lucide-react";
 import { setPerson } from "@/app/(app)/people-actions";
 import { personHref, type Person } from "@/lib/people/types";
 import { cn } from "@/lib/cn";
+import { Modal } from "@/components/ui/modal";
 
 const ROLE_LABEL: Record<Person["role"], string> = {
   director: "Directed by",
@@ -82,54 +83,49 @@ function PersonSheet({ person, following, onClose }: { person: Person; following
   }
 
   return (
-    <div role="dialog" aria-modal="true" aria-label={person.name} className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center" onClick={onClose}>
-      <div
-        className="flex w-full max-w-md flex-col gap-4 rounded-t-3xl bg-raised p-6 text-fg shadow-xl sm:rounded-3xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="label text-muted">{person.role}</p>
-            <p className="text-2xl font-black">{person.name}</p>
-          </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="-m-2 p-2">
-            <X className="size-5" aria-hidden />
-          </button>
+    <Modal label={person.name} onClose={onClose} className="max-w-md gap-4 sm:p-6">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="label text-muted">{person.role}</p>
+          <p className="text-2xl font-black">{person.name}</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            disabled={pending}
-            aria-pressed={state === "follow"}
-            onClick={() => choose("follow")}
-            className={cn(
-              "h-11 rounded-full border-2 px-5 font-bold",
-              state === "follow" ? "border-accent bg-accent text-on-accent" : "border-line hover:bg-soft",
-            )}
-          >
-            {state === "follow" ? "✓ Following" : "Follow"}
-          </button>
-          <button
-            type="button"
-            disabled={pending}
-            aria-pressed={state === "avoid"}
-            onClick={() => choose("avoid")}
-            className={cn("h-11 rounded-full border-2 px-5 font-bold", state === "avoid" ? "border-fg bg-fg text-bg" : "border-line hover:bg-soft")}
-          >
-            {state === "avoid" ? "Avoided" : "Avoid"}
-          </button>
-        </div>
-        <p className="text-sm text-muted">
-          {state === "follow"
-            ? "Their work ranks higher in every deck, with a badge on the card."
-            : state === "avoid"
-              ? "Their work won't come up again. Undo any time from People in Saved."
-              : "Follow to see more of their work; avoid to never see it."}
-        </p>
-        <Link href={personHref(person, person.role)} className="self-start text-sm font-bold underline underline-offset-4">
-          See all their work →
-        </Link>
+        <button type="button" onClick={onClose} aria-label="Close" className="-m-2 grid size-11 place-items-center">
+          <X className="size-5" aria-hidden />
+        </button>
       </div>
-    </div>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={pending}
+          aria-pressed={state === "follow"}
+          onClick={() => choose("follow")}
+          className={cn("h-11 rounded-full border-2 px-5 font-bold", state === "follow" ? "border-fg" : "border-line hover:bg-soft")}
+        >
+          {state === "follow" ? "✓ Following" : "Follow"}
+        </button>
+        <button
+          type="button"
+          disabled={pending}
+          aria-pressed={state === "avoid"}
+          onClick={() => choose("avoid")}
+          className={cn(
+            "h-11 rounded-full border-2 px-5 font-bold",
+            state === "avoid" ? "border-fg bg-fg text-bg" : "border-line hover:bg-soft",
+          )}
+        >
+          {state === "avoid" ? "Avoided" : "Avoid"}
+        </button>
+      </div>
+      <p className="text-sm text-muted">
+        {state === "follow"
+          ? "Their work ranks higher in every deck, with a badge on the card."
+          : state === "avoid"
+            ? "Their work won't come up again. Undo any time from People in Saved."
+            : "Follow to see more of their work; avoid to never see it."}
+      </p>
+      <Link href={personHref(person, person.role)} className="self-start text-sm font-bold underline underline-offset-4">
+        See all their work →
+      </Link>
+    </Modal>
   );
 }

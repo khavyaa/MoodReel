@@ -3,7 +3,7 @@
 import { refresh } from "next/cache";
 import { z } from "zod";
 import { requireOwner } from "@/lib/session";
-import { picksPage, savedPage, seenPage } from "@/lib/library-pages";
+import { picksPage, savedPage, seenPage, turnedDownPage } from "@/lib/library-pages";
 import {
   answerFollowUp,
   checkIn,
@@ -12,6 +12,7 @@ import {
   providersFor,
   saveProviders,
   savedTitles,
+  takeBack,
   tasteFor,
   updateTitleState,
   type CheckInAnswer,
@@ -248,4 +249,65 @@ export async function morePicks(offset: unknown) {
 export async function moreSeen(offset: unknown) {
   const owner = await requireOwner();
   return seenPage(owner.id, offsetSchema.parse(offset));
+}
+
+/* ------------------------------------------------- undo, restore, not seen */
+
+/** What an Undo toast takes back, and what else it puts back as it was. */
+const undoSchema = z.object({
+  media: mediaSchema,
+  id: titleId,
+  /** The action being taken back. */
+  kind: z.enum(["unsaved", "seen", "disliked", "dropped", "finished", "not-started"]),
+  /** Put back a series or book on Watching / Reading, from this time. */
+  watchingSince: z.string().datetime().nullable().optional(),
+  /** It was in Saved before (the Saved list knows; elsewhere its log decides). */
+  wasSaved: z.boolean().optional(),
+});
+
+/**
+ * Undo, from the toast after Remove, Seen it / Read it, Not for me, Gave up /
+ * Dropped, Finished or Not started yet: as if it never happened, taste included.
+ */
+export async function undoLibrary(input: unknown) {
+  const owner = await requireOwner();
+  const { media, id, kind, watchingSince, wasSaved } = undoSchema.parse(input);
+  const since = watchingSince ? new Date(watchingSince) : null;
+  if (kind === "not-started") {
+    // Nothing was logged: it only moved from Watching / Reading back to Saved.
+    await updateTitleState(owner.id, media, id, null, { saved: false, watchingSince: since });
+    return;
+  }
+  // Each undo reverses only what its action changed; everything else about the title stays.
+  const saved = (left: { saved: boolean }) => wasSaved ?? left.saved;
+  await takeBack(owner.id, media, id, [kind], {
+    only: (left) =>
+      kind === "unsaved"
+        ? { saved: true }
+        : kind === "seen"
+          ? { seen: left.seen, saved: saved(left), rating: null }
+          : kind === "disliked"
+            ? { disliked: left.disliked, saved: saved(left) }
+            : kind === "dropped"
+              ? { disliked: left.disliked, watchingSince: since }
+              : { seen: left.seen, rating: null, watchingSince: since },
+  });
+}
+
+/** Restore, from History → Turned down: off the list, and the taste it taught is taken back. */
+export async function restoreTurnedDown(media: unknown, id: unknown) {
+  const owner = await requireOwner();
+  await takeBack(owner.id, mediaSchema.parse(media), titleId.parse(id), ["disliked", "dropped"], { all: true });
+}
+
+/** "Not seen", from Seen & read: for a mis-tapped Seen it. Its rating goes too. */
+export async function notSeen(media: unknown, id: unknown) {
+  const owner = await requireOwner();
+  await takeBack(owner.id, mediaSchema.parse(media), titleId.parse(id), ["seen", "finished"], { all: true, extra: { rating: null } });
+}
+
+/** The next page of what you've turned down. */
+export async function moreTurnedDown(offset: unknown) {
+  const owner = await requireOwner();
+  return turnedDownPage(owner.id, offsetSchema.parse(offset));
 }
