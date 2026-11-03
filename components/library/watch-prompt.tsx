@@ -3,79 +3,10 @@
 import { useState, useTransition } from "react";
 import { Star } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { answerCheckIn, answerWatched, undoLibrary } from "@/app/(app)/library-actions";
+import { answerCheckIn, undoLibrary } from "@/app/(app)/library-actions";
 import { useToast } from "@/components/ui/toast";
-import type { CheckInAnswer, FollowUpAnswer } from "@/lib/picks/server";
+import type { CheckInAnswer, Media } from "@/lib/picks/server";
 import { cn } from "@/lib/cn";
-
-/**
- * "Did you watch it?" Yes asks for optional stars; Not yet puts it back on
- * your saved list; Skipped it just stops asking.
- */
-export function WatchAnswer({
-  sessionId,
-  onDone,
-  quiet = false,
-}: {
-  sessionId: string;
-  onDone?: (answer: FollowUpAnswer) => void;
-  /** Don't refresh the page after answering. */
-  quiet?: boolean;
-}) {
-  const [rating, setRating] = useState(false);
-  const [pending, startTransition] = useTransition();
-
-  function answer(a: FollowUpAnswer, stars: number | null = null) {
-    startTransition(async () => {
-      await answerWatched(sessionId, a, stars, { refresh: !quiet });
-      onDone?.(a);
-    });
-  }
-
-  if (rating) {
-    return (
-      <div className="flex flex-wrap items-center gap-3">
-        <span className="text-sm font-semibold">How was it?</span>
-        <div role="group" aria-label="Rate it" className="flex">
-          {[1, 2, 3, 4, 5].map((n) => (
-            <button
-              key={n}
-              type="button"
-              disabled={pending}
-              onClick={() => answer("watched", n)}
-              aria-label={`${n} star${n > 1 ? "s" : ""}`}
-              className="group -m-0.5 p-1.5"
-            >
-              <Star className="size-6 opacity-40 group-hover:fill-current group-hover:opacity-100" aria-hidden />
-            </button>
-          ))}
-        </div>
-        <button
-          type="button"
-          disabled={pending}
-          onClick={() => answer("watched")}
-          className="text-sm font-semibold underline underline-offset-4"
-        >
-          Skip rating
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex flex-wrap gap-2">
-      <AnswerButton onClick={() => setRating(true)} disabled={pending} primary>
-        Yes, watched it
-      </AnswerButton>
-      <AnswerButton onClick={() => answer("later")} disabled={pending}>
-        Not yet
-      </AnswerButton>
-      <AnswerButton onClick={() => answer("skipped")} disabled={pending}>
-        Skipped it
-      </AnswerButton>
-    </div>
-  );
-}
 
 function AnswerButton({
   children,
@@ -103,46 +34,17 @@ function AnswerButton({
   );
 }
 
-/** The card on the start screen, asked once about your last pick. */
-export function WatchPrompt({
-  sessionId,
-  title,
-  posterUrl,
-}: {
-  sessionId: string;
-  title: string;
-  posterUrl: string | null;
-}) {
-  const [answered, setAnswered] = useState<FollowUpAnswer | null>(null);
-  if (answered) {
-    return (
-      <p role="status" className="mb-6 rounded-2xl bg-soft px-4 py-3 text-sm font-semibold">
-        {answered === "watched" ? "Noted. It's in your history." : answered === "later" ? `${title} is back in Saved.` : "Got it."}
-      </p>
-    );
-  }
-  return (
-    <section
-      aria-label="Your last pick"
-      className="mb-8 flex items-center gap-4 rounded-3xl bg-soft p-4 sm:p-5"
-    >
-      {posterUrl && (
-        // eslint-disable-next-line @next/next/no-img-element -- a 56px thumb straight from TMDb's CDN
-        <img src={posterUrl} alt="" className="aspect-[2/3] w-14 shrink-0 rounded-lg object-cover" />
-      )}
-      <div className="flex min-w-0 flex-col gap-3">
-        <p className="font-bold">
-          Did you watch <span className="italic">{title}</span>?
-        </p>
-        <WatchAnswer sessionId={sessionId} onDone={setAnswered} quiet />
-      </div>
-    </section>
-  );
-}
+/** The answers, in each kind's words. */
+const WORDS: Record<Media, { list: string; still: string; finished: string; dropped: string; notStarted: string }> = {
+  movie: { list: "Tonight", still: "Not yet", finished: "Watched it", dropped: "Didn't finish", notStarted: "Not tonight after all" },
+  series: { list: "Watching", still: "Still watching", finished: "Finished it", dropped: "Dropped it", notStarted: "Not started yet" },
+  book: { list: "Reading", still: "Still reading", finished: "Finished it", dropped: "Gave up", notStarted: "Not started yet" },
+};
 
 /**
- * "Still watching?" for a series on your Watching list. Finished asks for
- * optional stars; dropped takes it off the list and counts like "not for me".
+ * "Still watching?" for a series on your Watching list (a book on Reading, a
+ * film on Tonight). Finished asks for optional stars; dropped takes it off the
+ * list and counts like "not for me".
  */
 export function CheckInAnswers({
   media = "series",
@@ -153,7 +55,7 @@ export function CheckInAnswers({
   quiet = false,
   showStillWatching = true,
 }: {
-  media?: "series" | "book";
+  media?: Media;
   seriesId: number;
   /** For the Undo toast. */
   title?: string;
@@ -168,21 +70,24 @@ export function CheckInAnswers({
   const toast = useToast();
   const router = useRouter();
   const book = media === "book";
+  const words = WORDS[media];
 
   function answer(a: CheckInAnswer, stars: number | null = null) {
     startTransition(async () => {
       await answerCheckIn(media, seriesId, a, stars, { refresh: !quiet });
       onDone?.(a);
       if (a === "watching") return;
-      const name = title ?? (book ? "That book" : "That series");
+      const name = title ?? (book ? "That book" : media === "movie" ? "That film" : "That series");
       toast({
         message:
           a === "finished"
-            ? `Finished: ${name}`
+            ? `${media === "movie" ? "Watched" : "Finished"}: ${name}`
             : a === "dropped"
-              ? `${book ? "Gave up on" : "Dropped"} ${name}`
+              ? media === "movie"
+                ? `Didn't finish ${name}`
+                : `${book ? "Gave up on" : "Dropped"} ${name}`
               : `${name} is back in Saved`,
-        undone: `${name} is back on your ${book ? "Reading" : "Watching"} list`,
+        undone: `${name} is back on your ${words.list} list`,
         undo: async () => {
           await undoLibrary({ media, id: seriesId, kind: a, watchingSince: since ?? new Date().toISOString() });
           router.refresh();
@@ -223,32 +128,39 @@ export function CheckInAnswers({
 
   return (
     <div className="flex flex-wrap gap-2">
-      {showStillWatching && (
-        <AnswerButton onClick={() => answer("watching")} disabled={pending} primary>
-          {media === "book" ? "Still reading" : "Still watching"}
+      {media === "movie" && (
+        <AnswerButton onClick={() => setRating(true)} disabled={pending} primary>
+          {words.finished}
         </AnswerButton>
       )}
-      <AnswerButton onClick={() => setRating(true)} disabled={pending}>
-        Finished it
-      </AnswerButton>
+      {showStillWatching && (
+        <AnswerButton onClick={() => answer("watching")} disabled={pending} primary={media !== "movie"}>
+          {words.still}
+        </AnswerButton>
+      )}
+      {media !== "movie" && (
+        <AnswerButton onClick={() => setRating(true)} disabled={pending}>
+          {words.finished}
+        </AnswerButton>
+      )}
       <AnswerButton onClick={() => answer("dropped")} disabled={pending}>
-        {media === "book" ? "Gave up" : "Dropped it"}
+        {words.dropped}
       </AnswerButton>
       <AnswerButton onClick={() => answer("not-started")} disabled={pending}>
-        Not started yet
+        {words.notStarted}
       </AnswerButton>
     </div>
   );
 }
 
-/** The card on the series or books start screen. */
+/** The card on the start screen. */
 export function CheckInPrompt({
   media = "series",
   seriesId,
   title,
   posterUrl,
 }: {
-  media?: "series" | "book";
+  media?: Media;
   seriesId: number;
   title: string;
   posterUrl: string | null;
@@ -259,24 +171,28 @@ export function CheckInPrompt({
     return (
       <p role="status" className="mb-6 rounded-2xl bg-soft px-4 py-3 text-sm font-semibold">
         {answered === "watching"
-          ? `Enjoy it. We'll ask again in ${book ? "a week" : "a few days"}.`
+          ? media === "movie"
+            ? "We'll ask again tomorrow."
+            : `Enjoy it. We'll ask again in ${book ? "a week" : "a few days"}.`
           : answered === "finished"
             ? `Nice. ${title} is in your history.`
             : answered === "not-started"
               ? `${title} is back in Saved for another night.`
-              : `${book ? "Put down" : "Dropped"}. ${title} won't come back.`}
+              : `${media === "movie" ? "Noted" : book ? "Put down" : "Dropped"}. ${title} won't come back.`}
       </p>
     );
   }
   return (
-    <section aria-label={book ? "A book you're reading" : "A show you're watching"} className="mb-8 flex items-center gap-4 rounded-3xl bg-soft p-4 sm:p-5">
+    <section
+      aria-label={media === "movie" ? "Your last pick" : book ? "A book you're reading" : "A show you're watching"}
+      className="mb-8 flex items-center gap-4 rounded-3xl bg-soft p-4 sm:p-5">
       {posterUrl && (
         // eslint-disable-next-line @next/next/no-img-element -- a 56px thumb straight from TMDb's CDN
         <img src={posterUrl} alt="" className="aspect-[2/3] w-14 shrink-0 rounded-lg object-cover" />
       )}
       <div className="flex min-w-0 flex-col gap-3">
         <p className="font-bold">
-          {book ? "Still reading" : "Still watching"} <span className="italic">{title}</span>?
+          {media === "movie" ? "Still on for" : book ? "Still reading" : "Still watching"} <span className="italic">{title}</span>?
         </p>
         <CheckInAnswers media={media} seriesId={seriesId} title={title} onDone={setAnswered} quiet />
       </div>

@@ -29,7 +29,7 @@ import { buttonClasses } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 import { linkChip, linkLine } from "@/components/pick/title-link";
 import type { FollowUpAnswer, Media } from "@/lib/picks/server";
-import { CheckInAnswers, WatchAnswer } from "./watch-prompt";
+import { CheckInAnswers } from "./watch-prompt";
 import { DetailsButton } from "./title-details";
 import { Poster } from "@/components/pick/poster";
 
@@ -198,7 +198,7 @@ export type HistoryEntry = {
   why: string | null;
   pickedAt: string | null;
   seen: boolean;
-  /** Series: still on your Watching list. */
+  /** Still on your Tonight, Watching or Reading list. */
   watching: boolean;
   /** Series: you gave up on it. */
   dropped: boolean;
@@ -235,30 +235,21 @@ export function HistoryList({ entries, fetched, total }: { entries: HistoryEntry
             {e.why && <p className="max-w-[56ch] leading-snug">{e.why}</p>}
             {e.seen ? (
               <Stars media={e.movie.media} id={e.movie.id} stars={e.stars} title={e.movie.title} />
+            ) : e.watching ? (
+              <div className="flex flex-col items-center gap-2">
+                <p className="text-sm font-semibold">{LIST_NOW[e.movie.media]}</p>
+                <CheckInAnswers media={e.movie.media} seriesId={e.movie.id} title={e.movie.title} since={e.pickedAt} showStillWatching={false} />
+              </div>
+            ) : e.dropped ? (
+              <p className="text-sm text-muted">
+                {e.movie.media === "book" ? "You gave up on this one." : e.movie.media === "movie" ? "You didn't finish this one." : "You dropped this one."}
+              </p>
             ) : e.movie.media !== "movie" ? (
-              e.watching ? (
-                <div className="flex flex-col items-center gap-2">
-                  <p className="text-sm font-semibold">{e.movie.media === "book" ? "Reading." : "Watching."} Done with it?</p>
-                  <CheckInAnswers media={e.movie.media} seriesId={e.movie.id} title={e.movie.title} since={e.pickedAt} showStillWatching={false} />
-                </div>
-              ) : (
-                <p className="text-sm text-muted">
-                  {e.dropped
-                    ? e.movie.media === "book"
-                      ? "You gave up on this one."
-                      : "You dropped this one."
-                    : `Off your ${e.movie.media === "book" ? "Reading" : "Watching"} list.`}
-                </p>
-              )
-            ) : e.followUp === "later" ? (
-              <WatchedNow movie={e.movie} />
-            ) : e.followUp ? (
+              <p className="text-sm text-muted">{`Off your ${e.movie.media === "book" ? "Reading" : "Watching"} list.`}</p>
+            ) : e.followUp === "skipped" ? (
               <p className="text-sm text-muted">You skipped this one.</p>
             ) : (
-              <div className="flex flex-col items-center gap-2">
-                <p className="text-sm font-semibold">Did you watch it?</p>
-                <WatchAnswer sessionId={e.sessionId} />
-              </div>
+              <WatchedNow movie={e.movie} />
             )}
             <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
               <WatchLinks movie={e.movie} />
@@ -339,23 +330,33 @@ function Stars({ media, id, stars, title }: { media: Media; id: number; stars: n
   );
 }
 
+/** A picked title that's still on your list, in History. */
+const LIST_NOW: Record<Media, string> = {
+  movie: "On your Tonight list. Watched it?",
+  series: "Watching. Done with it?",
+  book: "Reading. Done with it?",
+};
+
 /* --------------------------------------------------------------- watching */
 
 export type WatchingEntry = { since: string; show: LibraryMovie };
 
 const SHORT_DATE = new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", timeZone: "Asia/Kolkata" });
 
+const SHELF: Record<Media, string> = { movie: "Tonight", series: "Watching", book: "Reading" };
+
 /**
- * Series or books you picked and are part-way through, as a thin shelf of
- * covers: tap one to check in (finished, dropped / gave up, or not started yet).
+ * Films you picked for tonight, or series and books you're part-way through, as
+ * a thin shelf of covers: tap one to check in (finished, dropped / gave up, or
+ * not started yet).
  */
-export function WatchingShelf({ entries, media = "series" }: { entries: WatchingEntry[]; media?: "series" | "book" }) {
+export function WatchingShelf({ entries, media = "series" }: { entries: WatchingEntry[]; media?: Media }) {
   const [open, setOpen] = useState<WatchingEntry | null>(null);
   const book = media === "book";
   return (
-    <section aria-label={book ? "Reading" : "Watching"} className="flex flex-col gap-2">
+    <section aria-label={SHELF[media]} className="flex flex-col gap-2">
       <p className="label text-muted">
-        {book ? "Reading" : "Watching"} · {entries.length} · tap to check in
+        {SHELF[media]} · {entries.length} · tap to check in
       </p>
       <ul className="flex gap-3 overflow-x-auto pb-1">
         {entries.map((e) => (
@@ -371,7 +372,11 @@ export function WatchingShelf({ entries, media = "series" }: { entries: Watching
           <p className="text-sm text-muted">
             {(book
               ? [open.show.book?.authors[0], `started ${SHORT_DATE.format(new Date(open.since))}`, open.show.book?.pages ? `${open.show.book.pages} pages` : null]
-              : [`Started ${SHORT_DATE.format(new Date(open.since))}`, open.show.streamingOn[0], cardMeta(open.show).split(" · ").slice(2, 3)[0]]
+              : [
+                  `${media === "movie" ? "Picked" : "Started"} ${SHORT_DATE.format(new Date(open.since))}`,
+                  open.show.streamingOn[0],
+                  cardMeta(open.show).split(" · ").slice(2, 3)[0],
+                ]
             )
               .filter(Boolean)
               .join(" · ")}
@@ -382,8 +387,9 @@ export function WatchingShelf({ entries, media = "series" }: { entries: Watching
           </div>
           <CheckInAnswers media={media} seriesId={open.show.id} title={open.show.title} since={open.since} showStillWatching={false} />
           <p className="text-sm text-muted">
-            Finished asks for stars, then it moves to History. {book ? "Gave up" : "Dropped"} counts like &ldquo;not for me&rdquo;. Not
-            started yet puts it back among your saves.
+            {media === "movie"
+              ? "Watched it asks for stars, then it moves to History. Didn't finish counts like “not for me”. Not tonight after all puts it back among your saves."
+              : `Finished asks for stars, then it moves to History. ${book ? "Gave up" : "Dropped"} counts like “not for me”. Not started yet puts it back among your saves.`}
           </p>
         </Sheet>
       )}
@@ -484,12 +490,13 @@ export function TurnedDownList({ entries, fetched, total }: { entries: TurnedDow
 /* ------------------------------------------------------------ unavailable */
 
 /** A title in your lists whose details couldn't be fetched just now. Only ids are stored, so there's no name to show. */
-export type Unavailable = { media: Media; id: number; list: "saved" | "watching" | "reading" | "picked" | "seen"; at?: string };
+export type Unavailable = { media: Media; id: number; list: "saved" | "tonight" | "watching" | "reading" | "picked" | "seen"; at?: string };
 
 const SOURCE: Record<Media, string> = { movie: "TMDb", series: "TMDb", book: "Open Library" };
 const KIND: Record<Media, string> = { movie: "film", series: "series", book: "book" };
 const LIST_WORD: Record<Unavailable["list"], string> = {
   saved: "A saved",
+  tonight: "A",
   watching: "A",
   reading: "A",
   picked: "A",
@@ -497,6 +504,7 @@ const LIST_WORD: Record<Unavailable["list"], string> = {
 };
 const AFTER: Record<Unavailable["list"], string> = {
   saved: "",
+  tonight: " you picked for tonight",
   watching: " you're watching",
   reading: " you're reading",
   picked: " you picked",

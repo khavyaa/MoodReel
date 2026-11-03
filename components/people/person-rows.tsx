@@ -25,7 +25,9 @@ export async function personRows(userId: string, works: PageWork[]): Promise<Flo
       const status = state?.inProgress
         ? media === "book"
           ? "Reading"
-          : "Watching"
+          : media === "movie"
+            ? "Picked for tonight"
+            : "Watching"
         : state?.seen
           ? `${media === "book" ? "Read" : "Seen"}${stars ? ` ${"★".repeat(stars)}` : ""}`
           : state?.saved

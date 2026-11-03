@@ -91,11 +91,26 @@ test("deal from a person: from their page, and from the start screen's search", 
 
   await page.goto("/movies");
   await page.getByLabel(/With someone in mind/).fill("cara");
-  await page.getByRole("button", { name: /Cara Director/ }).click();
+  await page.getByRole("option", { name: /Cara Director/ }).click();
   await page.getByRole("button", { name: "Deal from Cara Director" }).click();
   await expect(page.getByText("From Cara Director", { exact: true }).first()).toBeVisible();
   const fromSearch = await lastDeck();
   expect(fromSearch.every((id) => directedBy(id, 702))).toBe(true);
+});
+
+test("with someone in mind: three matches with photos first, the rest on request, and the keyboard picks", async ({ page }) => {
+  await page.goto("/movies");
+  const box = page.getByLabel(/With someone in mind/);
+  await box.fill("director");
+  const options = page.getByRole("option");
+  await expect(options).toHaveCount(3);
+  await page.getByRole("button", { name: "Show 2 more" }).click();
+  await expect(options).toHaveCount(5);
+  await box.press("ArrowDown");
+  await box.press("ArrowDown");
+  await expect(page.getByRole("option", { name: /Cara Director/ })).toHaveAttribute("aria-selected", "true");
+  await box.press("Enter");
+  await expect(page.getByRole("button", { name: "Deal without Cara Director" })).toBeVisible();
 });
 
 test("the People page: following with Deal, suggestions from what you love, and undo an avoid", async ({ page }) => {
@@ -130,7 +145,7 @@ test("the People page: following with Deal, suggestions from what you love, and 
 test("books by author: search an author and deal only their books", async ({ page }) => {
   await page.goto("/books");
   await page.getByLabel(/An author in mind/).fill("Author 3");
-  await page.getByRole("button", { name: /^Author 3 /, exact: false }).click();
+  await page.getByRole("option", { name: /^Author 3 / }).click();
   await page.getByRole("button", { name: "Deal from Author 3" }).click();
   await expect(page.getByText("From Author 3", { exact: true }).first()).toBeVisible();
   expect(await lastDeck()).toEqual([7002]);

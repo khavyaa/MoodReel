@@ -5,7 +5,6 @@ import { z } from "zod";
 import { requireOwner } from "@/lib/session";
 import { picksPage, savedPage, seenPage, turnedDownPage } from "@/lib/library-pages";
 import {
-  answerFollowUp,
   checkIn,
   completePick,
   createSavedSession,
@@ -16,7 +15,6 @@ import {
   tasteFor,
   updateTitleState,
   type CheckInAnswer,
-  type FollowUpAnswer,
   type Media,
 } from "@/lib/picks/server";
 import type { DeckCard } from "@/lib/deck/build-movies";
@@ -171,29 +169,10 @@ export async function pickFromSaved(input: unknown): Promise<SavedPickResponse> 
   return { ok: true, sessionId, cards: best, taps, why: why.text };
 }
 
-/* -------------------------------------------------- did you watch it? (films) */
-
-/** `refresh: false` from the start-screen card, which shows its own confirmation and would vanish on refresh. */
-export async function answerWatched(
-  sessionId: string,
-  answer: FollowUpAnswer,
-  stars: number | null = null,
-  options: { refresh: boolean } = { refresh: true },
-) {
-  const owner = await requireOwner();
-  await answerFollowUp(
-    owner.id,
-    z.string().uuid().parse(sessionId),
-    z.enum(["watched", "later", "skipped"]).parse(answer),
-    starsSchema.parse(stars),
-  );
-  if (options.refresh) refresh();
-}
-
-/* ------------------------- still watching? (series) / still reading? (books) */
+/* ------------- still on for it? (films) / still watching? (series) / still reading? (books) */
 
 export async function answerCheckIn(
-  media: "series" | "book",
+  media: Media,
   id: number,
   answer: CheckInAnswer,
   stars: number | null = null,
@@ -202,7 +181,7 @@ export async function answerCheckIn(
   const owner = await requireOwner();
   await checkIn(
     owner.id,
-    z.enum(["series", "book"]).parse(media),
+    mediaSchema.parse(media),
     titleId.parse(id),
     z.enum(["watching", "finished", "dropped", "not-started"]).parse(answer),
     starsSchema.parse(stars),
@@ -259,7 +238,7 @@ const undoSchema = z.object({
   id: titleId,
   /** The action being taken back. */
   kind: z.enum(["unsaved", "seen", "disliked", "dropped", "finished", "not-started"]),
-  /** Put back a series or book on Watching / Reading, from this time. */
+  /** Put back a film, series or book on Tonight / Watching / Reading, from this time. */
   watchingSince: z.string().datetime().nullable().optional(),
   /** It was in Saved before (the Saved list knows; elsewhere its log decides). */
   wasSaved: z.boolean().optional(),
@@ -274,7 +253,7 @@ export async function undoLibrary(input: unknown) {
   const { media, id, kind, watchingSince, wasSaved } = undoSchema.parse(input);
   const since = watchingSince ? new Date(watchingSince) : null;
   if (kind === "not-started") {
-    // Nothing was logged: it only moved from Watching / Reading back to Saved.
+    // Nothing was logged: it only moved from Tonight / Watching / Reading back to Saved.
     await updateTitleState(owner.id, media, id, null, { saved: false, watchingSince: since });
     return;
   }

@@ -107,7 +107,7 @@ export function TapsScreen({
   );
 
   return (
-    <div className="grid flex-1 gap-10 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:gap-16">
+    <div className="grid flex-1 grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:gap-16">
       <div className="flex flex-col gap-7">
         <h1 className="display text-[clamp(2.75rem,min(8.5vw,10dvh),7.5rem)]">{media.ask}</h1>
 

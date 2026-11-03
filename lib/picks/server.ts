@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, gt, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNotNull, lt, or, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { pickSessions, preferences, titleActions, titleStates } from "@/lib/db/schema";
 import { buildTasteProfile, type ActionKind } from "@/lib/taste/profile";
@@ -233,7 +233,7 @@ export async function undoSwipe(userId: string, sessionId: string, titleId: numb
   });
 }
 
-/** The pick moves from "saved" into history (a series or book onto your Watching or Reading list); the other saves stay saved. */
+/** The pick moves from "saved" into history and onto your Tonight, Watching or Reading list; the other saves stay saved. */
 export async function completePick(
   userId: string,
   sessionId: string,
@@ -245,7 +245,8 @@ export async function completePick(
   await logAction(userId, session.media, sessionId, session.mood, title, "picked", {
     pickedAt: now,
     saved: false,
-    ...(session.media !== "movie" ? { watchingSince: now, checkedInAt: null } : {}),
+    watchingSince: now,
+    checkedInAt: null,
   });
   await getDb()
     .update(pickSessions)
@@ -568,63 +569,23 @@ export async function createSavedSession(
   return row.id;
 }
 
-/* ------------------------------------------------- did you watch it? (films) */
+/* ------------------------------- tonight (films), watching (series), reading (books) */
 
-/** How long after a film pick before asking whether you watched it. */
-export const FOLLOW_UP_AFTER_HOURS = 3;
-
+/** Answers to the old one-off "Did you watch it?" about a film pick, still shown in History. */
 export type FollowUpAnswer = "watched" | "later" | "skipped";
 
-/** The latest film pick you haven't told us about yet, if it's old enough to ask. */
-export async function pendingFollowUp(userId: string) {
-  const db = getDb();
-  const [session] = await db
-    .select({ id: pickSessions.id, pick: pickSessions.pick, pickedAt: pickSessions.completedAt })
-    .from(pickSessions)
-    .where(
-      and(
-        eq(pickSessions.userId, userId),
-        eq(pickSessions.media, "movie"),
-        eq(pickSessions.status, "picked"),
-        isNull(pickSessions.followUp),
-        lt(pickSessions.completedAt, sql`now() - make_interval(hours => ${FOLLOW_UP_AFTER_HOURS})`),
-      ),
-    )
-    .orderBy(desc(pickSessions.completedAt))
-    .limit(1);
-  if (!session?.pick) return null;
-  const state = await db.query.titleStates.findFirst({ where: titleKey(userId, "movie", session.pick.externalId) });
-  // Already marked watched some other way (History, a rating): nothing to ask.
-  if (state?.seen) return null;
-  return { sessionId: session.id, movieId: Number(session.pick.externalId) };
-}
-
 /**
- * Records your answer. Watched: seen (and rated, if you gave stars). Not yet:
- * back on the saved list. Skipped it: just stop asking.
+ * Hours before the first "still on for … ?" / "still watching?" / "still
+ * reading?" question about a title, and between the ones after.
  */
-export async function answerFollowUp(userId: string, sessionId: string, answer: FollowUpAnswer, stars: number | null) {
-  const session = await ownedSession(userId, sessionId);
-  if (!session.pick) throw new Error("That run has no pick.");
-  const movieId = Number(session.pick.externalId);
-  if (answer === "watched") {
-    await updateTitleState(userId, "movie", movieId, "seen", { seen: true, ...(stars ? { rating: stars * 2 } : {}) });
-  } else if (answer === "later") {
-    await updateTitleState(userId, "movie", movieId, null, { saved: true });
-  }
-  await getDb()
-    .update(pickSessions)
-    .set({ followUp: answer, followedUpAt: new Date() })
-    .where(eq(pickSessions.id, sessionId));
-}
+export const CHECK_IN_HOURS: Record<Media, { first: number; every: number }> = {
+  movie: { first: 3, every: 24 },
+  series: { first: 72, every: 72 },
+  book: { first: 168, every: 168 },
+};
 
-/* ------------------------------------------ watching (series), reading (books) */
-
-/** Days between "still watching?" / "still reading?" questions for each title. */
-export const CHECK_IN_EVERY_DAYS: Record<"series" | "book", number> = { series: 3, book: 7 };
-
-/** Series on your Watching list, or books on your Reading list, most recently started first. */
-export async function inProgress(userId: string, media: "series" | "book") {
+/** Films on your Tonight list, series on Watching or books on Reading, most recently started first. */
+export async function inProgress(userId: string, media: Media) {
   const rows = await getDb()
     .select({ id: titleStates.externalId, since: titleStates.watchingSince, checkedInAt: titleStates.checkedInAt })
     .from(titleStates)
@@ -640,8 +601,9 @@ export async function inProgress(userId: string, media: "series" | "book") {
   return rows.map((r) => ({ id: Number(r.id), since: r.since!, checkedInAt: r.checkedInAt }));
 }
 
-/** The title you've gone longest without being asked about, once enough days have passed. */
-export async function pendingCheckIn(userId: string, media: "series" | "book") {
+/** The title you've gone longest without being asked about, once enough time has passed. */
+export async function pendingCheckIn(userId: string, media: Media) {
+  const { first, every } = CHECK_IN_HOURS[media];
   const [row] = await getDb()
     .select({ id: titleStates.externalId })
     .from(titleStates)
@@ -652,8 +614,8 @@ export async function pendingCheckIn(userId: string, media: "series" | "book") {
         eq(titleStates.source, sourceOf(media)),
         isNotNull(titleStates.watchingSince),
         lt(
-          sql`coalesce(${titleStates.checkedInAt}, ${titleStates.watchingSince})`,
-          sql`now() - make_interval(days => ${CHECK_IN_EVERY_DAYS[media]})`,
+          sql`coalesce(${titleStates.checkedInAt} + make_interval(hours => ${every}), ${titleStates.watchingSince} + make_interval(hours => ${first}))`,
+          sql`now()`,
         ),
       ),
     )
@@ -665,13 +627,14 @@ export async function pendingCheckIn(userId: string, media: "series" | "book") {
 export type CheckInAnswer = "watching" | "finished" | "dropped" | "not-started";
 
 /**
- * Still going: ask again later. Finished: seen (read), rated if you gave stars,
- * off the list. Dropped (or "gave up"): off the list, and it counts like "not for me".
- * Not started yet: off the list and back in Saved, for another night; nothing learned.
+ * Still going (a film: not yet): ask again later. Finished (watched it): seen
+ * (read), rated if you gave stars, off the list. Dropped (gave up, didn't
+ * finish): off the list, and it counts like "not for me". Not started yet (not
+ * tonight after all): off the list and back in Saved, for another night; nothing learned.
  */
 export async function checkIn(
   userId: string,
-  media: "series" | "book",
+  media: Media,
   id: number,
   answer: CheckInAnswer,
   stars: number | null,

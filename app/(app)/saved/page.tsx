@@ -32,20 +32,21 @@ async function Saved({ searchParams }: { searchParams: PageProps<"/saved">["sear
   const params = await searchParams;
   // A type filter (?type=movie), in the address so Back works.
   const type = params.type === "movie" || params.type === "series" || params.type === "book" ? params.type : null;
-  const [counts, first, watching, reading, providers] = await Promise.all([
+  const [counts, first, tonight, watching, reading, providers] = await Promise.all([
     savedCounts(owner.id),
     savedPage(owner.id, type, 0),
+    inProgress(owner.id, "movie"),
     inProgress(owner.id, "series"),
     inProgress(owner.id, "book"),
     providersFor(owner.id),
   ]);
-  if (counts.movie + counts.series + counts.book === 0 && watching.length === 0 && reading.length === 0) {
+  if (counts.movie + counts.series + counts.book === 0 && tonight.length + watching.length + reading.length === 0) {
     return (
       <AppFrame>
         <EmptyState
           eyebrow="Saved"
           title="Nothing saved yet"
-          body="Everything you swipe right on and don't pick lands here, so you can come back to it another night. Series you're watching and books you're reading show up here too."
+          body="Everything you swipe right on and don't pick lands here, so you can come back to it another night. Films you picked for tonight, series you're watching and books you're reading show up here too."
           action={
             <Link href="/movies" className={buttonClasses("solid", "lg", "self-start")}>
               Pick something
@@ -57,10 +58,14 @@ async function Saved({ searchParams }: { searchParams: PageProps<"/saved">["sear
   }
 
   const cards = await libraryTitles(
-    [...watching.map((w) => ({ media: "series" as const, id: w.id })), ...reading.map((r) => ({ media: "book" as const, id: r.id }))],
+    [
+      ...tonight.map((t) => ({ media: "movie" as const, id: t.id })),
+      ...watching.map((w) => ({ media: "series" as const, id: w.id })),
+      ...reading.map((r) => ({ media: "book" as const, id: r.id })),
+    ],
     providers,
   ).then((found) => withLinksByKey(owner.id, found));
-  const entries = (media: "series" | "book", list: { id: number; since: Date }[]) =>
+  const entries = (media: "movie" | "series" | "book", list: { id: number; since: Date }[]) =>
     list.flatMap((w) => {
       const show = cards.get(libraryKey(media, w.id));
       return show ? [{ since: w.since.toISOString(), show }] : [];
@@ -68,6 +73,7 @@ async function Saved({ searchParams }: { searchParams: PageProps<"/saved">["sear
   // Titles whose details couldn't be fetched just now stay listed, as placeholders.
   const unavailable = [
     ...first.unavailable,
+    ...tonight.filter((t) => !cards.has(libraryKey("movie", t.id))).map((t) => ({ media: "movie" as const, id: t.id, list: "tonight" as const })),
     ...watching.filter((w) => !cards.has(libraryKey("series", w.id))).map((w) => ({ media: "series" as const, id: w.id, list: "watching" as const })),
     ...reading.filter((r) => !cards.has(libraryKey("book", r.id))).map((r) => ({ media: "book" as const, id: r.id, list: "reading" as const })),
   ];
@@ -75,6 +81,7 @@ async function Saved({ searchParams }: { searchParams: PageProps<"/saved">["sear
     <SavedScreen
       items={first.movies}
       fetched={first.fetched}
+      tonight={entries("movie", tonight)}
       watching={entries("series", watching)}
       reading={entries("book", reading)}
       counts={counts}
